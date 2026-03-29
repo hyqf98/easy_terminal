@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Easy Terminal</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <div id="app-titlebar">
+      <span class="app-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 17 10 11 4 5"></polyline>
+          <line x1="12" y1="19" x2="20" y2="19"></line>
+        </svg>
+        Easy Terminal
+      </span>
+      <div class="app-window-controls">
+        <button class="app-btn-minimize" id="app-minimize" title="Minimize"></button>
+        <button class="app-btn-maximize" id="app-maximize" title="Maximize"></button>
+        <button class="app-btn-close" id="app-close" title="Close"></button>
+      </div>
+    </div>
+    <div id="app-body">
+      <div id="sidebar-container"></div>
+      <div id="panel-area">
+        <div id="panel-files" class="panel-content"></div>
+        <div id="panel-settings" class="panel-content"></div>
+        <div id="panel-commands" class="panel-content"></div>
+      </div>
+      <div id="app-viewport">
+        <div id="canvas">
+          <div id="selection-rect"></div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
