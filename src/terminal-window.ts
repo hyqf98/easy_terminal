@@ -67,7 +67,7 @@ export class TerminalWindow {
   private currentLine = '';
   private cursorPos = 0;
   private selectionAnchor: number | null = null;
-  private selectionOverlay: HTMLDivElement | null = null;
+  private selectionOverlays: HTMLDivElement[] = [];
   private terminalContextMenu: HTMLDivElement | null = null;
 
   // Drag state
@@ -149,6 +149,7 @@ export class TerminalWindow {
     this.bindTitleRename();
     this.bindActivation();
     this.bindSelectionContextMenu();
+    this.bindLineSelection();
   }
 
   async initPty(options: TerminalLaunchOptions = {}) {
@@ -320,27 +321,18 @@ export class TerminalWindow {
 
   private showGhostText(text: string) {
     this.ghostText = text;
-    const terminalBody = this.container.querySelector('.terminal-body') as HTMLElement;
-    if (!terminalBody) return;
+    const metrics = this.getOverlayMetrics();
+    if (!metrics) return;
 
     if (!this.ghostOverlay) {
       this.ghostOverlay = document.createElement('span');
       this.ghostOverlay.className = 'ghost-text-overlay';
-      terminalBody.appendChild(this.ghostOverlay);
+      metrics.terminalBody.appendChild(this.ghostOverlay);
     }
 
-    // Position at cursor location
-    const buffer = this.term.buffer.active;
-    const cursorX = buffer.cursorX;
-    const cursorY = buffer.cursorY;
-    const rowHeight = terminalBody.clientHeight / this.term.rows;
-    const colWidth = terminalBody.clientWidth / this.term.cols;
-    const pixelX = cursorX * colWidth;
-    const pixelY = cursorY * rowHeight;
-
     this.ghostOverlay.textContent = text;
-    this.ghostOverlay.style.left = `${pixelX}px`;
-    this.ghostOverlay.style.top = `${pixelY}px`;
+    this.ghostOverlay.style.left = `${metrics.offsetX + metrics.cursorX * metrics.colWidth}px`;
+    this.ghostOverlay.style.top = `${metrics.offsetY + metrics.cursorY * metrics.rowHeight}px`;
     this.ghostOverlay.style.fontSize = `${this.term.options.fontSize}px`;
     this.ghostOverlay.style.lineHeight = `${(this.term.options.fontSize || 14) * 1.2}px`;
     this.ghostOverlay.style.display = 'block';
@@ -357,7 +349,8 @@ export class TerminalWindow {
     if (!this.ghostText) return;
     // Send ghost text to PTY
     invoke('write_pty', { sessionId: this.id, data: this.ghostText }).catch(console.error);
-    this.currentLine += this.ghostText;
+    this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${this.ghostText}${this.currentLine.slice(this.cursorPos)}`;
+    this.cursorPos += this.ghostText.length;
     this.refreshSuggestions();
   }
 
@@ -431,21 +424,13 @@ export class TerminalWindow {
   }
 
   private positionSuggestPopup() {
-    const terminalBody = this.container.querySelector('.terminal-body') as HTMLElement;
-    if (!terminalBody) return;
+    const metrics = this.getOverlayMetrics();
+    if (!metrics) return;
 
-    // Use xterm buffer cursor position for accurate placement
-    const buffer = this.term.buffer.active;
-    const cursorX = buffer.cursorX;
-    const cursorY = buffer.cursorY;
+    const pixelX = metrics.offsetX + metrics.cursorX * metrics.colWidth;
+    const pixelY = metrics.offsetY + (metrics.cursorY + 1.7) * metrics.rowHeight;
 
-    // Calculate pixel position from character grid
-    const rowHeight = terminalBody.clientHeight / this.term.rows;
-    const colWidth = terminalBody.clientWidth / this.term.cols;
-    const pixelX = cursorX * colWidth;
-    const pixelY = (cursorY + 1.35) * rowHeight;
-
-    this.commandSuggest.positionAt(terminalBody, pixelX, pixelY);
+    this.commandSuggest.positionAt(metrics.terminalBody, pixelX, pixelY);
   }
 
   private hasLineSelection(): boolean {
@@ -462,9 +447,9 @@ export class TerminalWindow {
 
   private clearLineSelection() {
     this.selectionAnchor = null;
-    if (this.selectionOverlay) {
-      this.selectionOverlay.style.display = 'none';
-    }
+    this.selectionOverlays.forEach((overlay) => {
+      overlay.style.display = 'none';
+    });
   }
 
   private async moveCursorByKey(key: string) {
@@ -524,31 +509,43 @@ export class TerminalWindow {
 
   private updateLineSelectionOverlay() {
     const range = this.getLineSelectionRange();
-    const terminalBody = this.container.querySelector('.terminal-body') as HTMLElement | null;
-    if (!range || !terminalBody || !this.currentLine) {
-      if (this.selectionOverlay) this.selectionOverlay.style.display = 'none';
+    const metrics = this.getOverlayMetrics();
+    if (!range || !metrics || !this.currentLine) {
+      this.selectionOverlays.forEach((overlay) => {
+        overlay.style.display = 'none';
+      });
       return;
     }
 
-    if (!this.selectionOverlay) {
-      this.selectionOverlay = document.createElement('div');
-      this.selectionOverlay.className = 'line-selection-overlay';
-      terminalBody.appendChild(this.selectionOverlay);
+    const promptStartIndex = this.getPromptStartIndex(metrics);
+    const startCell = promptStartIndex + range.start;
+    const endCell = promptStartIndex + range.end;
+    const startRow = Math.floor(startCell / metrics.cols);
+    const endRow = Math.floor(Math.max(startCell, endCell - 1) / metrics.cols);
+    const visibleRows: Array<{ row: number; startCol: number; endCol: number }> = [];
+
+    for (let row = startRow; row <= endRow; row += 1) {
+      if (row < 0 || row >= metrics.rows) continue;
+      const startCol = row === startRow ? this.mod(startCell, metrics.cols) : 0;
+      const endCol = row === endRow ? this.mod(endCell, metrics.cols) || metrics.cols : metrics.cols;
+      if (endCol <= startCol) continue;
+      visibleRows.push({ row, startCol, endCol });
     }
 
-    const buffer = this.term.buffer.active;
-    const rowHeight = terminalBody.clientHeight / this.term.rows;
-    const colWidth = terminalBody.clientWidth / this.term.cols;
-    const promptStartX = Math.max(0, buffer.cursorX - this.cursorPos);
-    const left = (promptStartX + range.start) * colWidth;
-    const width = Math.max(colWidth * (range.end - range.start), 2);
-    const top = buffer.cursorY * rowHeight;
+    this.ensureSelectionOverlayCount(visibleRows.length, metrics.terminalBody);
 
-    this.selectionOverlay.style.left = `${left}px`;
-    this.selectionOverlay.style.top = `${top}px`;
-    this.selectionOverlay.style.width = `${width}px`;
-    this.selectionOverlay.style.height = `${Math.max(rowHeight, 18)}px`;
-    this.selectionOverlay.style.display = 'block';
+    visibleRows.forEach((segment, index) => {
+      const overlay = this.selectionOverlays[index];
+      overlay.style.left = `${metrics.offsetX + segment.startCol * metrics.colWidth}px`;
+      overlay.style.top = `${metrics.offsetY + segment.row * metrics.rowHeight}px`;
+      overlay.style.width = `${Math.max((segment.endCol - segment.startCol) * metrics.colWidth, 2)}px`;
+      overlay.style.height = `${Math.max(metrics.rowHeight, 18)}px`;
+      overlay.style.display = 'block';
+    });
+
+    for (let index = visibleRows.length; index < this.selectionOverlays.length; index += 1) {
+      this.selectionOverlays[index].style.display = 'none';
+    }
   }
 
   private extractTitleFromOsc(data: string) {
@@ -613,6 +610,17 @@ export class TerminalWindow {
     });
   }
 
+  private bindLineSelection() {
+    const terminalBody = this.container.querySelector('.terminal-body') as HTMLDivElement;
+    terminalBody.addEventListener('dblclick', (event) => {
+      const range = this.resolveWordRangeFromPoint(event.clientX, event.clientY);
+      if (!range) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void this.selectLineRange(range.start, range.end);
+    }, true);
+  }
+
   private showTerminalContextMenu(x: number, y: number, selected: string) {
     this.closeTerminalContextMenu();
     const menu = document.createElement('div');
@@ -646,6 +654,58 @@ export class TerminalWindow {
     if (!this.terminalContextMenu) return;
     this.terminalContextMenu.remove();
     this.terminalContextMenu = null;
+  }
+
+  private async selectLineRange(start: number, end: number) {
+    if (!this.currentLine) return;
+    this.selectionAnchor = Math.max(0, Math.min(start, this.currentLine.length));
+    await this.moveCursorTo(Math.max(0, Math.min(end, this.currentLine.length)));
+    this.updateLineSelectionOverlay();
+  }
+
+  private resolveWordRangeFromPoint(clientX: number, clientY: number): { start: number; end: number } | null {
+    if (!this.currentLine) return null;
+    const metrics = this.getOverlayMetrics();
+    if (!metrics) return null;
+
+    const terminalRect = metrics.terminalBody.getBoundingClientRect();
+    const gridX = clientX - terminalRect.left - metrics.offsetX;
+    const gridY = clientY - terminalRect.top - metrics.offsetY;
+    if (gridX < 0 || gridY < 0) return null;
+
+    const row = Math.floor(gridY / metrics.rowHeight);
+    const col = Math.floor(gridX / metrics.colWidth);
+    if (row < 0 || row >= metrics.rows || col < 0 || col >= metrics.cols) return null;
+
+    const promptStartIndex = this.getPromptStartIndex(metrics);
+    const clickedCell = row * metrics.cols + col;
+    const lineStartCell = promptStartIndex;
+    const lineEndCell = promptStartIndex + this.currentLine.length;
+    if (clickedCell < lineStartCell || clickedCell > lineEndCell) return null;
+
+    let charIndex = Math.min(Math.max(clickedCell - promptStartIndex, 0), Math.max(this.currentLine.length - 1, 0));
+    if (/\s/.test(this.currentLine[charIndex] || '')) {
+      const prev = charIndex > 0 ? this.currentLine[charIndex - 1] : '';
+      const next = charIndex < this.currentLine.length - 1 ? this.currentLine[charIndex + 1] : '';
+      if (prev && !/\s/.test(prev)) {
+        charIndex -= 1;
+      } else if (next && !/\s/.test(next)) {
+        charIndex += 1;
+      } else {
+        return null;
+      }
+    }
+
+    let start = charIndex;
+    let end = charIndex + 1;
+    while (start > 0 && !/\s/.test(this.currentLine[start - 1])) {
+      start -= 1;
+    }
+    while (end < this.currentLine.length && !/\s/.test(this.currentLine[end])) {
+      end += 1;
+    }
+
+    return start < end ? { start, end } : null;
   }
 
   private bindActivation() {
@@ -933,6 +993,8 @@ export class TerminalWindow {
   async close() {
     this.commandSuggest.hide();
     this.closeTerminalContextMenu();
+    this.selectionOverlays.forEach((overlay) => overlay.remove());
+    this.selectionOverlays = [];
     if (this.id) {
       try {
         await invoke('kill_pty', { sessionId: this.id });
@@ -1034,5 +1096,57 @@ export class TerminalWindow {
         rows: this.term.rows,
       }).catch(console.error);
     }
+  }
+
+  private getOverlayMetrics(): {
+    terminalBody: HTMLElement;
+    offsetX: number;
+    offsetY: number;
+    colWidth: number;
+    rowHeight: number;
+    cols: number;
+    rows: number;
+    cursorX: number;
+    cursorY: number;
+  } | null {
+    const terminalBody = this.container.querySelector('.terminal-body') as HTMLElement | null;
+    if (!terminalBody || this.term.cols <= 0 || this.term.rows <= 0) return null;
+
+    const screen = terminalBody.querySelector('.xterm-screen') as HTMLElement | null;
+    const host = screen || terminalBody;
+    const hostRect = host.getBoundingClientRect();
+    const terminalRect = terminalBody.getBoundingClientRect();
+    if (!hostRect.width || !hostRect.height) return null;
+
+    const buffer = this.term.buffer.active;
+    return {
+      terminalBody,
+      offsetX: hostRect.left - terminalRect.left,
+      offsetY: hostRect.top - terminalRect.top,
+      colWidth: hostRect.width / this.term.cols,
+      rowHeight: hostRect.height / this.term.rows,
+      cols: this.term.cols,
+      rows: this.term.rows,
+      cursorX: buffer.cursorX,
+      cursorY: buffer.cursorY,
+    };
+  }
+
+  private getPromptStartIndex(metrics: { cols: number; cursorX: number; cursorY: number }): number {
+    return metrics.cursorY * metrics.cols + metrics.cursorX - this.cursorPos;
+  }
+
+  private ensureSelectionOverlayCount(count: number, terminalBody: HTMLElement) {
+    while (this.selectionOverlays.length < count) {
+      const overlay = document.createElement('div');
+      overlay.className = 'line-selection-overlay';
+      overlay.style.display = 'none';
+      terminalBody.appendChild(overlay);
+      this.selectionOverlays.push(overlay);
+    }
+  }
+
+  private mod(value: number, divisor: number): number {
+    return ((value % divisor) + divisor) % divisor;
   }
 }

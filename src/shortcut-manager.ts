@@ -77,6 +77,56 @@ export function matchShortcut(shortcut: string, event: KeyboardEvent): boolean {
   return normalizeKey(event.key) === normalizeKey(key);
 }
 
+export function formatShortcutFromEvent(event: KeyboardEvent): string {
+  const key = formatShortcutKey(event.key);
+  if (!key) return '';
+
+  const parts: string[] = [];
+  if (event.metaKey) parts.push('Cmd');
+  if (event.ctrlKey) parts.push('Ctrl');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+  parts.push(key);
+
+  return parts.join('+');
+}
+
+function formatShortcutKey(value: string): string {
+  const normalized = normalizeKey(value);
+  if (['control', 'shift', 'alt', 'meta'].includes(normalized)) {
+    return '';
+  }
+
+  const aliases: Record<string, string> = {
+    escape: 'Escape',
+    enter: 'Enter',
+    tab: 'Tab',
+    space: 'Space',
+    arrowleft: 'Left',
+    arrowright: 'Right',
+    arrowup: 'Up',
+    arrowdown: 'Down',
+    backspace: 'Backspace',
+    delete: 'Delete',
+    home: 'Home',
+    end: 'End',
+    pagedown: 'PageDown',
+    pageup: 'PageUp',
+  };
+
+  if (aliases[normalized]) {
+    return aliases[normalized];
+  }
+  if (/^f\d{1,2}$/.test(normalized)) {
+    return normalized.toUpperCase();
+  }
+  if (normalized.length === 1) {
+    return normalized.toUpperCase();
+  }
+
+  return value.length === 1 ? value.toUpperCase() : value;
+}
+
 function normalizeKey(value: string): string {
   const normalized = value.toLowerCase();
   const aliases: Record<string, string> = {
