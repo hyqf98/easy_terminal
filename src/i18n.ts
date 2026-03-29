@@ -1,0 +1,367 @@
+export type Lang = 'zh-CN' | 'en-US';
+
+type Listener = () => void;
+
+let currentLang: Lang = 'zh-CN';
+const listeners: Set<Listener> = new Set();
+
+const messages: Record<Lang, Record<string, string>> = {
+  'zh-CN': {
+    // Sidebar
+    'sidebar.files': '文件管理',
+    'sidebar.commands': '命令管理',
+    'sidebar.history': '历史命令',
+    'sidebar.mappings': '命令映射',
+    'sidebar.ssh': 'SSH 远程',
+    'sidebar.settings': '设置',
+
+    // Settings
+    'settings.title': '设置',
+    'settings.appearance': '外观',
+    'settings.dark': '暗色',
+    'settings.light': '亮色',
+    'settings.language': '语言',
+    'settings.langZh': '简体中文',
+    'settings.langEn': 'English',
+    'settings.update': '应用更新',
+    'settings.updateCurrent': '当前版本',
+    'settings.updateLastChecked': '上次检查',
+    'settings.updateAutoCheck': '启动时自动检查更新',
+    'settings.updateCheck': '检查更新',
+    'settings.updateInstall': '下载并安装',
+    'settings.updateChecking': '正在检查更新...',
+    'settings.updateDownloading': '正在下载更新...',
+    'settings.updateInstalling': '正在安装更新...',
+    'settings.updateUpToDate': '当前已经是最新版本',
+    'settings.updateAvailable': '发现新版本 {0}',
+    'settings.updateReady': '更新已下载，准备安装',
+    'settings.updateIdle': '可以手动检查新版本',
+    'settings.updateUnsupported': '当前环境不支持自动更新',
+    'settings.updateFailed': '更新失败: {0}',
+
+    // Command Config
+    'cmd.config.title': '命令管理',
+    'cmd.loaded': '已加载 {0} 条命令',
+    'cmd.system': '系统命令',
+    'cmd.other': '其他命令',
+    'cmd.custom': '自定义命令',
+    'cmd.quick': '快捷命令',
+    'cmd.quickLegacy': '快捷命令',
+    'cmd.current': '当前',
+    'cmd.count': '{0} 条',
+    'cmd.countCmd': '{0} 条命令',
+    'cmd.import': '导入 JSON 文件',
+    'cmd.importHint': '格式：{"id":"名称","kind":"custom","commands":[{name,alias,description,usage,category}]}',
+    'cmd.format': '格式化',
+    'cmd.save': '保存',
+    'cmd.close': '关闭',
+    'cmd.edit': '编辑',
+    'cmd.delete': '删除',
+    'cmd.add': '添加快捷命令',
+    'cmd.name': '名称',
+    'cmd.command': '命令',
+    'cmd.nameCn': '中文名',
+    'cmd.description': '描述',
+    'cmd.category': '分类',
+    'cmd.cancel': '取消',
+    'cmd.emptyQuick': '暂无快捷命令',
+    'cmd.clickToAdd': '点击下方按钮添加',
+    'cmd.nameRequired': '名称和命令不能为空',
+    'cmd.jsonError': 'JSON 格式不正确，需要 commands 字段',
+    'cmd.saveFailed': '保存失败: {0}',
+    'cmd.importFailed': '导入失败: {0}',
+    'cmd.discover': '发现更多命令',
+    'cmd.install': '安装',
+    'cmd.installed': '已安装',
+    'cmd.editCmd': '编辑命令',
+    'cmd.addCmd': '添加命令',
+    'cmd.addCategory': '新建分类',
+    'cmd.categoryName': '分类名称',
+    'cmd.categoryId': '分类标识',
+    'cmd.categoryRequired': '分类名称不能为空',
+    'cmd.categoryExists': '该分类已存在',
+    'cmd.platformHint': '当前系统已启用：{0}',
+    'cmd.recommended': '推荐模板',
+    'cmd.sendToTerminal': '发送到当前终端',
+    'cmd.noActiveTerminal': '请先选中一个终端',
+    'cmd.sourceSystem': '系统级别',
+    'cmd.sourceBuiltin': '内置模板',
+    'cmd.sourceUser': '用户自定义',
+    'cmd.emptySection': '当前没有可显示的命令分类',
+    'cmd.alias': '别名',
+    'cmd.tags': '标签',
+    'cmd.hint': '影子提示',
+    'cmd.examples': '示例',
+
+    // File Tree
+    'file.title': '文件管理',
+    'file.openInTerminal': '在终端中打开',
+    'file.newFile': '新建文件',
+    'file.newFolder': '新建文件夹',
+    'file.rename': '重命名',
+    'file.delete': '删除',
+    'file.confirmDelete': '确定删除 {0} ?',
+    'file.confirmDeleteMulti': '确定删除 {0} 个项目?',
+    'file.folderName': '文件夹名称:',
+    'file.fileName': '文件名称:',
+    'file.newName': '新名称:',
+    'file.createFailed': '创建失败: {0}',
+    'file.renameFailed': '重命名失败: {0}',
+    'file.deleteFailed': '删除失败: {0}',
+    'file.filterPlaceholder': '筛选文件...',
+    'file.noResults': '没有匹配的文件',
+
+    // Hints
+    'hint.canvas': '在空白区域拖拽以创建终端 | 滚轮平移 | Shift+滚轮水平移动 | Ctrl+滚轮缩放',
+
+    // Suggest
+    'suggest.other': '其他',
+    'suggest.aliases': '别名',
+    'suggest.usage': '用法',
+    'suggest.category': '分类',
+    'suggest.terminal': '终端',
+    'suggest.tags': '标签',
+    'suggest.examples': '示例',
+    'suggest.source': '来源',
+    'suggest.hint': '影子提示',
+
+    // Terminal
+    'terminal.copied': '成功复制终端',
+
+    // History
+    'history.title': '历史命令',
+    'history.summary': '{0} 条历史记录',
+    'history.clear': '清空',
+    'history.empty': '还没有执行过命令',
+    'history.delete': '删除记录',
+    'history.count': '使用 {0} 次',
+    'history.sourceLabel': '历史命令',
+
+    // Mapping
+    'mapping.title': '命令映射',
+    'mapping.add': '新增映射',
+    'mapping.edit': '编辑映射',
+    'mapping.empty': '暂无命令映射',
+    'mapping.enabled': '启用',
+    'mapping.disabled': '停用',
+    'mapping.toggle': '切换状态',
+    'mapping.trigger': '触发词',
+    'mapping.required': '触发词和执行命令不能为空',
+    'mapping.sourceLabel': '命令映射',
+    'mapping.descriptionPlaceholder': '例如：快速跳到固定工作目录',
+    'mapping.modalTitle': '新增命令映射',
+
+    // SSH
+    'ssh.title': 'SSH 远程服务',
+    'ssh.add': '新增服务器',
+    'ssh.empty': '暂无远程服务器',
+    'ssh.group': '分组',
+    'ssh.host': '主机',
+    'ssh.port': '端口',
+    'ssh.user': '用户',
+    'ssh.startupPath': '启动路径',
+    'ssh.jumpServer': '跳板服务器',
+    'ssh.noJumpServer': '不使用跳板',
+    'ssh.activate': '设为绘制目标',
+    'ssh.activateLocal': '切回本地终端',
+    'ssh.connectNow': '立即连接',
+    'ssh.activeBadge': '当前绘制目标',
+    'ssh.localBadge': '本地终端',
+    'ssh.required': '名称、主机和用户不能为空',
+    'ssh.command': '连接命令',
+    'ssh.detailEmpty': '从左侧选择一个服务器，后续在画布上新建终端会自动连接',
+  },
+
+  'en-US': {
+    // Sidebar
+    'sidebar.files': 'Files',
+    'sidebar.commands': 'Commands',
+    'sidebar.history': 'History',
+    'sidebar.mappings': 'Mappings',
+    'sidebar.ssh': 'SSH',
+    'sidebar.settings': 'Settings',
+
+    // Settings
+    'settings.title': 'Settings',
+    'settings.appearance': 'Appearance',
+    'settings.dark': 'Dark',
+    'settings.light': 'Light',
+    'settings.language': 'Language',
+    'settings.langZh': '简体中文',
+    'settings.langEn': 'English',
+    'settings.update': 'App Update',
+    'settings.updateCurrent': 'Current Version',
+    'settings.updateLastChecked': 'Last Checked',
+    'settings.updateAutoCheck': 'Check for updates on startup',
+    'settings.updateCheck': 'Check Update',
+    'settings.updateInstall': 'Download and Install',
+    'settings.updateChecking': 'Checking for updates...',
+    'settings.updateDownloading': 'Downloading update...',
+    'settings.updateInstalling': 'Installing update...',
+    'settings.updateUpToDate': 'You are up to date',
+    'settings.updateAvailable': 'New version {0} is available',
+    'settings.updateReady': 'Update downloaded and ready to install',
+    'settings.updateIdle': 'You can check for updates manually',
+    'settings.updateUnsupported': 'Auto update is unavailable in this environment',
+    'settings.updateFailed': 'Update failed: {0}',
+
+    // Command Config
+    'cmd.config.title': 'Commands',
+    'cmd.loaded': 'Loaded {0} commands',
+    'cmd.system': 'System',
+    'cmd.other': 'Other',
+    'cmd.custom': 'Custom',
+    'cmd.quick': 'Quick',
+    'cmd.quickLegacy': 'Quick Commands',
+    'cmd.current': 'Current',
+    'cmd.count': '{0}',
+    'cmd.countCmd': '{0} commands',
+    'cmd.import': 'Import JSON',
+    'cmd.importHint': 'Format: {"id":"name","kind":"custom","commands":[{name,alias,description,usage,category}]}',
+    'cmd.format': 'Format',
+    'cmd.save': 'Save',
+    'cmd.close': 'Close',
+    'cmd.edit': 'Edit',
+    'cmd.delete': 'Delete',
+    'cmd.add': 'Add Quick Command',
+    'cmd.name': 'Name',
+    'cmd.command': 'Command',
+    'cmd.nameCn': 'Chinese Name',
+    'cmd.description': 'Description',
+    'cmd.category': 'Category',
+    'cmd.cancel': 'Cancel',
+    'cmd.emptyQuick': 'No quick commands',
+    'cmd.clickToAdd': 'Click below to add',
+    'cmd.nameRequired': 'Name and command are required',
+    'cmd.jsonError': 'Invalid JSON format, requires commands field',
+    'cmd.saveFailed': 'Save failed: {0}',
+    'cmd.importFailed': 'Import failed: {0}',
+    'cmd.discover': 'Discover Commands',
+    'cmd.install': 'Install',
+    'cmd.installed': 'Installed',
+    'cmd.editCmd': 'Edit Command',
+    'cmd.addCmd': 'Add Command',
+    'cmd.addCategory': 'New Category',
+    'cmd.categoryName': 'Category Name',
+    'cmd.categoryId': 'Category Id',
+    'cmd.categoryRequired': 'Category name is required',
+    'cmd.categoryExists': 'This category already exists',
+    'cmd.platformHint': 'Enabled for current system: {0}',
+    'cmd.recommended': 'Recommended',
+    'cmd.sendToTerminal': 'Send to Active Terminal',
+    'cmd.noActiveTerminal': 'Select a terminal first',
+    'cmd.sourceSystem': 'System',
+    'cmd.sourceBuiltin': 'Built-in',
+    'cmd.sourceUser': 'User',
+    'cmd.emptySection': 'No command categories yet',
+    'cmd.alias': 'Aliases',
+    'cmd.tags': 'Tags',
+    'cmd.hint': 'Ghost Hint',
+    'cmd.examples': 'Examples',
+
+    // File Tree
+    'file.title': 'Files',
+    'file.openInTerminal': 'Open in Terminal',
+    'file.newFile': 'New File',
+    'file.newFolder': 'New Folder',
+    'file.rename': 'Rename',
+    'file.delete': 'Delete',
+    'file.confirmDelete': 'Delete {0} ?',
+    'file.confirmDeleteMulti': 'Delete {0} items?',
+    'file.folderName': 'Folder name:',
+    'file.fileName': 'File name:',
+    'file.newName': 'New name:',
+    'file.createFailed': 'Create failed: {0}',
+    'file.renameFailed': 'Rename failed: {0}',
+    'file.deleteFailed': 'Delete failed: {0}',
+    'file.filterPlaceholder': 'Filter files...',
+    'file.noResults': 'No matching files',
+
+    // Hints
+    'hint.canvas': 'Drag empty area to create terminal | Scroll to pan | Shift+Scroll horizontal | Ctrl+Scroll zoom',
+
+    // Suggest
+    'suggest.other': 'Other',
+    'suggest.aliases': 'Aliases',
+    'suggest.usage': 'Usage',
+    'suggest.category': 'Category',
+    'suggest.terminal': 'Terminal',
+    'suggest.tags': 'Tags',
+    'suggest.examples': 'Examples',
+    'suggest.source': 'Source',
+    'suggest.hint': 'Hint',
+
+    // Terminal
+    'terminal.copied': 'Terminal copied',
+
+    // History
+    'history.title': 'History',
+    'history.summary': '{0} history items',
+    'history.clear': 'Clear',
+    'history.empty': 'No command history yet',
+    'history.delete': 'Delete',
+    'history.count': 'Used {0} times',
+    'history.sourceLabel': 'History',
+
+    // Mapping
+    'mapping.title': 'Mappings',
+    'mapping.add': 'New Mapping',
+    'mapping.edit': 'Edit Mapping',
+    'mapping.empty': 'No mappings yet',
+    'mapping.enabled': 'Enabled',
+    'mapping.disabled': 'Disabled',
+    'mapping.toggle': 'Toggle',
+    'mapping.trigger': 'Trigger',
+    'mapping.required': 'Trigger and command are required',
+    'mapping.sourceLabel': 'Mapping',
+    'mapping.descriptionPlaceholder': 'For example: jump to a fixed workspace',
+    'mapping.modalTitle': 'New Mapping',
+
+    // SSH
+    'ssh.title': 'SSH Services',
+    'ssh.add': 'New Server',
+    'ssh.empty': 'No SSH servers yet',
+    'ssh.group': 'Group',
+    'ssh.host': 'Host',
+    'ssh.port': 'Port',
+    'ssh.user': 'User',
+    'ssh.startupPath': 'Startup Path',
+    'ssh.jumpServer': 'Jump Server',
+    'ssh.noJumpServer': 'No Jump Server',
+    'ssh.activate': 'Use For New Terminals',
+    'ssh.activateLocal': 'Back To Local',
+    'ssh.connectNow': 'Connect Now',
+    'ssh.activeBadge': 'Active Draw Target',
+    'ssh.localBadge': 'Local Terminal',
+    'ssh.required': 'Name, host, and user are required',
+    'ssh.command': 'Connect Command',
+    'ssh.detailEmpty': 'Select a server on the left. New canvas terminals will auto-connect to it.',
+  },
+};
+
+/**
+ * Translate a key with optional interpolation params.
+ * Usage: t('cmd.loaded', '42') → "已加载 42 条命令" / "Loaded 42 commands"
+ */
+export function t(key: string, ...args: string[]): string {
+  let str = messages[currentLang]?.[key] || messages['zh-CN']?.[key] || key;
+  args.forEach((arg, i) => {
+    str = str.replace(`{${i}}`, arg);
+  });
+  return str;
+}
+
+export function setLang(lang: Lang): void {
+  if (lang === currentLang) return;
+  currentLang = lang;
+  listeners.forEach((fn) => fn());
+}
+
+export function getLang(): Lang {
+  return currentLang;
+}
+
+export function onLangChange(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}

@@ -12,6 +12,15 @@ pub struct FileEntry {
     pub icon: String,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct FilePreviewData {
+    pub path: String,
+    pub language: String,
+    pub content: String,
+    pub truncated: bool,
+    pub size: u64,
+}
+
 fn get_icon(name: &str, is_dir: bool) -> String {
     if is_dir {
         return "folder".to_string();
@@ -172,5 +181,61 @@ pub fn get_os_platform() -> String {
         "darwin".to_string()
     } else {
         "linux".to_string()
+    }
+}
+
+pub fn read_file_preview(path: &str) -> Result<FilePreviewData, String> {
+    const MAX_PREVIEW_BYTES: usize = 1024 * 1024;
+
+    let file_path = Path::new(path);
+    if !file_path.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    if file_path.is_dir() {
+        return Err(format!("Cannot preview directory: {}", path));
+    }
+
+    let bytes = fs::read(file_path).map_err(|e| e.to_string())?;
+    if bytes.iter().take(4096).any(|byte| *byte == 0) {
+        return Err("Binary files are not supported in preview".to_string());
+    }
+
+    let truncated = bytes.len() > MAX_PREVIEW_BYTES;
+    let preview_bytes = if truncated {
+        &bytes[..MAX_PREVIEW_BYTES]
+    } else {
+        &bytes[..]
+    };
+
+    Ok(FilePreviewData {
+        path: path.to_string(),
+        language: detect_language(file_path),
+        content: String::from_utf8_lossy(preview_bytes).to_string(),
+        truncated,
+        size: bytes.len() as u64,
+    })
+}
+
+fn detect_language(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
+        "ts" | "tsx" => "typescript".to_string(),
+        "js" | "jsx" => "javascript".to_string(),
+        "json" => "json".to_string(),
+        "rs" => "rust".to_string(),
+        "py" => "python".to_string(),
+        "md" => "markdown".to_string(),
+        "html" => "html".to_string(),
+        "css" | "scss" | "less" => "css".to_string(),
+        "toml" => "toml".to_string(),
+        "yaml" | "yml" => "yaml".to_string(),
+        "sh" => "shell".to_string(),
+        "ps1" => "powershell".to_string(),
+        _ => "text".to_string(),
     }
 }

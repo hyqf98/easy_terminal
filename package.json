@@ -6,12 +6,20 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "build:mac": "pnpm tauri build --target universal-apple-darwin",
+    "build:mac-arm": "pnpm tauri build --target aarch64-apple-darwin",
+    "build:mac-intel": "pnpm tauri build --target x86_64-apple-darwin",
+    "build:windows": "pnpm tauri build --target x86_64-pc-windows-msvc",
+    "build:linux": "pnpm tauri build --target x86_64-unknown-linux-gnu"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2",
+    "@tauri-apps/plugin-updater": "^2",
     "@xterm/xterm": "^5.5.0",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0"

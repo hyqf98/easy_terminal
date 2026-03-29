@@ -1,0 +1,17 @@
+{
+  "id": "rust",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "cargo", "alias": [], "name_cn": "Cargo构建", "description": "Rust 包管理器与构建工具", "usage": "cargo <command>", "category": "Rust" },
+    { "name": "rustc", "alias": [], "name_cn": "Rust编译", "description": "Rust 编译器", "usage": "rustc <file>.rs", "category": "Rust" },
+    { "name": "rustup", "alias": [], "name_cn": "Rust工具链", "description": "Rust 工具链管理器", "usage": "rustup <command>", "category": "Rust" },
+    { "name": "rustfmt", "alias": [], "name_cn": "代码格式化", "description": "Rust 代码格式化", "usage": "rustfmt <file>", "category": "Rust" },
+    { "name": "clippy", "alias": [], "name_cn": "代码检查", "description": "Rust 代码检查工具", "usage": "cargo clippy", "category": "Rust" },
+    { "name": "cargo test", "alias": [], "name_cn": "运行测试", "description": "运行Rust测试", "usage": "cargo test", "category": "Rust" },
+    { "name": "cargo doc", "alias": [], "name_cn": "生成文档", "description": "生成Rust文档", "usage": "cargo doc --open", "category": "Rust" },
+    { "name": "cargo publish", "alias": [], "name_cn": "发布包", "description": "发布Rust包到crates.io", "usage": "cargo publish", "category": "Rust" },
+    { "name": "wasm-pack", "alias": [], "name_cn": "WebAssembly", "description": "Rust WebAssembly 打包工具", "usage": "wasm-pack build", "category": "Rust" },
+    { "name": "cargo install", "alias": [], "name_cn": "安装工具", "description": "安装Rust二进制工具", "usage": "cargo install <crate>", "category": "Rust" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "npm",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "npm", "alias": [], "name_cn": "npm 主命令", "description": "Node.js 包管理入口", "usage": "npm <command>", "category": "npm" },
+    { "name": "npm install", "alias": ["npm i"], "name_cn": "安装依赖", "description": "安装 package.json 中的依赖", "usage": "npm install", "category": "npm" },
+    { "name": "npm install <package>", "alias": ["npm i <package>"], "name_cn": "安装指定包", "description": "安装单个依赖包", "usage": "npm install <package>", "category": "npm" },
+    { "name": "npm run", "alias": [], "name_cn": "运行脚本", "description": "运行 package.json 中定义的脚本", "usage": "npm run <script>", "category": "npm" },
+    { "name": "npm run dev", "alias": [], "name_cn": "开发模式", "description": "运行常见的开发脚本", "usage": "npm run dev", "category": "npm" },
+    { "name": "npm run build", "alias": [], "name_cn": "构建", "description": "运行常见的构建脚本", "usage": "npm run build", "category": "npm" },
+    { "name": "npm test", "alias": [], "name_cn": "测试", "description": "运行项目测试", "usage": "npm test", "category": "npm" },
+    { "name": "npm uninstall", "alias": ["npm rm"], "name_cn": "卸载依赖", "description": "移除依赖包", "usage": "npm uninstall <package>", "category": "npm" },
+    { "name": "npm update", "alias": [], "name_cn": "更新依赖", "description": "更新项目依赖", "usage": "npm update", "category": "npm" },
+    { "name": "npm publish", "alias": [], "name_cn": "发布包", "description": "发布当前包到 npm 仓库", "usage": "npm publish", "category": "npm" }
+  ]
+}

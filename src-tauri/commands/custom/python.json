@@ -1,0 +1,19 @@
+{
+  "id": "python",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "python", "alias": ["py", "python3"], "name_cn": "运行Python", "description": "运行Python程序", "usage": "python <file>", "category": "Python" },
+    { "name": "pip", "alias": ["pip3"], "name_cn": "PIP包管理", "description": "Python 包管理器", "usage": "pip <command>", "category": "Python" },
+    { "name": "pipenv", "alias": [], "name_cn": "Pipenv", "description": "Python 虚拟环境管理", "usage": "pipenv <command>", "category": "Python" },
+    { "name": "poetry", "alias": [], "name_cn": "Poetry", "description": "Python 依赖管理工具", "usage": "poetry <command>", "category": "Python" },
+    { "name": "conda", "alias": [], "name_cn": "Conda", "description": "Anaconda 包和环境管理", "usage": "conda <command>", "category": "Python" },
+    { "name": "virtualenv", "alias": ["venv"], "name_cn": "虚拟环境", "description": "创建Python虚拟环境", "usage": "virtualenv <name>", "category": "Python" },
+    { "name": "pytest", "alias": [], "name_cn": "Pytest测试", "description": "Python 测试框架", "usage": "pytest [options]", "category": "Python" },
+    { "name": "black", "alias": [], "name_cn": "代码格式化", "description": "Python 代码格式化工具", "usage": "black <file>", "category": "Python" },
+    { "name": "flake8", "alias": [], "name_cn": "代码检查", "description": "Python 代码检查工具", "usage": "flake8 <file>", "category": "Python" },
+    { "name": "mypy", "alias": [], "name_cn": "类型检查", "description": "Python 静态类型检查", "usage": "mypy <file>", "category": "Python" },
+    { "name": "jupyter", "alias": [], "name_cn": "Jupyter", "description": "Jupyter Notebook", "usage": "jupyter notebook", "category": "Python" },
+    { "name": "uv", "alias": [], "name_cn": "UV包管理", "description": "极速Python包管理器", "usage": "uv <command>", "category": "Python" }
+  ]
+}

@@ -1,0 +1,2039 @@
+{
+  "id": "darwin",
+  "kind": "system",
+  "platforms": [
+    "darwin"
+  ],
+  "commands": [
+    {
+      "name": "ls",
+      "alias": [
+        "dir"
+      ],
+      "name_cn": "列出目录",
+      "description": "列出目录内容",
+      "usage": "ls [-la] [path]",
+      "category": "文件操作"
+    },
+    {
+      "name": "cd",
+      "alias": [],
+      "name_cn": "切换目录",
+      "description": "切换当前工作目录",
+      "usage": "cd <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "pwd",
+      "alias": [],
+      "name_cn": "当前目录",
+      "description": "显示当前工作目录",
+      "usage": "pwd",
+      "category": "文件操作"
+    },
+    {
+      "name": "mkdir",
+      "alias": [],
+      "name_cn": "创建目录",
+      "description": "创建目录",
+      "usage": "mkdir [-p] <dir>",
+      "category": "文件操作"
+    },
+    {
+      "name": "rmdir",
+      "alias": [],
+      "name_cn": "删除空目录",
+      "description": "删除空目录",
+      "usage": "rmdir <dir>",
+      "category": "文件操作"
+    },
+    {
+      "name": "rm",
+      "alias": [
+        "del"
+      ],
+      "name_cn": "删除文件",
+      "description": "删除文件或目录",
+      "usage": "rm [-rf] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "cp",
+      "alias": [
+        "copy"
+      ],
+      "name_cn": "复制文件",
+      "description": "复制文件或目录",
+      "usage": "cp [-R] <src> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "mv",
+      "alias": [
+        "move"
+      ],
+      "name_cn": "移动文件",
+      "description": "移动或重命名文件",
+      "usage": "mv <src> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "touch",
+      "alias": [],
+      "name_cn": "创建文件",
+      "description": "创建空文件或更新时间戳",
+      "usage": "touch <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "cat",
+      "alias": [
+        "type"
+      ],
+      "name_cn": "查看文件",
+      "description": "连接并显示文件内容",
+      "usage": "cat <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "less",
+      "alias": [
+        "more"
+      ],
+      "name_cn": "分页查看",
+      "description": "分页查看文件",
+      "usage": "less <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "head",
+      "alias": [],
+      "name_cn": "查看开头",
+      "description": "显示文件开头",
+      "usage": "head [-n N] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "tail",
+      "alias": [],
+      "name_cn": "查看末尾",
+      "description": "显示文件末尾",
+      "usage": "tail [-n N] [-f] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "find",
+      "alias": [],
+      "name_cn": "查找文件",
+      "description": "按条件查找文件",
+      "usage": "find <path> -name <pattern>",
+      "category": "文件操作"
+    },
+    {
+      "name": "locate",
+      "alias": [],
+      "name_cn": "快速查找",
+      "description": "通过数据库快速查找文件",
+      "usage": "locate <pattern>",
+      "category": "文件操作"
+    },
+    {
+      "name": "which",
+      "alias": [
+        "where"
+      ],
+      "name_cn": "查找命令",
+      "description": "显示命令所在路径",
+      "usage": "which <command>",
+      "category": "文件操作"
+    },
+    {
+      "name": "whereis",
+      "alias": [],
+      "name_cn": "命令位置",
+      "description": "显示命令相关路径",
+      "usage": "whereis <command>",
+      "category": "文件操作"
+    },
+    {
+      "name": "tree",
+      "alias": [],
+      "name_cn": "目录树",
+      "description": "以树状图显示目录结构",
+      "usage": "tree [path]",
+      "category": "文件操作"
+    },
+    {
+      "name": "ln",
+      "alias": [
+        "mklink"
+      ],
+      "name_cn": "创建链接",
+      "description": "创建硬链接或符号链接",
+      "usage": "ln [-s] <target> <link>",
+      "category": "文件操作"
+    },
+    {
+      "name": "chmod",
+      "alias": [
+        "icacls"
+      ],
+      "name_cn": "文件权限",
+      "description": "更改文件权限",
+      "usage": "chmod <mode> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "chown",
+      "alias": [
+        "takeown"
+      ],
+      "name_cn": "文件所有者",
+      "description": "更改文件所有者",
+      "usage": "chown <user> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "chgrp",
+      "alias": [],
+      "name_cn": "更改组",
+      "description": "更改文件所属组",
+      "usage": "chgrp <group> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "stat",
+      "alias": [],
+      "name_cn": "文件状态",
+      "description": "显示文件状态信息",
+      "usage": "stat <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "file",
+      "alias": [],
+      "name_cn": "文件类型",
+      "description": "确定文件类型",
+      "usage": "file <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "wc",
+      "alias": [],
+      "name_cn": "统计",
+      "description": "统计文件行数、单词、字节",
+      "usage": "wc [-lwc] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "du",
+      "alias": [],
+      "name_cn": "目录大小",
+      "description": "估算目录空间使用",
+      "usage": "du [-sh] [path]",
+      "category": "文件操作"
+    },
+    {
+      "name": "grep",
+      "alias": [
+        "findstr"
+      ],
+      "name_cn": "搜索文本",
+      "description": "搜索匹配模式的文本行",
+      "usage": "grep [-rin] <pattern> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "basename",
+      "alias": [],
+      "name_cn": "文件名",
+      "description": "从路径提取文件名",
+      "usage": "basename <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "dirname",
+      "alias": [],
+      "name_cn": "目录名",
+      "description": "从路径提取目录名",
+      "usage": "dirname <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "realpath",
+      "alias": [],
+      "name_cn": "真实路径",
+      "description": "显示解析后的绝对路径",
+      "usage": "realpath <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "readlink",
+      "alias": [],
+      "name_cn": "读取链接",
+      "description": "显示符号链接指向",
+      "usage": "readlink <link>",
+      "category": "文件操作"
+    },
+    {
+      "name": "xargs",
+      "alias": [],
+      "name_cn": "构建参数",
+      "description": "从标准输入构建命令",
+      "usage": "xargs <command>",
+      "category": "文件操作"
+    },
+    {
+      "name": "mktemp",
+      "alias": [],
+      "name_cn": "临时文件",
+      "description": "创建临时文件",
+      "usage": "mktemp",
+      "category": "文件操作"
+    },
+    {
+      "name": "md5",
+      "alias": [
+        "md5sum"
+      ],
+      "name_cn": "MD5校验",
+      "description": "计算文件MD5校验和",
+      "usage": "md5 <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "shasum",
+      "alias": [
+        "sha256sum"
+      ],
+      "name_cn": "SHA校验",
+      "description": "计算文件SHA校验和",
+      "usage": "shasum -a 256 <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "xattr",
+      "alias": [],
+      "name_cn": "扩展属性",
+      "description": "显示或修改文件扩展属性",
+      "usage": "xattr [-l] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "GetFileInfo",
+      "alias": [],
+      "name_cn": "Finder信息",
+      "description": "获取文件的Finder信息",
+      "usage": "GetFileInfo <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "SetFile",
+      "alias": [],
+      "name_cn": "设置Finder属性",
+      "description": "设置文件的Finder属性",
+      "usage": "SetFile -a <attr> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "clear",
+      "alias": [
+        "cls"
+      ],
+      "name_cn": "清屏",
+      "description": "清除终端屏幕",
+      "usage": "clear",
+      "category": "终端操作"
+    },
+    {
+      "name": "echo",
+      "alias": [],
+      "name_cn": "输出文本",
+      "description": "显示一行文本",
+      "usage": "echo <message>",
+      "category": "终端操作"
+    },
+    {
+      "name": "printf",
+      "alias": [],
+      "name_cn": "格式化输出",
+      "description": "格式化输出文本",
+      "usage": "printf <format> <args>",
+      "category": "终端操作"
+    },
+    {
+      "name": "export",
+      "alias": [
+        "set"
+      ],
+      "name_cn": "环境变量",
+      "description": "设置环境变量",
+      "usage": "export VAR=value",
+      "category": "终端操作"
+    },
+    {
+      "name": "alias",
+      "alias": [
+        "doskey"
+      ],
+      "name_cn": "命令别名",
+      "description": "创建命令别名",
+      "usage": "alias name=command",
+      "category": "终端操作"
+    },
+    {
+      "name": "unalias",
+      "alias": [],
+      "name_cn": "删除别名",
+      "description": "删除命令别名",
+      "usage": "unalias <name>",
+      "category": "终端操作"
+    },
+    {
+      "name": "history",
+      "alias": [],
+      "name_cn": "命令历史",
+      "description": "显示命令历史",
+      "usage": "history [N]",
+      "category": "终端操作"
+    },
+    {
+      "name": "source",
+      "alias": [
+        "."
+      ],
+      "name_cn": "执行脚本",
+      "description": "在当前shell执行脚本",
+      "usage": "source <file>",
+      "category": "终端操作"
+    },
+    {
+      "name": "exit",
+      "alias": [],
+      "name_cn": "退出",
+      "description": "退出当前shell",
+      "usage": "exit [code]",
+      "category": "终端操作"
+    },
+    {
+      "name": "env",
+      "alias": [],
+      "name_cn": "环境变量列表",
+      "description": "显示所有环境变量",
+      "usage": "env",
+      "category": "终端操作"
+    },
+    {
+      "name": "printenv",
+      "alias": [],
+      "name_cn": "打印环境变量",
+      "description": "打印环境变量值",
+      "usage": "printenv [VAR]",
+      "category": "终端操作"
+    },
+    {
+      "name": "type",
+      "alias": [],
+      "name_cn": "命令类型",
+      "description": "显示命令类型",
+      "usage": "type <command>",
+      "category": "终端操作"
+    },
+    {
+      "name": "tmux",
+      "alias": [],
+      "name_cn": "终端复用",
+      "description": "终端多路复用器",
+      "usage": "tmux [new|attach]",
+      "category": "终端操作"
+    },
+    {
+      "name": "screen",
+      "alias": [],
+      "name_cn": "屏幕复用",
+      "description": "全屏窗口管理器",
+      "usage": "screen [-S name]",
+      "category": "终端操作"
+    },
+    {
+      "name": "say",
+      "alias": [],
+      "name_cn": "语音播报",
+      "description": "macOS文本转语音",
+      "usage": "say <text>",
+      "category": "终端操作"
+    },
+    {
+      "name": "uname",
+      "alias": [
+        "ver"
+      ],
+      "name_cn": "系统信息",
+      "description": "显示系统信息",
+      "usage": "uname [-a]",
+      "category": "系统管理"
+    },
+    {
+      "name": "hostname",
+      "alias": [],
+      "name_cn": "主机名",
+      "description": "显示主机名",
+      "usage": "hostname",
+      "category": "系统管理"
+    },
+    {
+      "name": "uptime",
+      "alias": [],
+      "name_cn": "运行时间",
+      "description": "显示系统运行时间",
+      "usage": "uptime",
+      "category": "系统管理"
+    },
+    {
+      "name": "date",
+      "alias": [],
+      "name_cn": "日期时间",
+      "description": "显示或设置日期时间",
+      "usage": "date [+format]",
+      "category": "系统管理"
+    },
+    {
+      "name": "sw_vers",
+      "alias": [],
+      "name_cn": "macOS版本",
+      "description": "显示macOS版本信息",
+      "usage": "sw_vers",
+      "category": "系统管理"
+    },
+    {
+      "name": "system_profiler",
+      "alias": [
+        "systeminfo"
+      ],
+      "name_cn": "系统报告",
+      "description": "显示系统硬件和软件配置",
+      "usage": "system_profiler [SPDataType]",
+      "category": "系统管理"
+    },
+    {
+      "name": "who",
+      "alias": [],
+      "name_cn": "在线用户",
+      "description": "显示已登录用户",
+      "usage": "who",
+      "category": "系统管理"
+    },
+    {
+      "name": "w",
+      "alias": [],
+      "name_cn": "用户活动",
+      "description": "显示登录用户及其活动",
+      "usage": "w",
+      "category": "系统管理"
+    },
+    {
+      "name": "whoami",
+      "alias": [],
+      "name_cn": "当前用户",
+      "description": "显示当前用户名",
+      "usage": "whoami",
+      "category": "系统管理"
+    },
+    {
+      "name": "id",
+      "alias": [],
+      "name_cn": "用户ID",
+      "description": "显示用户和组ID",
+      "usage": "id [username]",
+      "category": "系统管理"
+    },
+    {
+      "name": "last",
+      "alias": [],
+      "name_cn": "登录记录",
+      "description": "显示最近登录列表",
+      "usage": "last [-n N]",
+      "category": "系统管理"
+    },
+    {
+      "name": "reboot",
+      "alias": [],
+      "name_cn": "重启",
+      "description": "重启系统",
+      "usage": "sudo reboot",
+      "category": "系统管理"
+    },
+    {
+      "name": "shutdown",
+      "alias": [],
+      "name_cn": "关机",
+      "description": "关闭系统",
+      "usage": "sudo shutdown -h now",
+      "category": "系统管理"
+    },
+    {
+      "name": "sysctl",
+      "alias": [],
+      "name_cn": "内核参数",
+      "description": "读写内核状态",
+      "usage": "sysctl [-a]",
+      "category": "系统管理"
+    },
+    {
+      "name": "dscacheutil",
+      "alias": [],
+      "name_cn": "缓存刷新",
+      "description": "刷新目录服务缓存",
+      "usage": "dscacheutil -flushcache",
+      "category": "系统管理"
+    },
+    {
+      "name": "dscl",
+      "alias": [
+        "net user"
+      ],
+      "name_cn": "目录服务",
+      "description": "目录服务命令行工具",
+      "usage": "dscl <path> -read",
+      "category": "系统管理"
+    },
+    {
+      "name": "ps",
+      "alias": [
+        "tasklist"
+      ],
+      "name_cn": "进程列表",
+      "description": "报告进程状态",
+      "usage": "ps [aux]",
+      "category": "进程管理"
+    },
+    {
+      "name": "top",
+      "alias": [],
+      "name_cn": "实时监控",
+      "description": "实时显示进程",
+      "usage": "top",
+      "category": "进程管理"
+    },
+    {
+      "name": "kill",
+      "alias": [
+        "taskkill"
+      ],
+      "name_cn": "终止进程",
+      "description": "发送信号到进程",
+      "usage": "kill [-9] <pid>",
+      "category": "进程管理"
+    },
+    {
+      "name": "killall",
+      "alias": [],
+      "name_cn": "按名终止",
+      "description": "按名称终止进程",
+      "usage": "killall <name>",
+      "category": "进程管理"
+    },
+    {
+      "name": "pkill",
+      "alias": [],
+      "name_cn": "模式终止",
+      "description": "按模式终止进程",
+      "usage": "pkill <pattern>",
+      "category": "进程管理"
+    },
+    {
+      "name": "pgrep",
+      "alias": [],
+      "name_cn": "查找进程",
+      "description": "查找进程ID",
+      "usage": "pgrep <name>",
+      "category": "进程管理"
+    },
+    {
+      "name": "nice",
+      "alias": [],
+      "name_cn": "调整优先级",
+      "description": "设置进程优先级",
+      "usage": "nice -n <priority> <command>",
+      "category": "进程管理"
+    },
+    {
+      "name": "renice",
+      "alias": [],
+      "name_cn": "修改优先级",
+      "description": "修改进程优先级",
+      "usage": "renice -n <priority> -p <pid>",
+      "category": "进程管理"
+    },
+    {
+      "name": "nohup",
+      "alias": [],
+      "name_cn": "后台运行",
+      "description": "不受挂断影响的运行命令",
+      "usage": "nohup <command> &",
+      "category": "进程管理"
+    },
+    {
+      "name": "bg",
+      "alias": [],
+      "name_cn": "后台任务",
+      "description": "将任务放到后台",
+      "usage": "bg [%n]",
+      "category": "进程管理"
+    },
+    {
+      "name": "fg",
+      "alias": [],
+      "name_cn": "前台任务",
+      "description": "将任务放到前台",
+      "usage": "fg [%n]",
+      "category": "进程管理"
+    },
+    {
+      "name": "jobs",
+      "alias": [],
+      "name_cn": "任务列表",
+      "description": "显示活跃任务",
+      "usage": "jobs",
+      "category": "进程管理"
+    },
+    {
+      "name": "lsof",
+      "alias": [
+        "openfiles"
+      ],
+      "name_cn": "打开的文件",
+      "description": "列出打开的文件",
+      "usage": "lsof [-i :port]",
+      "category": "进程管理"
+    },
+    {
+      "name": "pidof",
+      "alias": [],
+      "name_cn": "查找PID",
+      "description": "查找进程ID",
+      "usage": "pidof <program>",
+      "category": "进程管理"
+    },
+    {
+      "name": "pstree",
+      "alias": [],
+      "name_cn": "进程树",
+      "description": "显示进程树",
+      "usage": "pstree [-p]",
+      "category": "进程管理"
+    },
+    {
+      "name": "ifconfig",
+      "alias": [
+        "ipconfig"
+      ],
+      "name_cn": "网络配置",
+      "description": "配置网络接口",
+      "usage": "ifconfig [interface]",
+      "category": "网络"
+    },
+    {
+      "name": "ping",
+      "alias": [],
+      "name_cn": "测试网络",
+      "description": "测试网络连接",
+      "usage": "ping [-c N] <host>",
+      "category": "网络"
+    },
+    {
+      "name": "traceroute",
+      "alias": [
+        "tracert"
+      ],
+      "name_cn": "路由跟踪",
+      "description": "跟踪数据包路由路径",
+      "usage": "traceroute <host>",
+      "category": "网络"
+    },
+    {
+      "name": "netstat",
+      "alias": [
+        "ss"
+      ],
+      "name_cn": "网络连接",
+      "description": "显示网络连接和端口",
+      "usage": "netstat [-an]",
+      "category": "网络"
+    },
+    {
+      "name": "curl",
+      "alias": [
+        "wget"
+      ],
+      "name_cn": "HTTP请求",
+      "description": "发起HTTP请求",
+      "usage": "curl [-o file] <url>",
+      "category": "网络"
+    },
+    {
+      "name": "ssh",
+      "alias": [],
+      "name_cn": "远程登录",
+      "description": "SSH远程登录",
+      "usage": "ssh <user>@<host>",
+      "category": "网络"
+    },
+    {
+      "name": "scp",
+      "alias": [],
+      "name_cn": "远程复制",
+      "description": "通过SSH复制文件",
+      "usage": "scp <src> <dest>",
+      "category": "网络"
+    },
+    {
+      "name": "sftp",
+      "alias": [],
+      "name_cn": "安全传输",
+      "description": "安全文件传输",
+      "usage": "sftp <user>@<host>",
+      "category": "网络"
+    },
+    {
+      "name": "rsync",
+      "alias": [],
+      "name_cn": "远程同步",
+      "description": "远程文件同步",
+      "usage": "rsync -avz <src> <dest>",
+      "category": "网络"
+    },
+    {
+      "name": "dig",
+      "alias": [
+        "nslookup"
+      ],
+      "name_cn": "DNS查询",
+      "description": "DNS查询工具",
+      "usage": "dig <domain>",
+      "category": "网络"
+    },
+    {
+      "name": "nslookup",
+      "alias": [],
+      "name_cn": "DNS解析",
+      "description": "交互式DNS查询",
+      "usage": "nslookup <domain>",
+      "category": "网络"
+    },
+    {
+      "name": "host",
+      "alias": [],
+      "name_cn": "DNS查找",
+      "description": "DNS查找工具",
+      "usage": "host <domain>",
+      "category": "网络"
+    },
+    {
+      "name": "whois",
+      "alias": [],
+      "name_cn": "域名信息",
+      "description": "查询域名注册信息",
+      "usage": "whois <domain>",
+      "category": "网络"
+    },
+    {
+      "name": "nc",
+      "alias": [
+        "ncat"
+      ],
+      "name_cn": "网络工具",
+      "description": "TCP/IP工具",
+      "usage": "nc [-l] <host> <port>",
+      "category": "网络"
+    },
+    {
+      "name": "arp",
+      "alias": [],
+      "name_cn": "ARP表",
+      "description": "操作ARP缓存",
+      "usage": "arp [-a]",
+      "category": "网络"
+    },
+    {
+      "name": "ndp",
+      "alias": [],
+      "name_cn": "邻居发现",
+      "description": "IPv6邻居发现协议表",
+      "usage": "ndp -a",
+      "category": "网络"
+    },
+    {
+      "name": "networksetup",
+      "alias": [],
+      "name_cn": "网络设置",
+      "description": "macOS网络设置工具",
+      "usage": "networksetup -listallnetworkservices",
+      "category": "网络"
+    },
+    {
+      "name": "airport",
+      "alias": [
+        "iwconfig"
+      ],
+      "name_cn": "WiFi管理",
+      "description": "macOS无线网络管理",
+      "usage": "airport -s",
+      "category": "网络"
+    },
+    {
+      "name": "scutil",
+      "alias": [],
+      "name_cn": "系统配置",
+      "description": "系统配置交互工具",
+      "usage": "scutil --dns",
+      "category": "网络"
+    },
+    {
+      "name": "mtr",
+      "alias": [
+        "pathping"
+      ],
+      "name_cn": "网络诊断",
+      "description": "网络诊断工具",
+      "usage": "mtr <host>",
+      "category": "网络"
+    },
+    {
+      "name": "tcpdump",
+      "alias": [],
+      "name_cn": "抓包分析",
+      "description": "捕获网络数据包",
+      "usage": "tcpdump -i en0",
+      "category": "网络"
+    },
+    {
+      "name": "df",
+      "alias": [],
+      "name_cn": "磁盘空间",
+      "description": "显示磁盘使用情况",
+      "usage": "df [-h]",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "diskutil",
+      "alias": [
+        "diskpart"
+      ],
+      "name_cn": "磁盘工具",
+      "description": "macOS磁盘管理工具",
+      "usage": "diskutil <command>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "hdiutil",
+      "alias": [],
+      "name_cn": "磁盘映像",
+      "description": "操作磁盘映像(.dmg)",
+      "usage": "hdiutil attach <file.dmg>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "mount",
+      "alias": [],
+      "name_cn": "挂载",
+      "description": "挂载文件系统",
+      "usage": "mount <device> <dir>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "umount",
+      "alias": [],
+      "name_cn": "卸载",
+      "description": "卸载文件系统",
+      "usage": "umount <dir>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "dd",
+      "alias": [],
+      "name_cn": "数据复制",
+      "description": "转换和复制文件",
+      "usage": "dd if=<src> of=<dest>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "tmutil",
+      "alias": [],
+      "name_cn": "Time Machine",
+      "description": "Time Machine备份管理",
+      "usage": "tmutil startbackup",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "fsck",
+      "alias": [
+        "chkdsk"
+      ],
+      "name_cn": "文件系统检查",
+      "description": "检查和修复文件系统",
+      "usage": "fsck <device>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "sed",
+      "alias": [],
+      "name_cn": "流编辑器",
+      "description": "文本流编辑器",
+      "usage": "sed 's/old/new/g' <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "awk",
+      "alias": [],
+      "name_cn": "文本处理",
+      "description": "模式扫描和处理语言",
+      "usage": "awk '{print $1}' <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "sort",
+      "alias": [],
+      "name_cn": "排序",
+      "description": "对文本行排序",
+      "usage": "sort [-r] [-n] <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "uniq",
+      "alias": [],
+      "name_cn": "去重",
+      "description": "报告或忽略重复行",
+      "usage": "uniq [-c] <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "cut",
+      "alias": [],
+      "name_cn": "剪切列",
+      "description": "从每行中提取部分",
+      "usage": "cut -d<delim> -f<N> <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "paste",
+      "alias": [],
+      "name_cn": "合并列",
+      "description": "合并文件的行",
+      "usage": "paste <file1> <file2>",
+      "category": "文本处理"
+    },
+    {
+      "name": "tr",
+      "alias": [],
+      "name_cn": "字符替换",
+      "description": "替换或删除字符",
+      "usage": "tr 'a-z' 'A-Z'",
+      "category": "文本处理"
+    },
+    {
+      "name": "tee",
+      "alias": [],
+      "name_cn": "分流输出",
+      "description": "输出到文件和标准输出",
+      "usage": "<command> | tee <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "diff",
+      "alias": [
+        "fc"
+      ],
+      "name_cn": "比较文件",
+      "description": "逐行比较文件",
+      "usage": "diff <file1> <file2>",
+      "category": "文本处理"
+    },
+    {
+      "name": "patch",
+      "alias": [],
+      "name_cn": "应用补丁",
+      "description": "应用diff格式的补丁",
+      "usage": "patch < file.patch",
+      "category": "文本处理"
+    },
+    {
+      "name": "jq",
+      "alias": [],
+      "name_cn": "JSON处理",
+      "description": "命令行JSON处理器",
+      "usage": "jq '.' <file.json>",
+      "category": "文本处理"
+    },
+    {
+      "name": "plutil",
+      "alias": [],
+      "name_cn": "Plist编辑",
+      "description": "属性列表文件工具",
+      "usage": "plutil -convert xml1 <file>",
+      "category": "文本处理"
+    },
+    {
+      "name": "tar",
+      "alias": [],
+      "name_cn": "打包解压",
+      "description": "打包或解压文件",
+      "usage": "tar [-czf|xzf] <archive> [files]",
+      "category": "压缩解压"
+    },
+    {
+      "name": "gzip",
+      "alias": [],
+      "name_cn": "GZIP压缩",
+      "description": "压缩文件(.gz)",
+      "usage": "gzip <file>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "gunzip",
+      "alias": [],
+      "name_cn": "GZIP解压",
+      "description": "解压.gz文件",
+      "usage": "gunzip <file.gz>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "bzip2",
+      "alias": [],
+      "name_cn": "BZIP2压缩",
+      "description": "压缩文件(.bz2)",
+      "usage": "bzip2 <file>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "zip",
+      "alias": [],
+      "name_cn": "ZIP压缩",
+      "description": "压缩文件(.zip)",
+      "usage": "zip -r <archive.zip> <files>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "unzip",
+      "alias": [],
+      "name_cn": "ZIP解压",
+      "description": "解压.zip文件",
+      "usage": "unzip <archive.zip>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "ditto",
+      "alias": [],
+      "name_cn": "macOS复制",
+      "description": "macOS增强型复制工具",
+      "usage": "ditto -c -k <src> <archive.zip>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "xz",
+      "alias": [],
+      "name_cn": "XZ压缩",
+      "description": "压缩或解压.xz文件",
+      "usage": "xz [-d] <file>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "brew",
+      "alias": [],
+      "name_cn": "Homebrew",
+      "description": "macOS包管理器",
+      "usage": "brew <command>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "open",
+      "alias": [],
+      "name_cn": "打开文件",
+      "description": "用默认应用打开文件或URL",
+      "usage": "open <file|url>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "pbcopy",
+      "alias": [],
+      "name_cn": "复制到剪贴板",
+      "description": "将标准输入复制到剪贴板",
+      "usage": "pbcopy [< file]",
+      "category": "macOS特有"
+    },
+    {
+      "name": "pbpaste",
+      "alias": [],
+      "name_cn": "粘贴剪贴板",
+      "description": "将剪贴板内容输出到标准输出",
+      "usage": "pbpaste",
+      "category": "macOS特有"
+    },
+    {
+      "name": "mdfind",
+      "alias": [],
+      "name_cn": "Spotlight搜索",
+      "description": "使用Spotlight搜索文件",
+      "usage": "mdfind <query>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "mdls",
+      "alias": [],
+      "name_cn": "文件元数据",
+      "description": "显示文件Spotlight元数据",
+      "usage": "mdls <file>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "mdimport",
+      "alias": [],
+      "name_cn": "索引文件",
+      "description": "将文件导入Spotlight索引",
+      "usage": "mdimport <file>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "screencapture",
+      "alias": [],
+      "name_cn": "截屏",
+      "description": "macOS截屏工具",
+      "usage": "screencapture [-C] <file>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "osascript",
+      "alias": [],
+      "name_cn": "AppleScript",
+      "description": "执行AppleScript脚本",
+      "usage": "osascript -e <script>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "defaults",
+      "alias": [],
+      "name_cn": "系统偏好",
+      "description": "读写macOS用户偏好设置",
+      "usage": "defaults [read|write] <domain> <key>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "launchctl",
+      "alias": [
+        "sc"
+      ],
+      "name_cn": "服务管理",
+      "description": "macOS启动服务管理",
+      "usage": "launchctl <command>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "installer",
+      "alias": [],
+      "name_cn": "安装包工具",
+      "description": "安装macOS安装包",
+      "usage": "installer -pkg <file> -target /",
+      "category": "macOS特有"
+    },
+    {
+      "name": "pkgutil",
+      "alias": [],
+      "name_cn": "包管理工具",
+      "description": "查询和修改已安装的包",
+      "usage": "pkgutil --pkgs",
+      "category": "macOS特有"
+    },
+    {
+      "name": "softwareupdate",
+      "alias": [
+        "wuauclt"
+      ],
+      "name_cn": "系统更新",
+      "description": "macOS软件更新工具",
+      "usage": "softwareupdate --list",
+      "category": "macOS特有"
+    },
+    {
+      "name": "bless",
+      "alias": [
+        "bcdedit"
+      ],
+      "name_cn": "启动管理",
+      "description": "设置启动磁盘选项",
+      "usage": "sudo bless --mount <path>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "asr",
+      "alias": [],
+      "name_cn": "Apple恢复",
+      "description": "Apple Software Restore",
+      "usage": "sudo asr restore --source <src>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "caffeinate",
+      "alias": [],
+      "name_cn": "防止休眠",
+      "description": "防止系统进入休眠",
+      "usage": "caffeinate [-d] [-t <seconds>]",
+      "category": "macOS特有"
+    },
+    {
+      "name": "fdesetup",
+      "alias": [],
+      "name_cn": "FileVault",
+      "description": "FileVault全磁盘加密管理",
+      "usage": "fdesetup status",
+      "category": "macOS特有"
+    },
+    {
+      "name": "pmset",
+      "alias": [
+        "powercfg"
+      ],
+      "name_cn": "电源管理",
+      "description": "macOS电源管理设置",
+      "usage": "pmset [-g]",
+      "category": "macOS特有"
+    },
+    {
+      "name": "nvram",
+      "alias": [],
+      "name_cn": "NVRAM设置",
+      "description": "操作固件变量(NVRAM)",
+      "usage": "nvram [-p]",
+      "category": "macOS特有"
+    },
+    {
+      "name": "csrutil",
+      "alias": [],
+      "name_cn": "SIP管理",
+      "description": "系统完整性保护管理",
+      "usage": "csrutil status",
+      "category": "macOS特有"
+    },
+    {
+      "name": "systemsetup",
+      "alias": [],
+      "name_cn": "系统设置",
+      "description": "macOS服务器系统设置",
+      "usage": "systemsetup -getdate",
+      "category": "macOS特有"
+    },
+    {
+      "name": "syslog",
+      "alias": [],
+      "name_cn": "系统日志",
+      "description": "macOS系统日志",
+      "usage": "syslog -k Sender kernel",
+      "category": "macOS特有"
+    },
+    {
+      "name": "ioreg",
+      "alias": [],
+      "name_cn": "IO注册表",
+      "description": "显示IOKit注册表",
+      "usage": "ioreg -l",
+      "category": "macOS特有"
+    },
+    {
+      "name": "kextstat",
+      "alias": [
+        "lsmod"
+      ],
+      "name_cn": "内核扩展",
+      "description": "列出已加载的内核扩展",
+      "usage": "kextstat",
+      "category": "macOS特有"
+    },
+    {
+      "name": "kextload",
+      "alias": [
+        "modprobe"
+      ],
+      "name_cn": "加载扩展",
+      "description": "加载内核扩展",
+      "usage": "sudo kextload <kext>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "kextunload",
+      "alias": [
+        "modprobe -r"
+      ],
+      "name_cn": "卸载扩展",
+      "description": "卸载内核扩展",
+      "usage": "sudo kextunload <kext>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "security",
+      "alias": [],
+      "name_cn": "钥匙串",
+      "description": "macOS钥匙串和安全框架",
+      "usage": "security find-generic-password",
+      "category": "macOS特有"
+    },
+    {
+      "name": "codesign",
+      "alias": [],
+      "name_cn": "代码签名",
+      "description": "创建和管理代码签名",
+      "usage": "codesign -s <identity> <app>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "spctl",
+      "alias": [],
+      "name_cn": "Gatekeeper",
+      "description": "管理Gatekeeper安全策略",
+      "usage": "spctl --status",
+      "category": "macOS特有"
+    },
+    {
+      "name": "tccutil",
+      "alias": [],
+      "name_cn": "隐私权限",
+      "description": "管理隐私权限数据库",
+      "usage": "tccutil reset All",
+      "category": "macOS特有"
+    },
+    {
+      "name": "xcode-select",
+      "alias": [],
+      "name_cn": "Xcode选择",
+      "description": "选择Xcode工具链路径",
+      "usage": "xcode-select --install",
+      "category": "macOS特有"
+    },
+    {
+      "name": "xcodebuild",
+      "alias": [],
+      "name_cn": "Xcode构建",
+      "description": "构建Xcode项目",
+      "usage": "xcodebuild -scheme <name>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "xcrun",
+      "alias": [],
+      "name_cn": "Xcode运行",
+      "description": "运行或定位开发工具",
+      "usage": "xcrun <tool>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "instruments",
+      "alias": [],
+      "name_cn": "性能分析",
+      "description": "性能分析和跟踪工具",
+      "usage": "instruments -t <template>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "ibtool",
+      "alias": [],
+      "name_cn": "Interface Builder",
+      "description": "编译Interface Builder文件",
+      "usage": "ibtool <file.xib>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "actool",
+      "alias": [],
+      "name_cn": "资源编译",
+      "description": "编译资产目录",
+      "usage": "actool <Assets.car>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "swift",
+      "alias": [],
+      "name_cn": "Swift",
+      "description": "Swift编程语言",
+      "usage": "swift <file.swift>",
+      "category": "macOS特有"
+    },
+    {
+      "name": "npm",
+      "alias": [],
+      "name_cn": "NPM包管理",
+      "description": "Node.js包管理器",
+      "usage": "npm <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "pnpm",
+      "alias": [],
+      "name_cn": "PNPM包管理",
+      "description": "快速包管理器",
+      "usage": "pnpm <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "yarn",
+      "alias": [],
+      "name_cn": "Yarn包管理",
+      "description": "快速可靠的包管理器",
+      "usage": "yarn <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "node",
+      "alias": [],
+      "name_cn": "运行Node",
+      "description": "运行Node.js程序",
+      "usage": "node <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "npx",
+      "alias": [],
+      "name_cn": "NPX执行",
+      "description": "执行npm包命令",
+      "usage": "npx <package>",
+      "category": "开发工具"
+    },
+    {
+      "name": "python",
+      "alias": [
+        "python3"
+      ],
+      "name_cn": "运行Python",
+      "description": "运行Python程序",
+      "usage": "python <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "pip",
+      "alias": [
+        "pip3"
+      ],
+      "name_cn": "PIP包管理",
+      "description": "Python包安装器",
+      "usage": "pip <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "git",
+      "alias": [],
+      "name_cn": "版本控制",
+      "description": "分布式版本控制系统",
+      "usage": "git <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "cargo",
+      "alias": [],
+      "name_cn": "Rust构建",
+      "description": "Rust包管理器和构建工具",
+      "usage": "cargo <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "rustc",
+      "alias": [],
+      "name_cn": "Rust编译",
+      "description": "Rust编译器",
+      "usage": "rustc <file.rs>",
+      "category": "开发工具"
+    },
+    {
+      "name": "go",
+      "alias": [],
+      "name_cn": "Go语言",
+      "description": "Go语言工具",
+      "usage": "go <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "java",
+      "alias": [],
+      "name_cn": "运行Java",
+      "description": "运行Java程序",
+      "usage": "java -jar <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "javac",
+      "alias": [],
+      "name_cn": "编译Java",
+      "description": "编译Java源文件",
+      "usage": "javac <file.java>",
+      "category": "开发工具"
+    },
+    {
+      "name": "mvn",
+      "alias": [],
+      "name_cn": "Maven构建",
+      "description": "Apache Maven构建工具",
+      "usage": "mvn <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "gradle",
+      "alias": [],
+      "name_cn": "Gradle构建",
+      "description": "Gradle构建工具",
+      "usage": "gradle <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "docker",
+      "alias": [],
+      "name_cn": "Docker容器",
+      "description": "容器管理工具",
+      "usage": "docker <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "vim",
+      "alias": [
+        "vi"
+      ],
+      "name_cn": "文本编辑",
+      "description": "Vi IMproved文本编辑器",
+      "usage": "vim <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "nano",
+      "alias": [],
+      "name_cn": "简单编辑",
+      "description": "简单文本编辑器",
+      "usage": "nano <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "code",
+      "alias": [],
+      "name_cn": "VS Code",
+      "description": "打开VS Code编辑器",
+      "usage": "code [file|dir]",
+      "category": "开发工具"
+    },
+    {
+      "name": "gcc",
+      "alias": [
+        "cc"
+      ],
+      "name_cn": "C编译器",
+      "description": "GNU C编译器",
+      "usage": "gcc -o <out> <source.c>",
+      "category": "开发工具"
+    },
+    {
+      "name": "clang",
+      "alias": [],
+      "name_cn": "Clang编译",
+      "description": "LLVM C/C++编译器",
+      "usage": "clang -o <out> <source>",
+      "category": "开发工具"
+    },
+    {
+      "name": "make",
+      "alias": [],
+      "name_cn": "构建工具",
+      "description": "GNU Make构建工具",
+      "usage": "make [target]",
+      "category": "开发工具"
+    },
+    {
+      "name": "cmake",
+      "alias": [],
+      "name_cn": "CMake构建",
+      "description": "跨平台构建系统",
+      "usage": "cmake [path]",
+      "category": "开发工具"
+    },
+    {
+      "name": "lldb",
+      "alias": [
+        "gdb"
+      ],
+      "name_cn": "LLDB调试",
+      "description": "LLVM调试器",
+      "usage": "lldb <program>",
+      "category": "开发工具"
+    },
+    {
+      "name": "openssl",
+      "alias": [],
+      "name_cn": "SSL工具",
+      "description": "OpenSSL命令行工具",
+      "usage": "openssl <command>",
+      "category": "安全防护"
+    },
+    {
+      "name": "gpg",
+      "alias": [],
+      "name_cn": "GPG加密",
+      "description": "GNU隐私卫士",
+      "usage": "gpg --encrypt <file>",
+      "category": "安全防护"
+    },
+    {
+      "name": "ssh-keygen",
+      "alias": [],
+      "name_cn": "SSH密钥",
+      "description": "生成SSH密钥",
+      "usage": "ssh-keygen -t rsa -b 4096",
+      "category": "安全防护"
+    },
+    {
+      "name": "ssh-copy-id",
+      "alias": [],
+      "name_cn": "部署密钥",
+      "description": "部署公钥到远程主机",
+      "usage": "ssh-copy-id <user>@<host>",
+      "category": "安全防护"
+    },
+    {
+      "name": "chflags",
+      "alias": [
+        "chattr"
+      ],
+      "name_cn": "文件标志",
+      "description": "修改文件标志(含隐藏/系统)",
+      "usage": "chflags hidden <file>",
+      "category": "安全防护"
+    },
+    {
+      "name": "launchctl load",
+      "alias": [],
+      "name_cn": "加载服务",
+      "description": "加载launchd服务",
+      "usage": "launchctl load <plist>",
+      "category": "系统服务"
+    },
+    {
+      "name": "launchctl unload",
+      "alias": [],
+      "name_cn": "卸载服务",
+      "description": "卸载launchd服务",
+      "usage": "launchctl unload <plist>",
+      "category": "系统服务"
+    },
+    {
+      "name": "launchctl list",
+      "alias": [],
+      "name_cn": "服务列表",
+      "description": "列出已加载的launchd服务",
+      "usage": "launchctl list",
+      "category": "系统服务"
+    },
+    {
+      "name": "launchctl start",
+      "alias": [],
+      "name_cn": "启动服务",
+      "description": "启动已加载的launchd服务",
+      "usage": "launchctl start <label>",
+      "category": "系统服务"
+    },
+    {
+      "name": "launchctl stop",
+      "alias": [],
+      "name_cn": "停止服务",
+      "description": "停止已加载的launchd服务",
+      "usage": "launchctl stop <label>",
+      "category": "系统服务"
+    },
+    {
+      "name": "brew services",
+      "alias": [],
+      "name_cn": "Homebrew服务",
+      "description": "管理Homebrew安装的服务",
+      "usage": "brew services [list|start|stop]",
+      "category": "系统服务"
+    },
+    {
+      "name": "crontab",
+      "alias": [
+        "schtasks"
+      ],
+      "name_cn": "定时任务",
+      "description": "管理cron定时任务",
+      "usage": "crontab [-e|-l]",
+      "category": "系统服务"
+    },
+    {
+      "name": "at",
+      "alias": [],
+      "name_cn": "一次性任务",
+      "description": "在指定时间执行命令",
+      "usage": "at <time>",
+      "category": "系统服务"
+    },
+    {
+      "name": "brew install",
+      "alias": [],
+      "name_cn": "安装软件",
+      "description": "使用Homebrew安装软件包",
+      "usage": "brew install <package>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew uninstall",
+      "alias": [],
+      "name_cn": "卸载软件",
+      "description": "使用Homebrew卸载软件包",
+      "usage": "brew uninstall <package>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew update",
+      "alias": [],
+      "name_cn": "更新Homebrew",
+      "description": "更新Homebrew自身和软件列表",
+      "usage": "brew update",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew upgrade",
+      "alias": [],
+      "name_cn": "升级软件",
+      "description": "升级所有或指定Homebrew软件包",
+      "usage": "brew upgrade [package]",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew search",
+      "alias": [],
+      "name_cn": "搜索软件",
+      "description": "搜索Homebrew可用软件包",
+      "usage": "brew search <keyword>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew info",
+      "alias": [],
+      "name_cn": "软件信息",
+      "description": "查看Homebrew软件包详细信息",
+      "usage": "brew info <package>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew list",
+      "alias": [],
+      "name_cn": "已安装列表",
+      "description": "列出所有通过Homebrew安装的软件",
+      "usage": "brew list",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew cleanup",
+      "alias": [],
+      "name_cn": "清理缓存",
+      "description": "清理Homebrew旧版本和缓存文件",
+      "usage": "brew cleanup [-n]",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew doctor",
+      "alias": [],
+      "name_cn": "诊断Homebrew",
+      "description": "诊断Homebrew安装问题",
+      "usage": "brew doctor",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew tap",
+      "alias": [],
+      "name_cn": "添加仓库",
+      "description": "添加第三方Homebrew仓库",
+      "usage": "brew tap <user/repo>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew cask install",
+      "alias": [],
+      "name_cn": "安装GUI应用",
+      "description": "使用Homebrew Cask安装macOS GUI应用",
+      "usage": "brew install --cask <app>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "brew leaves",
+      "alias": [],
+      "name_cn": "顶层软件包",
+      "description": "列出非作为依赖安装的顶层软件包",
+      "usage": "brew leaves",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "networksetup -listallnetworkservices",
+      "alias": [],
+      "name_cn": "网络服务列表",
+      "description": "列出所有网络服务",
+      "usage": "networksetup -listallnetworkservices",
+      "category": "网络",
+      "command": ""
+    },
+    {
+      "name": "networksetup -getinfo",
+      "alias": [],
+      "name_cn": "网络服务信息",
+      "description": "获取指定网络服务的IP配置信息",
+      "usage": "networksetup -getinfo Wi-Fi",
+      "category": "网络",
+      "command": ""
+    },
+    {
+      "name": "networksetup -setairportnetwork",
+      "alias": [],
+      "name_cn": "连接WiFi",
+      "description": "通过命令行连接WiFi网络",
+      "usage": "networksetup -setairportnetwork en0 <SSID> <password>",
+      "category": "网络",
+      "command": ""
+    },
+    {
+      "name": "networksetup -setdnsservers",
+      "alias": [],
+      "name_cn": "设置DNS",
+      "description": "设置指定网络服务的DNS服务器",
+      "usage": "networksetup -setdnsservers Wi-Fi 8.8.8.8 8.8.4.4",
+      "category": "网络",
+      "command": ""
+    },
+    {
+      "name": "tmutil listbackups",
+      "alias": [],
+      "name_cn": "列出备份",
+      "description": "列出所有Time Machine备份日期",
+      "usage": "tmutil listbackups",
+      "category": "磁盘管理",
+      "command": ""
+    },
+    {
+      "name": "tmutil delete",
+      "alias": [],
+      "name_cn": "删除备份",
+      "description": "删除指定Time Machine备份快照",
+      "usage": "sudo tmutil delete <backup_path>",
+      "category": "磁盘管理",
+      "command": ""
+    },
+    {
+      "name": "diskutil list",
+      "alias": [],
+      "name_cn": "列出磁盘",
+      "description": "列出所有磁盘和分区",
+      "usage": "diskutil list",
+      "category": "磁盘管理",
+      "command": ""
+    },
+    {
+      "name": "diskutil apfs list",
+      "alias": [],
+      "name_cn": "APFS容器列表",
+      "description": "列出所有APFS容器和卷信息",
+      "usage": "diskutil apfs list",
+      "category": "磁盘管理",
+      "command": ""
+    },
+    {
+      "name": "diskutil verifyVolume",
+      "alias": [],
+      "name_cn": "验证卷",
+      "description": "验证卷的数据结构完整性",
+      "usage": "diskutil verifyVolume <volume>",
+      "category": "磁盘管理",
+      "command": ""
+    },
+    {
+      "name": "xcrun --find",
+      "alias": [],
+      "name_cn": "查找开发工具",
+      "description": "查找Xcode工具链中指定工具的路径",
+      "usage": "xcrun --find clang",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "xcodebuild -list",
+      "alias": [],
+      "name_cn": "列出构建目标",
+      "description": "列出Xcode项目的targets、schemes和配置",
+      "usage": "xcodebuild -list",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "xcodebuild test",
+      "alias": [],
+      "name_cn": "运行测试",
+      "description": "运行Xcode项目的单元测试和UI测试",
+      "usage": "xcodebuild test -scheme <name>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "swift build",
+      "alias": [],
+      "name_cn": "Swift构建",
+      "description": "构建Swift Package Manager项目",
+      "usage": "swift build",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "swift test",
+      "alias": [],
+      "name_cn": "Swift测试",
+      "description": "运行Swift Package Manager项目测试",
+      "usage": "swift test",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "swift run",
+      "alias": [],
+      "name_cn": "Swift运行",
+      "description": "构建并运行Swift可执行目标",
+      "usage": "swift run [target]",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "shortcuts run",
+      "alias": [],
+      "name_cn": "运行快捷指令",
+      "description": "从命令行运行macOS快捷指令(Shortcuts)",
+      "usage": "shortcuts run <shortcut-name>",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "shortcuts list",
+      "alias": [],
+      "name_cn": "列出快捷指令",
+      "description": "列出所有可用的快捷指令",
+      "usage": "shortcuts list",
+      "category": "macOS特有",
+      "command": ""
+    },
+    {
+      "name": "log",
+      "alias": [],
+      "name_cn": "统一日志系统",
+      "description": "macOS统一日志系统命令行工具",
+      "usage": "log stream --predicate 'subsystem == \"com.apple\"' --level debug",
+      "category": "macOS特有",
+      "command": ""
+    }
+  ]
+}

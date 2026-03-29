@@ -54,13 +54,9 @@ impl PtyManager {
             let prompt_script = r#"
 $e=[char]27
 function global:prompt {
-  $p = $PWD.Path.Replace('\','/')
-  if ($p -match '^([A-Za-z]):') { $p = $Matches[1].ToUpper() + $p.Substring(2) }
-  $h = $env:USERPROFILE.Replace('\','/')
-  if ($h -match '^([A-Za-z]):') { $h = $Matches[1].ToUpper() + $h.Substring(2) }
-  if ($p.StartsWith($h)) { $p = '~' + $p.Substring($h.Length) }
+  $p = $PWD.Path
   [Console]::Write("$e]0;$p$e\")
-  "$p $ "
+  "$p> "
 }
 "#;
             let mut c = CommandBuilder::new("powershell.exe");

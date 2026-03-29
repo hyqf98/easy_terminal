@@ -1,0 +1,958 @@
+{
+  "id": "ubuntu",
+  "kind": "system",
+  "platforms": [
+    "ubuntu"
+  ],
+  "commands": [
+    {
+      "name": "apt",
+      "alias": [],
+      "name_cn": "APT包管理",
+      "description": "Ubuntu/Debian 高级包管理器，用于安装、更新和删除软件包",
+      "usage": "apt [install|remove|update|upgrade|search] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-get",
+      "alias": [],
+      "name_cn": "APT-GET",
+      "description": "Ubuntu/Debian 底层包管理工具，APT 的脚本友好接口",
+      "usage": "apt-get [install|remove|update|upgrade|dist-upgrade]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-cache",
+      "alias": [],
+      "name_cn": "APT缓存查询",
+      "description": "查询和操作APT包缓存信息",
+      "usage": "apt-cache [search|show|depends|policy] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "dpkg",
+      "alias": [],
+      "name_cn": "DPKG包管理",
+      "description": "Debian 底层包管理器，直接操作 .deb 包文件",
+      "usage": "dpkg [-i|-r|-l|-s] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "dpkg-reconfigure",
+      "alias": [],
+      "name_cn": "重新配置包",
+      "description": "重新配置已安装的 Debian 软件包",
+      "usage": "dpkg-reconfigure <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "snap",
+      "alias": [],
+      "name_cn": "Snap包管理",
+      "description": "Ubuntu Snap 通用包管理器，管理容器化应用",
+      "usage": "snap [install|remove|list|refresh|find] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "add-apt-repository",
+      "alias": [],
+      "name_cn": "添加软件源",
+      "description": "添加或移除 APT 软件仓库（PPA）",
+      "usage": "add-apt-repository [--remove] <ppa:name>",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-key",
+      "alias": [],
+      "name_cn": "APT密钥管理",
+      "description": "管理 APT 软件源的 GPG 密钥",
+      "usage": "apt-key [add|del|list|export]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-mark",
+      "alias": [],
+      "name_cn": "APT标记管理",
+      "description": "标记/取消标记软件包的自动安装状态",
+      "usage": "apt-mark [auto|manual|hold|unhold|showhold]",
+      "category": "包管理"
+    },
+    {
+      "name": "aptitude",
+      "alias": [],
+      "name_cn": "APTITUDE",
+      "description": "基于终端的 APT 包管理前端，提供交互式界面",
+      "usage": "aptitude [install|remove|search|update]",
+      "category": "包管理"
+    },
+    {
+      "name": "synaptic",
+      "alias": [],
+      "name_cn": "新立得包管理",
+      "description": "图形化的 APT 包管理前端工具",
+      "usage": "synaptic",
+      "category": "包管理"
+    },
+    {
+      "name": "unattended-upgrade",
+      "alias": [],
+      "name_cn": "自动更新",
+      "description": "Ubuntu 自动安全更新守护程序",
+      "usage": "unattended-upgrade [-d|--dry-run]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-list-changes",
+      "alias": [],
+      "name_cn": "更新日志查看",
+      "description": "在 APT 升级后显示软件包变更日志",
+      "usage": "apt-list-changes [--which=news|changelogs]",
+      "category": "包管理"
+    },
+    {
+      "name": "checkrestart",
+      "alias": [],
+      "name_cn": "检查重启服务",
+      "description": "检查需要重启以使用更新库的服务",
+      "usage": "checkrestart",
+      "category": "包管理"
+    },
+    {
+      "name": "debconf",
+      "alias": [],
+      "name_cn": "DEB配置",
+      "description": "Debian 软件包配置管理系统",
+      "usage": "debconf-show <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "debsums",
+      "alias": [],
+      "name_cn": "DEB校验",
+      "description": "校验已安装 Debian 软件包的文件完整性",
+      "usage": "debsums [-a|-c] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-file",
+      "alias": [],
+      "name_cn": "APT文件搜索",
+      "description": "搜索 APT 软件包中的文件",
+      "usage": "apt-file [search|list|update] <pattern>",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-sortpkgs",
+      "alias": [],
+      "name_cn": "APT包排序",
+      "description": "对软件包索引文件进行排序",
+      "usage": "apt-sortpkgs [-s] <file>",
+      "category": "包管理"
+    },
+    {
+      "name": "dpkg-deb",
+      "alias": [],
+      "name_cn": "DEB包操作",
+      "description": "操作 Debian 归档文件（.deb）",
+      "usage": "dpkg-deb [-b|-c|-I|-e] <file>",
+      "category": "包管理"
+    },
+    {
+      "name": "dpkg-query",
+      "alias": [],
+      "name_cn": "DEB包查询",
+      "description": "查询 dpkg 软件包数据库",
+      "usage": "dpkg-query [-l|-s|-W|-S] <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "dpkg-statoverride",
+      "alias": [],
+      "name_cn": "DEB权限覆盖",
+      "description": "管理 dpkg 文件权限和所有权覆盖",
+      "usage": "dpkg-statoverride [--add|--remove|--list]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-show-versions",
+      "alias": [],
+      "name_cn": "包版本查看",
+      "description": "列出已安装和可用的软件包版本信息",
+      "usage": "apt-show-versions [-u|-a] [package]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-mirror",
+      "alias": [],
+      "name_cn": "APT镜像",
+      "description": "创建 APT 软件仓库的本地镜像",
+      "usage": "apt-mirror [configfile]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-cacher-ng",
+      "alias": [],
+      "name_cn": "APT缓存代理",
+      "description": "APT 软件包缓存代理服务器",
+      "usage": "apt-cacher-ng [options]",
+      "category": "包管理"
+    },
+    {
+      "name": "apt-transport-https",
+      "alias": [],
+      "name_cn": "APT HTTPS传输",
+      "description": "APT 的 HTTPS 传输协议支持",
+      "usage": "apt-transport-https",
+      "category": "包管理"
+    },
+    {
+      "name": "tasksel",
+      "alias": [],
+      "name_cn": "任务选择",
+      "description": "Ubuntu 任务选择器，批量安装软件集",
+      "usage": "tasksel [--list-packages|--task-packages]",
+      "category": "包管理"
+    },
+    {
+      "name": "do-release-upgrade",
+      "alias": [],
+      "name_cn": "版本升级",
+      "description": "Ubuntu 系统版本升级工具",
+      "usage": "do-release-upgrade [-d|-f]",
+      "category": "系统管理"
+    },
+    {
+      "name": "lsb_release",
+      "alias": [],
+      "name_cn": "系统版本信息",
+      "description": "显示 Ubuntu/Debian 发行版信息",
+      "usage": "lsb_release [-a|-d|-r|-c]",
+      "category": "系统管理"
+    },
+    {
+      "name": "landscape-sysinfo",
+      "alias": [],
+      "name_cn": "系统概览",
+      "description": "Ubuntu Landscape 系统信息收集工具",
+      "usage": "landscape-sysinfo",
+      "category": "系统管理"
+    },
+    {
+      "name": "ubuntu-security-status",
+      "alias": [
+        "ubuntu-pro-security-status"
+      ],
+      "name_cn": "安全状态",
+      "description": "显示 Ubuntu 系统安全更新和支持状态",
+      "usage": "ubuntu-security-status",
+      "category": "系统管理"
+    },
+    {
+      "name": "ubuntu-advantage",
+      "alias": [
+        "ua"
+      ],
+      "name_cn": "Ubuntu Advantage",
+      "description": "Ubuntu Advantage 订阅管理工具",
+      "usage": "ubuntu-advantage [attach|detach|status|refresh]",
+      "category": "系统管理"
+    },
+    {
+      "name": "pro",
+      "alias": [
+        "ubuntu-pro"
+      ],
+      "name_cn": "Ubuntu Pro",
+      "description": "Ubuntu Pro 订阅和服务管理",
+      "usage": "pro [attach|detach|status|fix]",
+      "category": "系统管理"
+    },
+    {
+      "name": "update-motd",
+      "alias": [],
+      "name_cn": "更新登录消息",
+      "description": "更新 Ubuntu 登录消息（MOTD）",
+      "usage": "update-motd",
+      "category": "系统管理"
+    },
+    {
+      "name": "motd",
+      "alias": [],
+      "name_cn": "登录消息",
+      "description": "显示每日消息（Message of the Day）",
+      "usage": "cat /etc/motd",
+      "category": "系统管理"
+    },
+    {
+      "name": "byobu",
+      "alias": [],
+      "name_cn": "终端复用",
+      "description": "Ubuntu 终端复用器，基于 tmux/screen 的增强工具",
+      "usage": "byobu [new-session|attach|list-sessions]",
+      "category": "系统管理"
+    },
+    {
+      "name": "screen-launcher",
+      "alias": [],
+      "name_cn": "Screen启动器",
+      "description": "Ubuntu Screen 会话启动器",
+      "usage": "screen-launcher",
+      "category": "系统管理"
+    },
+    {
+      "name": "ubuntu-drivers",
+      "alias": [],
+      "name_cn": "驱动管理",
+      "description": "Ubuntu 专有驱动程序管理工具",
+      "usage": "ubuntu-drivers [devices|install|list|autoinstall]",
+      "category": "系统管理"
+    },
+    {
+      "name": "update-rc.d",
+      "alias": [],
+      "name_cn": "开机启动管理",
+      "description": "管理 System V 风格的开机启动脚本",
+      "usage": "update-rc.d <service> [defaults|enable|disable]",
+      "category": "系统管理"
+    },
+    {
+      "name": "invoke-rc.d",
+      "alias": [],
+      "name_cn": "服务脚本调用",
+      "description": "安全调用 System V init.d 服务脚本",
+      "usage": "invoke-rc.d <service> <action>",
+      "category": "系统管理"
+    },
+    {
+      "name": "ufw",
+      "alias": [],
+      "name_cn": "UFW防火墙",
+      "description": "Ubuntu Uncomplicated Firewall 简易防火墙管理",
+      "usage": "ufw [enable|disable|allow|deny|status|delete]",
+      "category": "网络"
+    },
+    {
+      "name": "netplan",
+      "alias": [],
+      "name_cn": "Netplan网络",
+      "description": "Ubuntu 网络配置工具，使用 YAML 配置网络",
+      "usage": "netplan [apply|generate|try|get]",
+      "category": "网络"
+    },
+    {
+      "name": "nmcli",
+      "alias": [],
+      "name_cn": "NetworkManager CLI",
+      "description": "NetworkManager 命令行网络管理工具",
+      "usage": "nmcli [device|connection|general] <command>",
+      "category": "网络"
+    },
+    {
+      "name": "nmtui",
+      "alias": [],
+      "name_cn": "NetworkManager TUI",
+      "description": "NetworkManager 文本用户界面网络配置工具",
+      "usage": "nmtui [edit|connect|hostname]",
+      "category": "网络"
+    },
+    {
+      "name": "resolvectl",
+      "alias": [],
+      "name_cn": "DNS解析管理",
+      "description": "systemd-resolved DNS 解析管理命令行工具",
+      "usage": "resolvectl [status|dns|domain|query]",
+      "category": "网络"
+    },
+    {
+      "name": "systemd-resolve",
+      "alias": [],
+      "name_cn": "DNS解析(旧)",
+      "description": "systemd-resolved DNS 解析工具（已弃用，使用 resolvectl 替代）",
+      "usage": "systemd-resolve [--status|--dns|--query]",
+      "category": "网络"
+    },
+    {
+      "name": "networkctl",
+      "alias": [],
+      "name_cn": "网络设备管理",
+      "description": "systemd-networkd 网络设备查询工具",
+      "usage": "networkctl [list|status|lldp]",
+      "category": "网络"
+    },
+    {
+      "name": "bridge",
+      "alias": [],
+      "name_cn": "网桥管理",
+      "description": "Linux 网桥配置管理工具",
+      "usage": "bridge [link|fdb|vlan] [show|add|del]",
+      "category": "网络"
+    },
+    {
+      "name": "systemctl start",
+      "alias": [],
+      "name_cn": "启动服务",
+      "description": "启动指定的 systemd 服务单元",
+      "usage": "systemctl start <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl stop",
+      "alias": [],
+      "name_cn": "停止服务",
+      "description": "停止指定的 systemd 服务单元",
+      "usage": "systemctl stop <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl enable",
+      "alias": [],
+      "name_cn": "启用开机自启",
+      "description": "设置服务开机自动启动",
+      "usage": "systemctl enable <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl disable",
+      "alias": [],
+      "name_cn": "禁用开机自启",
+      "description": "取消服务开机自动启动",
+      "usage": "systemctl disable <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl status",
+      "alias": [],
+      "name_cn": "服务状态",
+      "description": "查看指定 systemd 服务的运行状态",
+      "usage": "systemctl status <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "service",
+      "alias": [],
+      "name_cn": "服务操作(兼容)",
+      "description": "System V / LSB 兼容的服务管理命令",
+      "usage": "service <service> [start|stop|restart|status]",
+      "category": "服务管理"
+    },
+    {
+      "name": "initctl",
+      "alias": [],
+      "name_cn": "Init控制",
+      "description": "Upstart init 系统的服务控制工具",
+      "usage": "initctl [start|stop|restart|status|list]",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl daemon-reload",
+      "alias": [],
+      "name_cn": "重载服务配置",
+      "description": "重新加载 systemd 管理器配置文件",
+      "usage": "systemctl daemon-reload",
+      "category": "服务管理"
+    },
+    {
+      "name": "systemctl list-units",
+      "alias": [],
+      "name_cn": "列出服务单元",
+      "description": "列出 systemd 管理的服务单元",
+      "usage": "systemctl list-units [--type=service]",
+      "category": "服务管理"
+    },
+    {
+      "name": "apparmor_status",
+      "alias": [
+        "aa-status"
+      ],
+      "name_cn": "AppArmor状态",
+      "description": "查看 AppArmor 安全模块的运行状态",
+      "usage": "apparmor_status",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-status",
+      "alias": [],
+      "name_cn": "AppArmor状态(简)",
+      "description": "AppArmor 安全状态快速查看",
+      "usage": "aa-status",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-genprof",
+      "alias": [],
+      "name_cn": "生成安全配置",
+      "description": "为程序生成 AppArmor 安全配置文件",
+      "usage": "aa-genprof <program>",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-logprof",
+      "alias": [],
+      "name_cn": "日志安全配置",
+      "description": "根据日志自动更新 AppArmor 安全配置",
+      "usage": "aa-logprof <program>",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-enforce",
+      "alias": [],
+      "name_cn": "强制安全模式",
+      "description": "将 AppArmor 配置设置为强制执行模式",
+      "usage": "aa-enforce <profile>",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-complain",
+      "alias": [],
+      "name_cn": "投诉安全模式",
+      "description": "将 AppArmor 配置设置为投诉（仅记录）模式",
+      "usage": "aa-complain <profile>",
+      "category": "安全防护"
+    },
+    {
+      "name": "aa-disable",
+      "alias": [],
+      "name_cn": "禁用安全配置",
+      "description": "禁用 AppArmor 安全配置文件",
+      "usage": "aa-disable <profile>",
+      "category": "安全防护"
+    },
+    {
+      "name": "pro attach",
+      "alias": [
+        "ubuntu-advantage attach"
+      ],
+      "name_cn": "绑定Pro订阅",
+      "description": "将 Ubuntu Pro 订阅绑定到当前系统",
+      "usage": "pro attach <token>",
+      "category": "安全防护"
+    },
+    {
+      "name": "pro fix",
+      "alias": [
+        "ubuntu-advantage fix"
+      ],
+      "name_cn": "修复安全漏洞",
+      "description": "自动修复 Ubuntu 安全漏洞（CVE）",
+      "usage": "pro fix <CVE-ID>",
+      "category": "安全防护"
+    },
+    {
+      "name": "multipass",
+      "alias": [],
+      "name_cn": "Multipass虚拟机",
+      "description": "Ubuntu 轻量级虚拟机管理工具",
+      "usage": "multipass [launch|list|shell|delete|purge]",
+      "category": "开发工具"
+    },
+    {
+      "name": "lxc",
+      "alias": [],
+      "name_cn": "LXC容器",
+      "description": "Linux 容器命令行管理工具",
+      "usage": "lxc [launch|list|exec|stop|delete] <container>",
+      "category": "开发工具"
+    },
+    {
+      "name": "lxd",
+      "alias": [],
+      "name_cn": "LXD容器管理",
+      "description": "LXD 容器管理守护进程和工具集",
+      "usage": "lxd [init|cluster|profile|storage]",
+      "category": "开发工具"
+    },
+    {
+      "name": "juju",
+      "alias": [],
+      "name_cn": "Juju编排",
+      "description": "Ubuntu Juju 云服务编排和部署工具",
+      "usage": "juju [bootstrap|deploy|status|add-unit]",
+      "category": "开发工具"
+    },
+    {
+      "name": "snap install",
+      "alias": [],
+      "name_cn": "安装Snap包",
+      "description": "安装 Snap 格式的软件包",
+      "usage": "snap install <package> [--channel=<channel>]",
+      "category": "开发工具"
+    },
+    {
+      "name": "cloud-localds",
+      "alias": [],
+      "name_cn": "云镜像数据源",
+      "description": "创建 cloud-init 本地数据源镜像",
+      "usage": "cloud-localds <output> <user-data>",
+      "category": "系统工具"
+    },
+    {
+      "name": "ubuntu-bug",
+      "alias": [],
+      "name_cn": "报告Bug",
+      "description": "Ubuntu Bug 报告工具",
+      "usage": "ubuntu-bug <package>",
+      "category": "系统工具"
+    },
+    {
+      "name": "apport-bug",
+      "alias": [],
+      "name_cn": "Apport Bug报告",
+      "description": "使用 Apport 收集并提交 Bug 报告",
+      "usage": "apport-bug <package|pid>",
+      "category": "系统工具"
+    },
+    {
+      "name": "apport-cli",
+      "alias": [],
+      "name_cn": "Aport命令行",
+      "description": "Apport 崩溃报告命令行工具",
+      "usage": "apport-cli <report-file>",
+      "category": "系统工具"
+    },
+    {
+      "name": "ubuntu-distro-info",
+      "alias": [
+        "distro-info"
+      ],
+      "name_cn": "发行版信息",
+      "description": "查询 Ubuntu 发行版生命周期信息",
+      "usage": "ubuntu-distro-info [--all|--series|--devel]",
+      "category": "系统工具"
+    },
+    {
+      "name": "hwe-support-status",
+      "alias": [],
+      "name_cn": "HWE支持状态",
+      "description": "检查 Ubuntu 硬件使能（HWE）内核支持状态",
+      "usage": "hwe-support-status [--verbose]",
+      "category": "系统工具"
+    },
+    {
+      "name": "update-manager",
+      "alias": [],
+      "name_cn": "更新管理器",
+      "description": "Ubuntu 图形化更新管理器",
+      "usage": "update-manager [-c|-d]",
+      "category": "系统工具"
+    },
+    {
+      "name": "software-properties-gtk",
+      "alias": [
+        "software-properties-qt"
+      ],
+      "name_cn": "软件源管理",
+      "description": "Ubuntu 软件源和驱动管理图形界面",
+      "usage": "software-properties-gtk",
+      "category": "系统工具"
+    },
+    {
+      "name": "software-center",
+      "alias": [
+        "snap-store"
+      ],
+      "name_cn": "软件中心",
+      "description": "Ubuntu 软件中心应用商店",
+      "usage": "software-center",
+      "category": "系统工具"
+    },
+    {
+      "name": "apt update",
+      "alias": [],
+      "name_cn": "更新软件列表",
+      "description": "从所有配置的源下载软件包列表",
+      "usage": "sudo apt update",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt upgrade",
+      "alias": [],
+      "name_cn": "升级软件",
+      "description": "升级所有可升级的软件包",
+      "usage": "sudo apt upgrade",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt full-upgrade",
+      "alias": [],
+      "name_cn": "完整升级",
+      "description": "升级并处理依赖关系变更的完整升级",
+      "usage": "sudo apt full-upgrade",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt install",
+      "alias": [],
+      "name_cn": "安装软件包",
+      "description": "安装指定的软件包",
+      "usage": "sudo apt install <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt remove",
+      "alias": [],
+      "name_cn": "删除软件包",
+      "description": "删除软件包但保留配置文件",
+      "usage": "sudo apt remove <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt purge",
+      "alias": [],
+      "name_cn": "彻底删除",
+      "description": "删除软件包及其配置文件",
+      "usage": "sudo apt purge <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt autoremove",
+      "alias": [],
+      "name_cn": "自动清理依赖",
+      "description": "自动删除不再需要的依赖包",
+      "usage": "sudo apt autoremove --purge",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt search",
+      "alias": [],
+      "name_cn": "搜索软件包",
+      "description": "在软件源中搜索软件包",
+      "usage": "apt search <keyword>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt show",
+      "alias": [],
+      "name_cn": "软件包详情",
+      "description": "显示软件包的详细信息",
+      "usage": "apt show <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt list",
+      "alias": [],
+      "name_cn": "列出软件包",
+      "description": "列出软件包（支持--installed, --upgradable）",
+      "usage": "apt list --upgradable",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt edit-sources",
+      "alias": [],
+      "name_cn": "编辑软件源",
+      "description": "编辑APT软件源列表",
+      "usage": "sudo apt edit-sources",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt-cache depends",
+      "alias": [],
+      "name_cn": "查看依赖关系",
+      "description": "显示软件包的依赖关系",
+      "usage": "apt-cache depends <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt-cache policy",
+      "alias": [],
+      "name_cn": "包版本策略",
+      "description": "显示软件包的版本和来源优先级",
+      "usage": "apt-cache policy <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "apt-mark hold",
+      "alias": [],
+      "name_cn": "锁定软件包",
+      "description": "阻止指定软件包被升级",
+      "usage": "sudo apt-mark hold <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap list",
+      "alias": [],
+      "name_cn": "列出Snap包",
+      "description": "列出所有已安装的Snap软件包",
+      "usage": "snap list",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap find",
+      "alias": [],
+      "name_cn": "搜索Snap",
+      "description": "在Snap商店中搜索软件包",
+      "usage": "snap find <keyword>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap info",
+      "alias": [],
+      "name_cn": "Snap包详情",
+      "description": "显示Snap软件包的详细信息",
+      "usage": "snap info <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap refresh",
+      "alias": [],
+      "name_cn": "刷新Snap",
+      "description": "更新指定的Snap软件包到最新版本",
+      "usage": "sudo snap refresh <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap revert",
+      "alias": [],
+      "name_cn": "回滚Snap",
+      "description": "将Snap软件包回滚到上一个版本",
+      "usage": "sudo snap revert <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "snap remove",
+      "alias": [],
+      "name_cn": "删除Snap",
+      "description": "删除指定的Snap软件包",
+      "usage": "sudo snap remove <package>",
+      "category": "包管理",
+      "command": ""
+    },
+    {
+      "name": "systemd-analyze",
+      "alias": [],
+      "name_cn": "启动分析",
+      "description": "分析系统启动性能和服务耗时",
+      "usage": "systemd-analyze",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "systemd-analyze blame",
+      "alias": [],
+      "name_cn": "启动耗时排名",
+      "description": "按耗时排序列出各服务的启动时间",
+      "usage": "systemd-analyze blame",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "systemctl list-timers",
+      "alias": [],
+      "name_cn": "定时器列表",
+      "description": "列出所有systemd定时器",
+      "usage": "systemctl list-timers --all",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "systemctl restart",
+      "alias": [],
+      "name_cn": "重启服务",
+      "description": "重启指定的systemd服务",
+      "usage": "sudo systemctl restart <service>",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "systemctl cat",
+      "alias": [],
+      "name_cn": "查看服务文件",
+      "description": "显示systemd服务单元文件内容",
+      "usage": "systemctl cat <service>",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "systemctl edit",
+      "alias": [],
+      "name_cn": "编辑服务配置",
+      "description": "创建override配置片段",
+      "usage": "sudo systemctl edit <service>",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "pro status",
+      "alias": [
+        "ubuntu-pro status"
+      ],
+      "name_cn": "Pro订阅状态",
+      "description": "查看Ubuntu Pro订阅状态和已启用服务",
+      "usage": "pro status",
+      "category": "系统管理",
+      "command": ""
+    },
+    {
+      "name": "multipass launch",
+      "alias": [],
+      "name_cn": "启动虚拟机",
+      "description": "启动一个新的Ubuntu虚拟机实例",
+      "usage": "multipass launch -n <name>",
+      "category": "开发工具",
+      "command": ""
+    },
+    {
+      "name": "multipass shell",
+      "alias": [],
+      "name_cn": "进入虚拟机",
+      "description": "在Multipass虚拟机中打开Shell",
+      "usage": "multipass shell <name>",
+      "category": "开发工具",
+      "command": ""
+    },
+    {
+      "name": "multipass list",
+      "alias": [],
+      "name_cn": "列出虚拟机",
+      "description": "列出所有Multipass虚拟机实例",
+      "usage": "multipass list",
+      "category": "开发工具",
+      "command": ""
+    },
+    {
+      "name": "lxc list",
+      "alias": [],
+      "name_cn": "列出LXD容器",
+      "description": "列出所有LXD容器和虚拟机",
+      "usage": "lxc list",
+      "category": "开发工具",
+      "command": ""
+    },
+    {
+      "name": "lxc launch",
+      "alias": [],
+      "name_cn": "启动LXD容器",
+      "description": "创建并启动一个LXD容器",
+      "usage": "lxc launch ubuntu:22.04 <name>",
+      "category": "开发工具",
+      "command": ""
+    },
+    {
+      "name": "lxc exec",
+      "alias": [],
+      "name_cn": "LXD容器执行",
+      "description": "在LXD容器中执行命令",
+      "usage": "lxc exec <name> -- bash",
+      "category": "开发工具",
+      "command": ""
+    }
+  ]
+}

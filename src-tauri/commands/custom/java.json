@@ -1,0 +1,19 @@
+{
+  "id": "java",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "java", "alias": [], "name_cn": "运行Java", "description": "运行Java程序", "usage": "java -jar <file>", "category": "Java" },
+    { "name": "javac", "alias": [], "name_cn": "编译Java", "description": "编译Java源文件", "usage": "javac <file>.java", "category": "Java" },
+    { "name": "mvn", "alias": ["maven"], "name_cn": "Maven构建", "description": "Maven 项目构建工具", "usage": "mvn <command>", "category": "Java" },
+    { "name": "gradle", "alias": [], "name_cn": "Gradle构建", "description": "Gradle 构建工具", "usage": "gradle <task>", "category": "Java" },
+    { "name": "javadoc", "alias": [], "name_cn": "生成文档", "description": "生成API文档", "usage": "javadoc <packages>", "category": "Java" },
+    { "name": "jps", "alias": [], "name_cn": "Java进程", "description": "列出Java进程", "usage": "jps [-l]", "category": "Java" },
+    { "name": "jstat", "alias": [], "name_cn": "JVM统计", "description": "JVM统计监控", "usage": "jstat <pid>", "category": "Java" },
+    { "name": "jstack", "alias": [], "name_cn": "线程堆栈", "description": "打印线程堆栈", "usage": "jstack <pid>", "category": "Java" },
+    { "name": "jmap", "alias": [], "name_cn": "堆内存", "description": "打印堆内存映射", "usage": "jmap -heap <pid>", "category": "Java" },
+    { "name": "jar", "alias": [], "name_cn": "JAR包", "description": "JAR包管理工具", "usage": "jar -cf <name>.jar <files>", "category": "Java" },
+    { "name": "keytool", "alias": [], "name_cn": "密钥管理", "description": "密钥和证书管理", "usage": "keytool -genkey", "category": "Java" },
+    { "name": "spring", "alias": [], "name_cn": "Spring CLI", "description": "Spring Boot CLI", "usage": "spring run <file>", "category": "Java" }
+  ]
+}

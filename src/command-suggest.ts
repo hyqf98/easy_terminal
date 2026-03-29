@@ -1,75 +1,50 @@
-import { invoke } from '@tauri-apps/api/core';
-
-export interface CommandEntry {
-  name: string;
-  alias: string[];
-  description: string;
-  usage: string;
-  category: string;
-}
-
-interface CommandConfig {
-  platform: string;
-  commands: CommandEntry[];
-}
+import { t } from './i18n';
+import { CommandIntelligence, type ExecutionResolution, type GhostSuggestion } from './command-intelligence';
+import type { SuggestionItem } from './types';
 
 export class CommandSuggest {
-  private commands: CommandEntry[] = [];
   private popup: HTMLDivElement | null = null;
+  private detailPopup: HTMLDivElement | null = null;
   private activeIndex = 0;
-  private filteredItems: CommandEntry[] = [];
+  private filteredItems: SuggestionItem[] = [];
   private visible = false;
-  private currentInput = '';
-  private currentPlatform = '';
 
-  // Callback: when user selects a command, return the command text to insert
-  public onSelect?: (commandName: string) => void;
+  public onSelect?: (item: SuggestionItem) => void;
+
+  constructor(private intelligence: CommandIntelligence) {}
 
   async init() {
-    try {
-      this.currentPlatform = await invoke<string>('get_platform');
-      const configs = await invoke<CommandConfig[]>('load_commands');
-      // Merge all commands, but prioritize current platform
-      for (const config of configs) {
-        if (config.platform === this.currentPlatform) {
-          this.commands = config.commands;
-          break;
-        }
-      }
-      // If no platform match, use first config
-      if (this.commands.length === 0 && configs.length > 0) {
-        this.commands = configs[0].commands;
-      }
-    } catch (e) {
-      console.error('Failed to load commands:', e);
-    }
+    await this.intelligence.init();
   }
 
-  getCommands(): CommandEntry[] {
-    return this.commands;
+  async refresh(): Promise<void> {
+    await this.intelligence.reloadAll();
   }
 
-  getPlatform(): string {
-    return this.currentPlatform;
+  async reloadCommands(): Promise<void> {
+    await this.intelligence.reloadCommands();
   }
 
-  /** Feed current terminal input line, show suggestions if applicable */
+  getGhostSuggestion(input: string): GhostSuggestion | null {
+    return this.intelligence.getGhostSuggestion(input);
+  }
+
+  getSuggestions(input: string): SuggestionItem[] {
+    return this.intelligence.getSuggestionItems(input);
+  }
+
+  resolveExecution(input: string): ExecutionResolution {
+    return this.intelligence.resolveExecution(input);
+  }
+
   update(input: string): boolean {
-    this.currentInput = input;
-    // Extract the command part (first word or partial)
     const trimmed = input.trimStart();
     if (!trimmed) {
       this.hide();
       return false;
     }
-    // Only suggest at the beginning of a command line (first word)
-    const firstWord = trimmed.split(/\s/)[0].toLowerCase();
-    if (!firstWord || firstWord.length < 1) {
-      this.hide();
-      return false;
-    }
 
-    this.filteredItems = this.matchCommands(firstWord);
+    this.filteredItems = this.intelligence.getSuggestionItems(trimmed);
     if (this.filteredItems.length === 0) {
       this.hide();
       return false;
@@ -80,73 +55,14 @@ export class CommandSuggest {
     return true;
   }
 
-  private matchCommands(query: string): CommandEntry[] {
-    const results: { cmd: CommandEntry; score: number }[] = [];
-
-    for (const cmd of this.commands) {
-      const nameLower = cmd.name.toLowerCase();
-      let score = 0;
-
-      // Exact match
-      if (nameLower === query) {
-        score = 100;
-      }
-      // Starts with query
-      else if (nameLower.startsWith(query)) {
-        score = 80 + query.length;
-      }
-      // Contains query
-      else if (nameLower.includes(query)) {
-        score = 50 + query.length;
-      }
-      // Alias match
-      else {
-        for (const alias of cmd.alias) {
-          const aliasLower = alias.toLowerCase();
-          if (aliasLower === query) {
-            score = 90;
-            break;
-          }
-          if (aliasLower.startsWith(query)) {
-            score = 70 + query.length;
-            break;
-          }
-          if (aliasLower.includes(query)) {
-            score = 40 + query.length;
-            break;
-          }
-        }
-      }
-
-      // Description match (lower priority)
-      if (score === 0 && cmd.description.toLowerCase().includes(query)) {
-        score = 20;
-      }
-
-      if (score > 0) {
-        results.push({ cmd, score });
-      }
-    }
-
-    results.sort((a, b) => b.score - a.score);
-    return results.slice(0, 8).map((r) => r.cmd);
-  }
-
-  private show() {
-    if (!this.popup) {
-      this.popup = document.createElement('div');
-      this.popup.className = 'cmd-suggest-popup';
-      document.body.appendChild(this.popup);
-    }
-    this.visible = true;
-    this.render();
-  }
-
   hide() {
     if (this.popup) {
       this.popup.remove();
       this.popup = null;
     }
+    this.hideDetail();
+    this.filteredItems = [];
+    this.activeIndex = 0;
     this.visible = false;
   }
 
@@ -154,30 +70,32 @@ export class CommandSuggest {
     return this.visible;
   }
 
-  /** Position the popup relative to the terminal cursor */
   positionAt(terminalEl: HTMLElement, cursorX: number, cursorY: number) {
     if (!this.popup) return;
 
     const rect = terminalEl.getBoundingClientRect();
     let left = rect.left + cursorX;
-    let top = rect.top + cursorY;
+    let top = rect.top + cursorY + 12;
+    const popupWidth = Math.max(280, Math.min(420, rect.width * 0.62));
+    const maxH = Math.min(320, Math.max(160, window.innerHeight - top - 16));
 
-    // Ensure popup stays within viewport
-    const popupWidth = 340;
-    const popupHeight = Math.min(this.filteredItems.length * 48 + 30, 280);
+    this.popup.style.minWidth = '240px';
+    this.popup.style.maxWidth = `${popupWidth}px`;
+    this.popup.style.maxHeight = `${maxH}px`;
 
     if (left + popupWidth > window.innerWidth) {
       left = window.innerWidth - popupWidth - 8;
     }
-    if (top + popupHeight > window.innerHeight) {
-      top = top - popupHeight - 20;
+    if (left < 8) left = 8;
+
+    if (top + maxH > window.innerHeight) {
+      top = Math.max(8, top - maxH - 32);
     }
 
     this.popup.style.left = `${left}px`;
     this.popup.style.top = `${top}px`;
   }
 
-  /** Handle keyboard navigation. Returns true if the event was consumed */
   handleKey(e: KeyboardEvent): boolean {
     if (!this.visible) return false;
 
@@ -185,12 +103,14 @@ export class CommandSuggest {
       case 'ArrowDown':
         e.preventDefault();
         this.activeIndex = Math.min(this.activeIndex + 1, this.filteredItems.length - 1);
-        this.render();
+        this.highlightActive();
+        this.showDetail(this.filteredItems[this.activeIndex]);
         return true;
       case 'ArrowUp':
         e.preventDefault();
         this.activeIndex = Math.max(this.activeIndex - 1, 0);
-        this.render();
+        this.highlightActive();
+        this.showDetail(this.filteredItems[this.activeIndex]);
         return true;
       case 'Enter':
       case 'Tab':
@@ -200,89 +120,135 @@ export class CommandSuggest {
         }
         return true;
       case 'Escape':
+        e.preventDefault();
         this.hide();
         return true;
+      default:
+        return false;
     }
-    return false;
   }
 
-  private selectItem(cmd: CommandEntry) {
-    this.onSelect?.(cmd.name);
-    this.hide();
+  private show() {
+    if (!this.popup) {
+      this.popup = document.createElement('div');
+      this.popup.className = 'cmd-suggest-popup simple';
+      document.body.appendChild(this.popup);
+    }
+    this.visible = true;
+    this.render();
   }
 
   private render() {
     if (!this.popup) return;
 
-    const query = this.currentInput.trimStart().split(/\s/)[0].toLowerCase();
+    this.popup.innerHTML = this.filteredItems.map((item, index) => `
+      <div class="cmd-suggest-item simple${index === this.activeIndex ? ' active' : ''}" data-index="${index}">
+        <div class="cmd-suggest-line">
+          <span class="cmd-suggest-title">${escapeHtml(item.title)}</span>
+          ${item.description || item.subtitle ? `<span class="cmd-suggest-inline-note">(${escapeHtml(item.description || item.subtitle)})</span>` : ''}
+        </div>
+      </div>
+    `).join('');
 
-    // Group by category
-    const categories = new Map<string, CommandEntry[]>();
-    for (const item of this.filteredItems) {
-      const cat = item.category || '其他';
-      if (!categories.has(cat)) categories.set(cat, []);
-      categories.get(cat)!.push(item);
-    }
-
-    let html = '';
-    let globalIdx = 0;
-
-    for (const [cat, items] of categories) {
-      html += `<div class="cmd-suggest-category">${escapeHtml(cat)}</div>`;
-      for (const cmd of items) {
-        const isActive = globalIdx === this.activeIndex;
-        const highlightedName = highlightMatch(cmd.name, query);
-        html += `
-          <div class="cmd-suggest-item${isActive ? ' active' : ''}" data-index="${globalIdx}">
-            <div class="cmd-suggest-icon" style="background:${categoryColor(cmd.category)}22;color:${categoryColor(cmd.category)}">${cmd.name.charAt(0).toUpperCase()}</div>
-            <div class="cmd-suggest-info">
-              <div class="cmd-suggest-name">${highlightedName}${cmd.alias.length ? `<span style="color:var(--text-muted);font-size:11px;font-weight:400"> (${cmd.alias.join(', ')})</span>` : ''}</div>
-              <div class="cmd-suggest-desc">${escapeHtml(cmd.description)}</div>
-            </div>
-            ${cmd.usage ? `<div class="cmd-suggest-usage">${escapeHtml(cmd.usage)}</div>` : ''}
-          </div>
-        `;
-        globalIdx++;
-      }
-    }
-
-    this.popup.innerHTML = html;
-
-    // Bind click events
-    this.popup.querySelectorAll('.cmd-suggest-item').forEach((el) => {
-      el.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const idx = parseInt((el as HTMLElement).dataset.index || '0');
-        if (this.filteredItems[idx]) {
-          this.selectItem(this.filteredItems[idx]);
+    this.popup.querySelectorAll<HTMLElement>('.cmd-suggest-item').forEach((element) => {
+      element.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const index = Number(element.dataset.index || '0');
+        const item = this.filteredItems[index];
+        if (item) {
+          this.selectItem(item);
         }
       });
+
+      element.addEventListener('mouseenter', () => {
+        const index = Number(element.dataset.index || '0');
+        this.activeIndex = index;
+        this.highlightActive();
+        this.showDetail(this.filteredItems[index]);
+      });
     });
+
+    this.showDetail(this.filteredItems[this.activeIndex]);
+  }
+
+  private selectItem(item: SuggestionItem) {
+    this.onSelect?.(item);
+    this.hide();
+  }
+
+  private highlightActive() {
+    if (!this.popup) return;
+    this.popup.querySelectorAll('.cmd-suggest-item').forEach((element, index) => {
+      element.classList.toggle('active', index === this.activeIndex);
+    });
+  }
+
+  private showDetail(item: SuggestionItem) {
+    this.hideDetail();
+    if (!item || !this.popup) return;
+
+    const popup = document.createElement('div');
+    popup.className = 'cmd-detail-popup simple';
+
+    let html = `<div class="cmd-detail-title">${escapeHtml(item.title)}</div>`;
+    if (item.subtitle) {
+      html += `<div class="cmd-detail-cn">${escapeHtml(item.subtitle)}</div>`;
+    }
+    if (item.description) {
+      html += `<div class="cmd-detail-desc">${escapeHtml(item.description)}</div>`;
+    }
+    html += `<div class="cmd-detail-section">${t('suggest.usage')}</div>`;
+    html += `<div class="cmd-detail-code">${escapeHtml(item.usage || item.executeText)}</div>`;
+
+    if (item.hint) {
+      html += `<div class="cmd-detail-section">${t('suggest.hint')}</div>`;
+      html += `<div class="cmd-detail-code">${escapeHtml(item.hint)}</div>`;
+    }
+    if (item.tags.length) {
+      html += `<div class="cmd-detail-section">${t('suggest.tags')}</div>`;
+      html += `<div class="cmd-detail-text">${escapeHtml(item.tags.join(' / '))}</div>`;
+    }
+    if (item.aliases.length) {
+      html += `<div class="cmd-detail-section">${t('suggest.aliases')}</div>`;
+      html += `<div class="cmd-detail-code">${escapeHtml(item.aliases.join(', '))}</div>`;
+    }
+    if (item.examples.length) {
+      html += `<div class="cmd-detail-section">${t('suggest.examples')}</div>`;
+      html += item.examples.map((example) => `<div class="cmd-detail-code">${escapeHtml(example)}</div>`).join('');
+    }
+    html += `<div class="cmd-detail-section">${t('suggest.source')}</div>`;
+    html += `<div class="cmd-detail-text">${escapeHtml(item.sourceLabel)}</div>`;
+
+    popup.innerHTML = html;
+    document.body.appendChild(popup);
+    this.detailPopup = popup;
+
+    const popupRect = this.popup.getBoundingClientRect();
+    let left = popupRect.right + 8;
+    let top = popupRect.top;
+
+    if (left + 320 > window.innerWidth) {
+      left = Math.max(8, popupRect.left - 328);
+    }
+    if (top + popup.offsetHeight > window.innerHeight) {
+      top = Math.max(8, window.innerHeight - popup.offsetHeight - 8);
+    }
+
+    popup.style.left = `${left}px`;
+    popup.style.top = `${top}px`;
+  }
+
+  private hideDetail() {
+    if (!this.detailPopup) return;
+    this.detailPopup.remove();
+    this.detailPopup = null;
   }
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function highlightMatch(name: string, query: string): string {
-  const lower = name.toLowerCase();
-  const idx = lower.indexOf(query.toLowerCase());
-  if (idx === -1) return escapeHtml(name);
-  const before = name.slice(0, idx);
-  const match = name.slice(idx, idx + query.length);
-  const after = name.slice(idx + query.length);
-  return `${escapeHtml(before)}<span class="highlight">${escapeHtml(match)}</span>${escapeHtml(after)}`;
-}
-
-function categoryColor(cat: string): string {
-  const colors: Record<string, string> = {
-    '文件操作': '#89b4fa',
-    '终端操作': '#a6e3a1',
-    '系统管理': '#f9e2af',
-    '网络': '#94e2d5',
-    '开发工具': '#cba6f7',
-  };
-  return colors[cat] || '#6c7086';
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

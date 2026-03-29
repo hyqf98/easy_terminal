@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "easy-terminal",
+  "productName": "EasyTerminal",
   "version": "0.1.0",
-  "identifier": "io.github.hyqf",
+  "identifier": "io.github.hyqf.easy-terminal",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -25,13 +25,55 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "targets": ["nsis", "dmg", "app", "deb", "appimage"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "hyqf",
+    "shortDescription": "Easy Terminal - Visual terminal canvas for local and remote sessions",
+    "longDescription": "Easy Terminal provides a visual terminal canvas, command intelligence, SSH management, and cross-platform desktop packaging.",
+    "category": "DeveloperTool",
+    "macOS": {
+      "minimumSystemVersion": "10.13",
+      "entitlements": null,
+      "exceptionDomain": "",
+      "frameworks": [],
+      "providerShortName": null,
+      "signingIdentity": "-"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": "",
+      "tsp": false,
+      "nsis": {
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0"]
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDA2MTU5NzIzMDE3Q0U1NTYKUldSVzVYd0JJNWNWQmxUSFNHc1c5ZkJPeUIyeFN6R21zaHRyWHp5dmdwNDZjUTlRbUk2bC9BMGYK",
+      "endpoints": [
+        "https://github.com/hyqf98/easy-terminal/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

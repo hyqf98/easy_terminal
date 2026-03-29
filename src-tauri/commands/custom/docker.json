@@ -1,0 +1,18 @@
+{
+  "id": "docker",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "docker", "alias": [], "name_cn": "Docker容器", "description": "容器管理工具", "usage": "docker <command>", "category": "Docker" },
+    { "name": "docker-compose", "alias": ["docker compose"], "name_cn": "Docker编排", "description": "Docker 容器编排", "usage": "docker-compose <command>", "category": "Docker" },
+    { "name": "kubectl", "alias": ["k8s"], "name_cn": "Kubernetes", "description": "Kubernetes 命令行工具", "usage": "kubectl <command>", "category": "Docker" },
+    { "name": "helm", "alias": [], "name_cn": "Helm", "description": "Kubernetes 包管理器", "usage": "helm <command>", "category": "Docker" },
+    { "name": "podman", "alias": [], "name_cn": "Podman", "description": "无守护进程容器工具", "usage": "podman <command>", "category": "Docker" },
+    { "name": "docker build", "alias": [], "name_cn": "构建镜像", "description": "构建Docker镜像", "usage": "docker build -t <name> .", "category": "Docker" },
+    { "name": "docker run", "alias": [], "name_cn": "运行容器", "description": "运行Docker容器", "usage": "docker run <image>", "category": "Docker" },
+    { "name": "docker ps", "alias": [], "name_cn": "容器列表", "description": "列出运行中的容器", "usage": "docker ps [-a]", "category": "Docker" },
+    { "name": "docker images", "alias": [], "name_cn": "镜像列表", "description": "列出Docker镜像", "usage": "docker images", "category": "Docker" },
+    { "name": "docker pull", "alias": [], "name_cn": "拉取镜像", "description": "拉取远程镜像", "usage": "docker pull <image>", "category": "Docker" },
+    { "name": "docker exec", "alias": [], "name_cn": "执行命令", "description": "在容器中执行命令", "usage": "docker exec -it <container> <cmd>", "category": "Docker" }
+  ]
+}

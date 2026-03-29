@@ -1,26 +1,62 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { CommandEntry } from './command-suggest';
+import { onLangChange, t } from './i18n';
+import type { CommandConfig, CommandEntry } from './types';
+import { normalizeCommandEntry } from './command-intelligence';
 
-interface CommandConfig {
-  platform: string;
+type OverlayState =
+  | { type: 'category'; id: string; label: string }
+  | { type: 'command'; categoryId: string; index: number | null };
+
+interface CategoryView {
+  id: string;
+  title: string;
+  subtitle: string;
+  kind: 'system' | 'custom';
+  source: 'system' | 'builtin' | 'user';
   commands: CommandEntry[];
+  current: boolean;
+  canAdd: boolean;
+  canDelete: boolean;
 }
+
+const BUILTIN_LIBRARY_IDS = new Set(['java', 'python', 'conda', 'npm', 'docker', 'rust']);
 
 export class CommandConfigPanel {
   private container: HTMLDivElement;
   private configs: CommandConfig[] = [];
-  private currentPlatform = '';
-  private editorOverlay: HTMLDivElement | null = null;
+  private currentPlatforms: string[] = [];
+  private overlayState: OverlayState | null = null;
+  private commandContext: HTMLDivElement | null = null;
+  private activeCategoryId = '';
 
-  constructor(container: HTMLDivElement) {
+  constructor(
+    container: HTMLDivElement,
+    private sendToTerminal: (command: string) => Promise<boolean>,
+    private onLibraryChanged: (() => Promise<void>) | null = null
+  ) {
     this.container = container;
+    this.renderShell();
+    this.init();
+
+    document.addEventListener('click', (event) => {
+      if (!(event.target as HTMLElement).closest('.cmd-context-menu')) {
+        this.closeContextMenu();
+      }
+    });
+
+    onLangChange(() => {
+      this.renderShell();
+      this.render();
+    });
+  }
+
+  private renderShell() {
     this.container.innerHTML = `
       <div class="panel-header">
-        <h2>${commandIcon()} 命令配置</h2>
+        <h2>${commandIcon()} ${t('cmd.config.title')}</h2>
       </div>
       <div class="panel-body cmd-panel-body"></div>
     `;
-    this.init();
   }
 
   private get body(): HTMLDivElement {
@@ -28,193 +64,324 @@ export class CommandConfigPanel {
   }
 
   private async init() {
-    try {
-      this.currentPlatform = await invoke<string>('get_platform');
-      this.configs = await invoke<CommandConfig[]>('load_commands');
-    } catch {
-      this.configs = [];
-    }
+    await this.reload();
     this.render();
   }
 
+  private async reload() {
+    try {
+      const [platforms, configs] = await Promise.all([
+        invoke<string[]>('get_platforms'),
+        invoke<CommandConfig[]>('load_commands'),
+      ]);
+      this.currentPlatforms = platforms;
+      this.configs = configs.map((config) => ({
+        ...config,
+        commands: config.commands.map((command) => normalizeCommandEntry(command)),
+      }));
+      this.ensureActiveCategory();
+    } catch (error) {
+      console.error('Failed to load command library:', error);
+      this.currentPlatforms = [];
+      this.configs = [];
+      this.activeCategoryId = '';
+    }
+  }
+
+  private ensureActiveCategory() {
+    const categories = this.getAllCategories();
+    if (categories.length === 0) {
+      this.activeCategoryId = '';
+      return;
+    }
+    const hasActive = categories.some((category) => category.id === this.activeCategoryId);
+    if (hasActive) return;
+    this.activeCategoryId = categories.find((category) => category.current)?.id || categories[0].id;
+  }
+
+  private getAllCategories(): CategoryView[] {
+    const categories: CategoryView[] = this.configs.map((config) => {
+      const id = config.id || config.platform;
+      const current = config.kind === 'system'
+        && (config.platforms.some((platform) => this.currentPlatforms.includes(platform))
+          || this.currentPlatforms.includes(config.platform));
+      const source: CategoryView['source'] = config.kind === 'system'
+        ? 'system'
+        : BUILTIN_LIBRARY_IDS.has(id)
+          ? 'builtin'
+          : 'user';
+
+      return {
+        id,
+        title: formatCategoryTitle(id),
+        subtitle: config.kind === 'system'
+          ? this.describePlatforms(config)
+          : source === 'builtin'
+            ? t('cmd.sourceBuiltin')
+            : t('cmd.sourceUser'),
+        kind: config.kind === 'system' ? 'system' : 'custom',
+        source,
+        commands: config.commands,
+        current,
+        canAdd: config.kind !== 'system',
+        canDelete: config.kind !== 'system',
+      };
+    });
+
+    categories.sort((left, right) => {
+      if (left.kind !== right.kind) {
+        return left.kind === 'system' ? -1 : 1;
+      }
+      if (left.current !== right.current) {
+        return left.current ? -1 : 1;
+      }
+      return left.title.localeCompare(right.title, 'zh-CN');
+    });
+
+    return categories;
+  }
+
+  private get activeCategory(): CategoryView | null {
+    return this.getAllCategories().find((category) => category.id === this.activeCategoryId) || null;
+  }
+
   private render() {
-    const totalCommands = this.configs.reduce((sum, c) => sum + c.commands.length, 0);
+    const categories = this.getAllCategories();
+    const totalCommands = categories.reduce((sum, category) => sum + category.commands.length, 0);
+    const active = this.activeCategory;
 
     let html = `
-      <div class="cmd-summary">
-        已加载 <code>${totalCommands}</code> 条命令
+      <div class="cmd-summary cmd-summary-grid">
+        <div class="cmd-summary-card">
+          <span>${t('cmd.loaded', String(totalCommands))}</span>
+          <strong>${categories.length}</strong>
+        </div>
+        <div class="cmd-summary-card">
+          <span>${t('cmd.system')}</span>
+          <strong>${categories.filter((category) => category.kind === 'system').length}</strong>
+        </div>
+        <div class="cmd-summary-card">
+          <span>${t('cmd.other')}</span>
+          <strong>${categories.filter((category) => category.kind === 'custom').length}</strong>
+        </div>
       </div>
-      <div class="cmd-file-list">
+      <div class="cmd-toolbar">
+        <button class="cmd-toolbar-btn primary" id="cmd-add-category">${addIcon()} ${t('cmd.addCategory')}</button>
+        <button class="cmd-toolbar-btn" id="cmd-import-btn">${uploadIcon()} ${t('cmd.import')}</button>
+      </div>
+      <div class="cmd-platform-hint">${t('cmd.platformHint', this.currentPlatforms.map(formatCategoryTitle).join(', '))}</div>
+      <div class="cmd-master-detail">
+        <aside class="cmd-card-list">
+          ${categories.length === 0 ? `<div class="cmd-empty">${t('cmd.emptySection')}</div>` : categories.map((category) => this.renderCategoryCard(category)).join('')}
+        </aside>
+        <section class="cmd-detail-pane">
+          ${active ? this.renderCategoryDetail(active) : `<div class="cmd-empty">${t('cmd.emptySection')}</div>`}
+        </section>
+      </div>
     `;
 
-    for (const config of this.configs) {
-      const isCurrent = config.platform === this.currentPlatform;
-      html += `
-        <div class="cmd-file-item${isCurrent ? ' current' : ''}" data-platform="${escapeHtml(config.platform)}">
-          <div class="cmd-file-info">
-            <span class="cmd-file-platform-icon">${platformIcon(config.platform)}</span>
-            <span class="cmd-file-name">${escapeHtml(config.platform)}.json</span>
-            ${isCurrent ? '<span class="cmd-file-badge">当前</span>' : ''}
-          </div>
-          <span class="cmd-file-count">${config.commands.length} 条</span>
-        </div>
-      `;
+    if (this.overlayState) {
+      html += this.renderOverlay();
     }
-
-    html += `</div>`;
-
-    // Import section
-    html += `
-      <div class="cmd-import-section">
-        <button class="cmd-import-btn" id="cmd-import-btn">
-          ${uploadIcon()} 导入 JSON 文件
-        </button>
-        <div class="cmd-import-hint">
-          格式：{"platform":"windows","commands":[{name,alias,description,usage,category}]}
-        </div>
-      </div>
-    `;
 
     this.body.innerHTML = html;
     this.bindEvents();
   }
 
-  private bindEvents() {
-    // File item click -> open editor
-    this.body.querySelectorAll('.cmd-file-item').forEach((el) => {
-      el.addEventListener('click', () => {
-        const platform = (el as HTMLElement).dataset.platform!;
-        this.openEditor(platform);
-      });
-    });
-
-    this.body.querySelector('#cmd-import-btn')?.addEventListener('click', () => this.importFile());
+  private renderCategoryCard(category: CategoryView): string {
+    return `
+      <button class="cmd-card-item${category.id === this.activeCategoryId ? ' active' : ''}" data-category-card="${escapeHtml(category.id)}">
+        <div class="cmd-card-head">
+          <span class="cmd-card-title">${escapeHtml(category.title)}</span>
+          ${category.current ? `<span class="cmd-chip accent">${t('cmd.current')}</span>` : ''}
+        </div>
+        <div class="cmd-card-subtitle">${escapeHtml(category.subtitle)}</div>
+        <div class="cmd-card-footer">
+          <span class="cmd-chip">${category.source === 'system' ? t('cmd.sourceSystem') : category.source === 'builtin' ? t('cmd.sourceBuiltin') : t('cmd.sourceUser')}</span>
+          <span class="cmd-count">${t('cmd.count', String(category.commands.length))}</span>
+        </div>
+      </button>
+    `;
   }
 
-  private async openEditor(platform: string) {
-    const config = this.configs.find(c => c.platform === platform);
-    if (!config) return;
-
-    // Close existing editor if any
-    this.closeEditor();
-
-    const viewport = document.getElementById('app-viewport')!;
-    const overlay = document.createElement('div');
-    overlay.className = 'json-editor-overlay';
-    overlay.innerHTML = `
-      <div class="json-editor-container">
-        <div class="json-editor-header">
-          <div class="json-editor-title">
-            <span class="cmd-file-platform-icon">${platformIcon(platform)}</span>
-            <span>${escapeHtml(platform)}.json</span>
-            <span class="json-editor-count">${config.commands.length} 条命令</span>
+  private renderCategoryDetail(category: CategoryView): string {
+    return `
+      <div class="cmd-detail-header">
+        <div class="cmd-detail-header-main">
+          <div class="cmd-detail-title-row">
+            <h3>${escapeHtml(category.title)}</h3>
+            <span class="cmd-chip">${category.source === 'system' ? t('cmd.sourceSystem') : category.source === 'builtin' ? t('cmd.sourceBuiltin') : t('cmd.sourceUser')}</span>
           </div>
-          <div class="json-editor-actions">
-            <button class="json-editor-format-btn" title="格式化">
-              ${formatIcon()} 格式化
-            </button>
-            <button class="json-editor-save-btn" title="保存">
-              ${saveIcon()} 保存
-            </button>
-            <button class="json-editor-close-btn" title="关闭">
-              ${closeIcon()}
-            </button>
-          </div>
+          <div class="cmd-detail-subtitle">${escapeHtml(category.subtitle)}</div>
         </div>
-        <div class="json-editor-body">
-          <textarea class="json-editor-textarea" spellcheck="false">${escapeHtml(JSON.stringify(config, null, 2))}</textarea>
+        ${category.canAdd ? `<button class="cmd-toolbar-btn primary" data-add-command="${escapeHtml(category.id)}">${addIcon()} ${t('cmd.addCmd')}</button>` : ''}
+      </div>
+      <div class="cmd-detail-list">
+        ${category.commands.length === 0 ? `<div class="cmd-empty">${t('cmd.emptySection')}</div>` : category.commands.map((command, index) => this.renderCommand(category, command, index)).join('')}
+      </div>
+    `;
+  }
+
+  private renderCommand(category: CategoryView, command: CommandEntry, index: number): string {
+    const commandText = command.command || command.name;
+    return `
+      <div class="cmd-command-item ${category.canDelete ? 'editable' : ''}" data-command-category="${escapeHtml(category.id)}" data-command-index="${index}">
+        <div class="cmd-command-main">
+          <div class="cmd-command-name-row">
+            <span class="cmd-command-name">${escapeHtml(command.name)}</span>
+            ${command.name_cn ? `<span class="cmd-command-cn">${escapeHtml(command.name_cn)}</span>` : ''}
+          </div>
+          ${command.description ? `<div class="cmd-command-desc">${escapeHtml(command.description)}</div>` : ''}
+          ${command.tags.length ? `<div class="cmd-command-tags">${command.tags.map((tag) => `<span class="cmd-tag">${escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+          <div class="cmd-command-text">${escapeHtml(commandText)}</div>
+        </div>
+        <div class="cmd-command-actions">
+          <button class="cmd-mini-btn" data-send-command="${escapeHtml(category.id)}:${index}" title="${t('cmd.sendToTerminal')}">${sendIcon()}</button>
+          <button class="cmd-mini-btn" data-edit-command="${escapeHtml(category.id)}:${index}" title="${t('cmd.edit')}">${editIcon()}</button>
         </div>
       </div>
     `;
-
-    viewport.appendChild(overlay);
-    this.editorOverlay = overlay;
-
-    // Auto-format on open
-    const textarea = overlay.querySelector('.json-editor-textarea') as HTMLTextAreaElement;
-    this.formatJson(textarea);
-
-    // Bind editor events
-    overlay.querySelector('.json-editor-close-btn')!.addEventListener('click', () => {
-      this.closeEditor();
-    });
-
-    overlay.querySelector('.json-editor-format-btn')!.addEventListener('click', () => {
-      this.formatJson(textarea);
-    });
-
-    overlay.querySelector('.json-editor-save-btn')!.addEventListener('click', async () => {
-      await this.saveEditor(platform, textarea);
-    });
-
-    // Ctrl+S to save
-    textarea.addEventListener('keydown', async (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        await this.saveEditor(platform, textarea);
-      }
-      if (e.key === 'Escape') {
-        this.closeEditor();
-      }
-    });
-
-    // Tab key inserts spaces
-    textarea.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        textarea.value = textarea.value.substring(0, start) + '  ' + textarea.value.substring(end);
-        textarea.selectionStart = textarea.selectionEnd = start + 2;
-      }
-    });
-
-    textarea.focus();
   }
 
-  private formatJson(textarea: HTMLTextAreaElement) {
-    try {
-      const parsed = JSON.parse(textarea.value);
-      textarea.value = JSON.stringify(parsed, null, 2);
-      textarea.dataset.error = '';
-      textarea.classList.remove('json-error');
-    } catch (e) {
-      textarea.dataset.error = (e as Error).message;
-      textarea.classList.add('json-error');
+  private renderOverlay(): string {
+    const overlay = this.overlayState;
+    if (!overlay) return '';
+
+    if (overlay.type === 'category') {
+      return `
+        <div class="cmd-overlay">
+          <div class="cmd-overlay-card">
+            <div class="cmd-overlay-title">${t('cmd.addCategory')}</div>
+            <label class="cmd-field">
+              <span>${t('cmd.categoryName')}</span>
+              <input id="cmd-category-label" type="text" value="${escapeHtml(overlay.label)}" placeholder="Team Tools">
+            </label>
+            <label class="cmd-field">
+              <span>${t('cmd.categoryId')}</span>
+              <input id="cmd-category-id" type="text" value="${escapeHtml(overlay.id)}" placeholder="team-tools">
+            </label>
+            <div class="cmd-overlay-actions">
+              <button class="cmd-toolbar-btn primary" id="cmd-save-category">${t('cmd.save')}</button>
+              <button class="cmd-toolbar-btn" id="cmd-cancel-overlay">${t('cmd.cancel')}</button>
+            </div>
+          </div>
+        </div>
+      `;
     }
+
+    const category = this.getConfigById(overlay.categoryId);
+    const entry = overlay.index === null
+      ? emptyCommandEntry()
+      : category?.commands[overlay.index] || emptyCommandEntry();
+
+    return `
+      <div class="cmd-overlay">
+        <div class="cmd-overlay-card wide">
+          <div class="cmd-overlay-title">${overlay.index === null ? t('cmd.addCmd') : t('cmd.editCmd')}</div>
+          <div class="cmd-overlay-subtitle">${escapeHtml(formatCategoryTitle(overlay.categoryId))}</div>
+          <label class="cmd-field">
+            <span>${t('cmd.name')}</span>
+            <input id="cmd-name" type="text" value="${escapeHtml(entry.name)}" placeholder="npm run dev">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.command')}</span>
+            <textarea id="cmd-command" rows="5" placeholder="npm run dev">${escapeHtml(entry.command || entry.name)}</textarea>
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.nameCn')}</span>
+            <input id="cmd-name-cn" type="text" value="${escapeHtml(entry.name_cn)}" placeholder="启动开发服务">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.description')}</span>
+            <input id="cmd-description" type="text" value="${escapeHtml(entry.description)}" placeholder="${t('cmd.description')}">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.alias')}</span>
+            <input id="cmd-aliases" type="text" value="${escapeHtml(entry.alias.join(', '))}" placeholder="dev, start">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.tags')}</span>
+            <input id="cmd-tags" type="text" value="${escapeHtml(entry.tags.join(', '))}" placeholder="删除, remove, file">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.hint')}</span>
+            <input id="cmd-hint" type="text" value="${escapeHtml(entry.hint)}" placeholder="-r 递归 -f 强制">
+          </label>
+          <label class="cmd-field">
+            <span>${t('cmd.examples')}</span>
+            <textarea id="cmd-examples" rows="4" placeholder="rm -rf dist&#10;rm file.txt">${escapeHtml(entry.examples.join('\n'))}</textarea>
+          </label>
+          <div class="cmd-overlay-actions">
+            <button class="cmd-toolbar-btn primary" id="cmd-save-command">${t('cmd.save')}</button>
+            <button class="cmd-toolbar-btn" id="cmd-cancel-overlay">${t('cmd.cancel')}</button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  private async saveEditor(_platform: string, textarea: HTMLTextAreaElement) {
-    try {
-      const config: CommandConfig = JSON.parse(textarea.value);
-      if (!config.platform || !Array.isArray(config.commands)) {
-        throw new Error('JSON 格式不正确，需要 platform 和 commands 字段');
-      }
-      // Format before save
-      textarea.value = JSON.stringify(config, null, 2);
-      textarea.classList.remove('json-error');
+  private bindEvents() {
+    this.body.querySelectorAll<HTMLElement>('[data-category-card]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.activeCategoryId = button.dataset.categoryCard || '';
+        this.render();
+      });
+    });
 
-      await invoke('save_commands', { config });
-      // Reload configs
-      this.configs = await invoke<CommandConfig[]>('load_commands');
+    this.body.querySelector('#cmd-add-category')?.addEventListener('click', () => {
+      this.overlayState = { type: 'category', id: '', label: '' };
       this.render();
+    });
 
-      // Update editor count display
-      const countEl = this.editorOverlay?.querySelector('.json-editor-count');
-      if (countEl) {
-        countEl.textContent = `${config.commands.length} 条命令`;
-      }
-    } catch (e) {
-      textarea.classList.add('json-error');
-      alert('保存失败: ' + e);
-    }
-  }
+    this.body.querySelector('#cmd-import-btn')?.addEventListener('click', () => {
+      this.importFile();
+    });
 
-  private closeEditor() {
-    if (this.editorOverlay) {
-      this.editorOverlay.remove();
-      this.editorOverlay = null;
-    }
+    this.body.querySelectorAll<HTMLElement>('[data-add-command]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.overlayState = { type: 'command', categoryId: button.dataset.addCommand!, index: null };
+        this.render();
+      });
+    });
+
+    this.body.querySelectorAll<HTMLElement>('[data-send-command]').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const [categoryId, indexText] = (button.dataset.sendCommand || '').split(':');
+        await this.sendCommand(categoryId, Number(indexText));
+      });
+    });
+
+    this.body.querySelectorAll<HTMLElement>('[data-edit-command]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const [categoryId, indexText] = (button.dataset.editCommand || '').split(':');
+        this.overlayState = { type: 'command', categoryId, index: Number(indexText) };
+        this.render();
+      });
+    });
+
+    this.body.querySelectorAll<HTMLElement>('.cmd-command-item').forEach((item) => {
+      item.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        const categoryId = item.dataset.commandCategory!;
+        const index = Number(item.dataset.commandIndex);
+        this.showContextMenu(event.clientX, event.clientY, categoryId, index);
+      });
+    });
+
+    this.body.querySelector('#cmd-cancel-overlay')?.addEventListener('click', () => {
+      this.overlayState = null;
+      this.render();
+    });
+
+    this.body.querySelector('#cmd-save-category')?.addEventListener('click', async () => {
+      await this.saveCategory();
+    });
+
+    this.body.querySelector('#cmd-save-command')?.addEventListener('click', async () => {
+      await this.saveCommand();
+    });
   }
 
   private async importFile() {
@@ -226,49 +393,257 @@ export class CommandConfigPanel {
       if (!file) return;
       try {
         const text = await file.text();
-        const config: CommandConfig = JSON.parse(text);
-        if (!config.platform || !Array.isArray(config.commands)) {
-          throw new Error('JSON 格式不正确，需要 platform 和 commands 字段');
+        const parsed = JSON.parse(text) as Partial<CommandConfig>;
+        if (!Array.isArray(parsed.commands)) {
+          throw new Error(t('cmd.jsonError'));
         }
+        const id = parsed.id?.trim() || slugify(file.name.replace(/\.json$/i, ''));
+        const config: CommandConfig = {
+          id,
+          kind: 'custom',
+          platforms: [],
+          commands: parsed.commands.map((command) => normalizeCommandEntry(command)),
+          platform: '',
+        };
         await invoke('save_commands', { config });
-        this.configs = await invoke<CommandConfig[]>('load_commands');
+        await this.reload();
+        await this.onLibraryChanged?.();
+        this.activeCategoryId = id;
         this.render();
-      } catch (e) { alert('导入失败: ' + e); }
+      } catch (error) {
+        alert(t('cmd.importFailed', String(error)));
+      }
     });
     input.click();
   }
+
+  private async saveCategory() {
+    const label = (this.body.querySelector('#cmd-category-label') as HTMLInputElement | null)?.value.trim() || '';
+    const rawId = (this.body.querySelector('#cmd-category-id') as HTMLInputElement | null)?.value.trim() || label;
+    const id = slugify(rawId);
+
+    if (!label || !id) {
+      alert(t('cmd.categoryRequired'));
+      return;
+    }
+    if (this.getConfigById(id)) {
+      alert(t('cmd.categoryExists'));
+      return;
+    }
+
+    const config: CommandConfig = {
+      id,
+      kind: 'custom',
+      platforms: [],
+      commands: [],
+      platform: '',
+    };
+    await invoke('save_commands', { config });
+    await this.reload();
+    await this.onLibraryChanged?.();
+    this.activeCategoryId = id;
+    this.overlayState = null;
+    this.render();
+  }
+
+  private async saveCommand() {
+    if (!this.overlayState || this.overlayState.type !== 'command') return;
+    const config = this.getConfigById(this.overlayState.categoryId);
+    if (!config) return;
+
+    const name = (this.body.querySelector('#cmd-name') as HTMLInputElement | null)?.value.trim() || '';
+    const command = (this.body.querySelector('#cmd-command') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const nameCn = (this.body.querySelector('#cmd-name-cn') as HTMLInputElement | null)?.value.trim() || '';
+    const description = (this.body.querySelector('#cmd-description') as HTMLInputElement | null)?.value.trim() || '';
+    const aliasInput = (this.body.querySelector('#cmd-aliases') as HTMLInputElement | null)?.value.trim() || '';
+    const tagsInput = (this.body.querySelector('#cmd-tags') as HTMLInputElement | null)?.value.trim() || '';
+    const hint = (this.body.querySelector('#cmd-hint') as HTMLInputElement | null)?.value.trim() || '';
+    const examplesInput = (this.body.querySelector('#cmd-examples') as HTMLTextAreaElement | null)?.value.trim() || '';
+
+    if (!name || !command) {
+      alert(t('cmd.nameRequired'));
+      return;
+    }
+
+    const entry: CommandEntry = {
+      name,
+      command,
+      name_cn: nameCn,
+      description,
+      alias: aliasInput.split(',').map((value) => value.trim()).filter(Boolean),
+      usage: command,
+      category: formatCategoryTitle(config.id),
+      tags: tagsInput.split(',').map((value) => value.trim()).filter(Boolean),
+      examples: examplesInput.split('\n').map((value) => value.trim()).filter(Boolean),
+      hint,
+    };
+
+    const commands = [...config.commands];
+    if (this.overlayState.index === null) {
+      commands.push(entry);
+    } else {
+      commands[this.overlayState.index] = entry;
+    }
+
+    await invoke('save_commands', {
+      config: {
+        ...config,
+        commands,
+      },
+    });
+    await this.reload();
+    await this.onLibraryChanged?.();
+    this.activeCategoryId = config.id;
+    this.overlayState = null;
+    this.render();
+  }
+
+  private async deleteCommand(categoryId: string, index: number) {
+    const config = this.getConfigById(categoryId);
+    if (!config) return;
+    const commands = [...config.commands];
+    commands.splice(index, 1);
+    await invoke('save_commands', {
+      config: {
+        ...config,
+        commands,
+      },
+    });
+    await this.reload();
+    await this.onLibraryChanged?.();
+    this.render();
+  }
+
+  private async sendCommand(categoryId: string, index: number) {
+    const command = this.getCommand(categoryId, index);
+    if (!command) return;
+    const sent = await this.sendToTerminal(command.command || command.name);
+    if (!sent) {
+      alert(t('cmd.noActiveTerminal'));
+    }
+  }
+
+  private showContextMenu(x: number, y: number, categoryId: string, index: number) {
+    this.closeContextMenu();
+    const category = this.getAllCategories().find((item) => item.id === categoryId);
+    if (!category) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'context-menu cmd-context-menu';
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+
+    menu.appendChild(this.createMenuItem(t('cmd.sendToTerminal'), sendIcon(), async () => {
+      await this.sendCommand(categoryId, index);
+      this.closeContextMenu();
+    }));
+
+    if (category.canDelete) {
+      menu.appendChild(this.createMenuItem(t('cmd.edit'), editIcon(), () => {
+        this.overlayState = { type: 'command', categoryId, index };
+        this.closeContextMenu();
+        this.render();
+      }));
+      menu.appendChild(this.createMenuItem(t('cmd.delete'), deleteIcon(), async () => {
+        await this.deleteCommand(categoryId, index);
+        this.closeContextMenu();
+      }, true));
+    }
+
+    document.body.appendChild(menu);
+    this.commandContext = menu;
+  }
+
+  private createMenuItem(label: string, icon: string, handler: () => void | Promise<void>, danger = false): HTMLDivElement {
+    const item = document.createElement('div');
+    item.className = `context-menu-item${danger ? ' danger' : ''}`;
+    item.innerHTML = `${icon}<span>${label}</span>`;
+    item.addEventListener('click', () => {
+      void handler();
+    });
+    return item;
+  }
+
+  private closeContextMenu() {
+    if (!this.commandContext) return;
+    this.commandContext.remove();
+    this.commandContext = null;
+  }
+
+  private getConfigById(id: string): CommandConfig | undefined {
+    return this.configs.find((config) => config.id === id || config.platform === id);
+  }
+
+  private getCommand(categoryId: string, index: number): CommandEntry | undefined {
+    const command = this.getConfigById(categoryId)?.commands[index];
+    return command ? normalizeCommandEntry(command) : undefined;
+  }
+
+  private describePlatforms(config: CommandConfig): string {
+    const platforms = config.platforms.length > 0 ? config.platforms : [config.platform];
+    return platforms.filter(Boolean).map(formatCategoryTitle).join(', ');
+  }
 }
 
-// ===== SVG Icons =====
+function emptyCommandEntry(): CommandEntry {
+  return {
+    name: '',
+    alias: [],
+    name_cn: '',
+    description: '',
+    usage: '',
+    category: '',
+    command: '',
+    tags: [],
+    examples: [],
+    hint: '',
+  };
+}
+
+function formatCategoryTitle(id: string): string {
+  const titles: Record<string, string> = {
+    darwin: 'macOS',
+    'quick-commands': t('cmd.quickLegacy'),
+  };
+  return titles[id] || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 function commandIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`;
 }
 
-function platformIcon(platform: string): string {
-  const icons: Record<string, string> = {
-    windows: `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>`,
-    linux: `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M12.504 0c-.155 0-.311.015-.466.04C10.577.276 9.592 1.328 9.17 2.72c-.422 1.392-.298 2.743.326 3.79.308.518.57 1.066.767 1.648.359 1.06.057 2.234-.742 3.118-.8.884-1.7 1.896-2.267 3.092-.567 1.196-.807 2.588-.466 4.03.34 1.44 1.248 2.887 2.95 4.055 1.702 1.168 3.372 1.597 4.892 1.514 1.52-.083 2.882-.687 3.964-1.838 1.082-1.15 1.558-2.586 1.623-4.052.065-1.466-.285-2.966-.998-4.197-.713-1.23-1.816-2.187-3.21-2.6-.57-.168-1.089-.478-1.516-.913-.427-.436-.748-.99-.906-1.62-.158-.63-.146-1.306.039-1.96.37-1.307.435-2.473.15-3.45C13.14.878 12.916.478 12.504 0z"/></svg>`,
-    darwin: `<svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`,
-  };
-  return icons[platform] || `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/></svg>`;
+function addIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
 }
 
 function uploadIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>`;
 }
 
-function saveIcon(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`;
+function sendIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 }
 
-function formatIcon(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="21" y1="10" x2="3" y2="10"></line><line x1="21" y1="6" x2="3" y2="6"></line><line x1="21" y1="14" x2="3" y2="14"></line><line x1="21" y1="18" x2="3" y2="18"></line></svg>`;
+function editIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
 }
 
-function closeIcon(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+function deleteIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
 }

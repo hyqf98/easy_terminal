@@ -1,3 +1,5 @@
+import { t, onLangChange } from './i18n';
+
 export class Sidebar {
   private el: HTMLDivElement;
   private activeTab = '';
@@ -9,15 +11,33 @@ export class Sidebar {
     this.el = document.createElement('div');
     this.el.id = 'sidebar';
 
-    this.addTab('files', folderIcon(), '文件管理');
-    this.addTab('commands', commandIcon(), '命令配置');
-    this.addTab('settings', gearIcon(), '设置');
+    this.addTab('files', folderIcon(), t('sidebar.files'));
+    this.addTab('commands', commandIcon(), t('sidebar.commands'));
+    this.addTab('history', historyIcon(), t('sidebar.history'));
+    this.addTab('mappings', mappingIcon(), t('sidebar.mappings'));
+    this.addTab('ssh', sshIcon(), t('sidebar.ssh'));
+    this.addTab('settings', gearIcon(), t('sidebar.settings'));
 
     const spacer = document.createElement('div');
     spacer.className = 'sidebar-spacer';
     this.el.appendChild(spacer);
 
     container.appendChild(this.el);
+
+    // Update titles on language change
+    onLangChange(() => {
+      const titleMap: Record<string, string> = {
+        files: t('sidebar.files'),
+        commands: t('sidebar.commands'),
+        history: t('sidebar.history'),
+        mappings: t('sidebar.mappings'),
+        ssh: t('sidebar.ssh'),
+        settings: t('sidebar.settings'),
+      };
+      this.tabs.forEach((btn, id) => {
+        btn.title = titleMap[id] || id;
+      });
+    });
   }
 
   private addTab(id: string, iconHtml: string, _label: string): HTMLButtonElement {
@@ -76,4 +96,16 @@ function gearIcon(): string {
 
 function commandIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line><line x1="12" y1="5" x2="20" y2="5"></line></svg>`;
+}
+
+function historyIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"></path><path d="M3.05 13a9 9 0 1 0 .5-5.2L3 8"></path><path d="M12 7v5l4 2"></path></svg>`;
+}
+
+function mappingIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M16 3h3a2 2 0 0 1 2 2v3"></path><path d="M8 21H5a2 2 0 0 1-2-2v-3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>`;
+}
+
+function sshIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path><path d="M5 5v14"></path></svg>`;
 }

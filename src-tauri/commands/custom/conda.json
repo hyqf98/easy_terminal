@@ -1,0 +1,17 @@
+{
+  "id": "conda",
+  "kind": "custom",
+  "platforms": [],
+  "commands": [
+    { "name": "conda", "alias": [], "name_cn": "Conda 主命令", "description": "Conda 包与环境管理入口", "usage": "conda <command>", "category": "Conda" },
+    { "name": "conda create", "alias": [], "name_cn": "创建环境", "description": "创建新的 Conda 环境", "usage": "conda create -n <env> python=<version>", "category": "Conda" },
+    { "name": "conda activate", "alias": [], "name_cn": "激活环境", "description": "激活指定 Conda 环境", "usage": "conda activate <env>", "category": "Conda" },
+    { "name": "conda deactivate", "alias": [], "name_cn": "退出环境", "description": "退出当前 Conda 环境", "usage": "conda deactivate", "category": "Conda" },
+    { "name": "conda install", "alias": [], "name_cn": "安装包", "description": "在当前环境安装包", "usage": "conda install <package>", "category": "Conda" },
+    { "name": "conda remove", "alias": [], "name_cn": "卸载包", "description": "从当前环境移除包", "usage": "conda remove <package>", "category": "Conda" },
+    { "name": "conda list", "alias": [], "name_cn": "包列表", "description": "查看当前环境已安装的包", "usage": "conda list", "category": "Conda" },
+    { "name": "conda env list", "alias": ["conda info --envs"], "name_cn": "环境列表", "description": "列出本机所有 Conda 环境", "usage": "conda env list", "category": "Conda" },
+    { "name": "conda env export", "alias": [], "name_cn": "导出环境", "description": "导出当前环境依赖定义", "usage": "conda env export > environment.yml", "category": "Conda" },
+    { "name": "conda env create", "alias": [], "name_cn": "从文件创建环境", "description": "根据 environment.yml 创建环境", "usage": "conda env create -f environment.yml", "category": "Conda" }
+  ]
+}

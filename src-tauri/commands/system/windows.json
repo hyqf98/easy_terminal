@@ -1,0 +1,3823 @@
+{
+  "id": "windows",
+  "kind": "system",
+  "platforms": [
+    "windows"
+  ],
+  "commands": [
+    {
+      "name": "dir",
+      "alias": [
+        "ls"
+      ],
+      "name_cn": "列出目录",
+      "description": "列出目录内容和文件属性",
+      "usage": "dir [path] [/s] [/b]",
+      "category": "文件操作"
+    },
+    {
+      "name": "cd",
+      "alias": [
+        "chdir"
+      ],
+      "name_cn": "切换目录",
+      "description": "显示或切换当前目录",
+      "usage": "cd <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "mkdir",
+      "alias": [
+        "md"
+      ],
+      "name_cn": "创建目录",
+      "description": "创建目录",
+      "usage": "mkdir <dir>",
+      "category": "文件操作"
+    },
+    {
+      "name": "rmdir",
+      "alias": [
+        "rd"
+      ],
+      "name_cn": "删除目录",
+      "description": "删除目录",
+      "usage": "rmdir [/s] [/q] <dir>",
+      "category": "文件操作"
+    },
+    {
+      "name": "del",
+      "alias": [
+        "rm",
+        "erase"
+      ],
+      "name_cn": "删除文件",
+      "description": "删除一个或多个文件",
+      "usage": "del [/f] [/q] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "copy",
+      "alias": [
+        "cp"
+      ],
+      "name_cn": "复制文件",
+      "description": "复制文件到指定位置",
+      "usage": "copy <src> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "xcopy",
+      "alias": [
+        "cp -r"
+      ],
+      "name_cn": "扩展复制",
+      "description": "复制文件和目录树",
+      "usage": "xcopy <src> <dest> [/s] [/e]",
+      "category": "文件操作"
+    },
+    {
+      "name": "robocopy",
+      "alias": [
+        "rsync"
+      ],
+      "name_cn": "高级复制",
+      "description": "强大的文件复制工具，支持断点续传",
+      "usage": "robocopy <src> <dest> [/mir] [/z]",
+      "category": "文件操作"
+    },
+    {
+      "name": "move",
+      "alias": [
+        "mv"
+      ],
+      "name_cn": "移动文件",
+      "description": "移动或重命名文件",
+      "usage": "move <src> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "rename",
+      "alias": [
+        "ren",
+        "mv"
+      ],
+      "name_cn": "重命名",
+      "description": "重命名文件或目录",
+      "usage": "rename <old> <new>",
+      "category": "文件操作"
+    },
+    {
+      "name": "type",
+      "alias": [
+        "cat"
+      ],
+      "name_cn": "查看文件",
+      "description": "显示文本文件内容",
+      "usage": "type <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "find",
+      "alias": [
+        "grep"
+      ],
+      "name_cn": "搜索文本",
+      "description": "在文件中搜索文本字符串",
+      "usage": "find <string> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "findstr",
+      "alias": [
+        "grep"
+      ],
+      "name_cn": "正则搜索",
+      "description": "在文件中搜索正则表达式文本",
+      "usage": "findstr [/r] <pattern> <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "tree",
+      "alias": [
+        "tree"
+      ],
+      "name_cn": "目录树",
+      "description": "以图形方式显示目录结构",
+      "usage": "tree [path] [/f] [/a]",
+      "category": "文件操作"
+    },
+    {
+      "name": "where",
+      "alias": [
+        "which",
+        "locate"
+      ],
+      "name_cn": "查找命令",
+      "description": "显示匹配搜索模式的文件位置",
+      "usage": "where <command>",
+      "category": "文件操作"
+    },
+    {
+      "name": "attrib",
+      "alias": [
+        "chmod",
+        "chattr"
+      ],
+      "name_cn": "文件属性",
+      "description": "显示或更改文件属性",
+      "usage": "attrib [+r|-r] [+h|-h] [+s|-s] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "icacls",
+      "alias": [
+        "chmod",
+        "chown"
+      ],
+      "name_cn": "文件权限",
+      "description": "显示或修改文件ACL访问控制列表",
+      "usage": "icacls <file> [/grant] [/deny]",
+      "category": "文件操作"
+    },
+    {
+      "name": "takeown",
+      "alias": [
+        "chown"
+      ],
+      "name_cn": "取得所有权",
+      "description": "以管理员身份取得文件所有权",
+      "usage": "takeown /f <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "cacls",
+      "alias": [
+        "chmod"
+      ],
+      "name_cn": "访问控制(旧版)",
+      "description": "显示或修改文件的访问控制列表(旧版)",
+      "usage": "cacls <file> [/e] [/p user:perm]",
+      "category": "文件操作"
+    },
+    {
+      "name": "more",
+      "alias": [
+        "less"
+      ],
+      "name_cn": "分页查看",
+      "description": "逐屏显示输出",
+      "usage": "more <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "sort",
+      "alias": [
+        "sort"
+      ],
+      "name_cn": "排序",
+      "description": "对输入进行排序",
+      "usage": "sort [file]",
+      "category": "文件操作"
+    },
+    {
+      "name": "comp",
+      "alias": [
+        "diff"
+      ],
+      "name_cn": "比较文件",
+      "description": "比较两个文件的内容",
+      "usage": "comp <file1> <file2>",
+      "category": "文件操作"
+    },
+    {
+      "name": "fc",
+      "alias": [
+        "diff"
+      ],
+      "name_cn": "文件对比",
+      "description": "比较两个文件并显示差异",
+      "usage": "fc <file1> <file2>",
+      "category": "文件操作"
+    },
+    {
+      "name": "mklink",
+      "alias": [
+        "ln -s"
+      ],
+      "name_cn": "创建链接",
+      "description": "创建符号链接或硬链接",
+      "usage": "mklink [/d] [/h] <link> <target>",
+      "category": "文件操作"
+    },
+    {
+      "name": "subst",
+      "alias": [
+        "mount"
+      ],
+      "name_cn": "虚拟驱动器",
+      "description": "将路径映射为驱动器号",
+      "usage": "subst <drive:> <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "pushd",
+      "alias": [
+        "pushd"
+      ],
+      "name_cn": "保存并切换",
+      "description": "保存当前目录并切换到新目录",
+      "usage": "pushd <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "popd",
+      "alias": [
+        "popd"
+      ],
+      "name_cn": "恢复目录",
+      "description": "恢复pushd保存的目录",
+      "usage": "popd",
+      "category": "文件操作"
+    },
+    {
+      "name": "forfiles",
+      "alias": [
+        "find -exec"
+      ],
+      "name_cn": "批量文件操作",
+      "description": "对匹配的文件执行命令",
+      "usage": "forfiles [/p path] [/m mask] [/c command]",
+      "category": "文件操作"
+    },
+    {
+      "name": "cipher",
+      "alias": [],
+      "name_cn": "文件加密",
+      "description": "显示或修改NTFS分区上的文件加密",
+      "usage": "cipher [/e|/d] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "certutil",
+      "alias": [
+        "md5sum",
+        "sha256sum"
+      ],
+      "name_cn": "文件校验",
+      "description": "证书服务工具，可计算文件哈希",
+      "usage": "certutil -hashfile <file> [MD5|SHA256]",
+      "category": "文件操作"
+    },
+    {
+      "name": "certutil -encode",
+      "alias": [
+        "base64"
+      ],
+      "name_cn": "Base64编码",
+      "description": "将文件编码为Base64格式",
+      "usage": "certutil -encode <infile> <outfile>",
+      "category": "文件操作"
+    },
+    {
+      "name": "certutil -decode",
+      "alias": [
+        "base64 -d"
+      ],
+      "name_cn": "Base64解码",
+      "description": "解码Base64编码的文件",
+      "usage": "certutil -decode <infile> <outfile>",
+      "category": "文件操作"
+    },
+    {
+      "name": "assoc",
+      "alias": [
+        "xdg-mime"
+      ],
+      "name_cn": "文件关联",
+      "description": "显示或修改文件扩展名关联",
+      "usage": "assoc [.ext[=[fileType]]]",
+      "category": "文件操作"
+    },
+    {
+      "name": "ftype",
+      "alias": [],
+      "name_cn": "文件类型",
+      "description": "显示或修改文件类型的打开命令",
+      "usage": "ftype [fileType[=[command]]]",
+      "category": "文件操作"
+    },
+    {
+      "name": "expand",
+      "alias": [
+        "gunzip",
+        "unzip"
+      ],
+      "name_cn": "解压文件",
+      "description": "展开一个或多个压缩文件",
+      "usage": "expand <source> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "replace",
+      "alias": [],
+      "name_cn": "替换文件",
+      "description": "替换目录中的文件",
+      "usage": "replace <src> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "openfiles",
+      "alias": [
+        "lsof"
+      ],
+      "name_cn": "打开的文件",
+      "description": "查询或显示系统打开的文件",
+      "usage": "openfiles [/query]",
+      "category": "文件操作"
+    },
+    {
+      "name": "fsutil",
+      "alias": [],
+      "name_cn": "文件系统工具",
+      "description": "文件系统管理工具",
+      "usage": "fsutil <command>",
+      "category": "文件操作"
+    },
+    {
+      "name": "pathping",
+      "alias": [
+        "mtr"
+      ],
+      "name_cn": "路径追踪",
+      "description": "提供路径中各节点的延迟和丢包信息",
+      "usage": "pathping <host>",
+      "category": "文件操作"
+    },
+    {
+      "name": "copy /b",
+      "alias": [
+        "cat"
+      ],
+      "name_cn": "二进制合并",
+      "description": "以二进制模式合并文件",
+      "usage": "copy /b <file1>+<file2> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "del /s",
+      "alias": [
+        "rm -rf"
+      ],
+      "name_cn": "递归删除",
+      "description": "递归删除指定文件",
+      "usage": "del /s /q <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "dir /a",
+      "alias": [
+        "ls -la"
+      ],
+      "name_cn": "列出隐藏文件",
+      "description": "列出包含隐藏和系统属性的文件",
+      "usage": "dir /a [path]",
+      "category": "文件操作"
+    },
+    {
+      "name": "dir /s",
+      "alias": [
+        "find"
+      ],
+      "name_cn": "递归列出",
+      "description": "递归列出目录和子目录中的文件",
+      "usage": "dir /s [path]",
+      "category": "文件操作"
+    },
+    {
+      "name": "xcopy /e",
+      "alias": [
+        "cp -r"
+      ],
+      "name_cn": "递归复制目录",
+      "description": "递归复制目录和子目录包括空目录",
+      "usage": "xcopy <src> <dest> /e",
+      "category": "文件操作"
+    },
+    {
+      "name": "robocopy /mir",
+      "alias": [
+        "rsync -a --delete"
+      ],
+      "name_cn": "镜像同步",
+      "description": "镜像同步目录内容",
+      "usage": "robocopy <src> <dest> /mir",
+      "category": "文件操作"
+    },
+    {
+      "name": "robocopy /e",
+      "alias": [
+        "rsync -a"
+      ],
+      "name_cn": "递归同步",
+      "description": "递归复制目录包含子目录",
+      "usage": "robocopy <src> <dest> /e",
+      "category": "文件操作"
+    },
+    {
+      "name": "attrib +h",
+      "alias": [],
+      "name_cn": "隐藏文件",
+      "description": "设置文件为隐藏属性",
+      "usage": "attrib +h <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "attrib +r",
+      "alias": [
+        "chmod -w"
+      ],
+      "name_cn": "设为只读",
+      "description": "设置文件为只读属性",
+      "usage": "attrib +r <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "icacls /grant",
+      "alias": [
+        "chmod +x"
+      ],
+      "name_cn": "授予权限",
+      "description": "授予指定用户文件访问权限",
+      "usage": "icacls <file> /grant <user>:<perm>",
+      "category": "文件操作"
+    },
+    {
+      "name": "fsutil file",
+      "alias": [
+        "stat"
+      ],
+      "name_cn": "文件信息查询",
+      "description": "查询文件详细信息",
+      "usage": "fsutil file queryfileid <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "makecab",
+      "alias": [
+        "zip"
+      ],
+      "name_cn": "创建CAB",
+      "description": "将文件压缩为CAB格式",
+      "usage": "makecab <source> <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "extrac32",
+      "alias": [
+        "unzip"
+      ],
+      "name_cn": "解压CAB文件",
+      "description": "解压CAB压缩文件",
+      "usage": "extrac32 <source> [/l] <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "cls",
+      "alias": [
+        "clear"
+      ],
+      "name_cn": "清屏",
+      "description": "清除命令提示符屏幕",
+      "usage": "cls",
+      "category": "终端操作"
+    },
+    {
+      "name": "echo",
+      "alias": [
+        "print",
+        "printf"
+      ],
+      "name_cn": "输出文本",
+      "description": "显示消息或将消息回显",
+      "usage": "echo <message>",
+      "category": "终端操作"
+    },
+    {
+      "name": "set",
+      "alias": [
+        "export"
+      ],
+      "name_cn": "环境变量",
+      "description": "显示、设置或删除环境变量",
+      "usage": "set [var=value]",
+      "category": "终端操作"
+    },
+    {
+      "name": "setx",
+      "alias": [],
+      "name_cn": "永久环境变量",
+      "description": "永久设置环境变量",
+      "usage": "setx <var> <value>",
+      "category": "终端操作"
+    },
+    {
+      "name": "path",
+      "alias": [
+        "echo $PATH"
+      ],
+      "name_cn": "搜索路径",
+      "description": "显示或设置可执行文件搜索路径",
+      "usage": "path [[drive:]path[;...]]",
+      "category": "终端操作"
+    },
+    {
+      "name": "title",
+      "alias": [],
+      "name_cn": "窗口标题",
+      "description": "设置命令提示符窗口标题",
+      "usage": "title <text>",
+      "category": "终端操作"
+    },
+    {
+      "name": "prompt",
+      "alias": [
+        "PS1"
+      ],
+      "name_cn": "命令提示符",
+      "description": "更改命令提示符显示方式",
+      "usage": "prompt <text>",
+      "category": "终端操作"
+    },
+    {
+      "name": "color",
+      "alias": [],
+      "name_cn": "控制台颜色",
+      "description": "设置控制台前景和背景颜色",
+      "usage": "color [attr]",
+      "category": "终端操作"
+    },
+    {
+      "name": "ver",
+      "alias": [
+        "uname -r"
+      ],
+      "name_cn": "系统版本",
+      "description": "显示Windows版本",
+      "usage": "ver",
+      "category": "终端操作"
+    },
+    {
+      "name": "date",
+      "alias": [
+        "date"
+      ],
+      "name_cn": "日期",
+      "description": "显示或设置日期",
+      "usage": "date [/t]",
+      "category": "终端操作"
+    },
+    {
+      "name": "time",
+      "alias": [],
+      "name_cn": "时间",
+      "description": "显示或设置时间",
+      "usage": "time [/t]",
+      "category": "终端操作"
+    },
+    {
+      "name": "exit",
+      "alias": [
+        "exit"
+      ],
+      "name_cn": "退出",
+      "description": "退出CMD或当前脚本",
+      "usage": "exit [/b] [code]",
+      "category": "终端操作"
+    },
+    {
+      "name": "start",
+      "alias": [
+        "open",
+        "xdg-open"
+      ],
+      "name_cn": "启动程序",
+      "description": "在新窗口中启动程序或命令",
+      "usage": "start [options] <program>",
+      "category": "终端操作"
+    },
+    {
+      "name": "call",
+      "alias": [
+        "source"
+      ],
+      "name_cn": "调用脚本",
+      "description": "从另一个批处理程序调用",
+      "usage": "call <script>",
+      "category": "终端操作"
+    },
+    {
+      "name": "cmd",
+      "alias": [],
+      "name_cn": "命令提示符",
+      "description": "启动命令解释器的新实例",
+      "usage": "cmd [/c|/k]",
+      "category": "终端操作"
+    },
+    {
+      "name": "powershell",
+      "alias": [
+        "pwsh"
+      ],
+      "name_cn": "PowerShell",
+      "description": "启动Windows PowerShell",
+      "usage": "powershell [command]",
+      "category": "终端操作"
+    },
+    {
+      "name": "doskey",
+      "alias": [
+        "history",
+        "alias"
+      ],
+      "name_cn": "宏和历史",
+      "description": "编辑命令行、创建宏和查看历史",
+      "usage": "doskey <name>=<command>",
+      "category": "终端操作"
+    },
+    {
+      "name": "choice",
+      "alias": [
+        "select"
+      ],
+      "name_cn": "用户选择",
+      "description": "提示用户从选择列表中做选择",
+      "usage": "choice [/c choices]",
+      "category": "终端操作"
+    },
+    {
+      "name": "pause",
+      "alias": [
+        "read"
+      ],
+      "name_cn": "暂停",
+      "description": "暂停批处理文件并显示提示",
+      "usage": "pause",
+      "category": "终端操作"
+    },
+    {
+      "name": "break",
+      "alias": [],
+      "name_cn": "中断控制",
+      "description": "设置或清除扩展的CTRL+C检查",
+      "usage": "break",
+      "category": "终端操作"
+    },
+    {
+      "name": "if",
+      "alias": [],
+      "name_cn": "条件判断",
+      "description": "批处理中的条件处理",
+      "usage": "if [not] <condition> <command>",
+      "category": "终端操作"
+    },
+    {
+      "name": "for",
+      "alias": [],
+      "name_cn": "循环",
+      "description": "对一组文件运行指定命令",
+      "usage": "for %var in (set) do <command>",
+      "category": "终端操作"
+    },
+    {
+      "name": "goto",
+      "alias": [],
+      "name_cn": "跳转",
+      "description": "跳转到标签行",
+      "usage": "goto <label>",
+      "category": "终端操作"
+    },
+    {
+      "name": "shift",
+      "alias": [],
+      "name_cn": "参数移位",
+      "description": "更改批处理中可替换参数的位置",
+      "usage": "shift",
+      "category": "终端操作"
+    },
+    {
+      "name": "rem",
+      "alias": [
+        "#"
+      ],
+      "name_cn": "注释",
+      "description": "批处理文件中的注释",
+      "usage": "rem <comment>",
+      "category": "终端操作"
+    },
+    {
+      "name": "timeout",
+      "alias": [
+        "sleep"
+      ],
+      "name_cn": "延时等待",
+      "description": "暂停指定秒数",
+      "usage": "timeout [/t] <seconds>",
+      "category": "终端操作"
+    },
+    {
+      "name": "waitfor",
+      "alias": [
+        "wait"
+      ],
+      "name_cn": "等待信号",
+      "description": "等待或发送信号以同步系统",
+      "usage": "waitfor <signal>",
+      "category": "终端操作"
+    },
+    {
+      "name": "clip",
+      "alias": [
+        "xclip",
+        "pbcopy"
+      ],
+      "name_cn": "复制到剪贴板",
+      "description": "将命令输出重定向到剪贴板",
+      "usage": "command | clip",
+      "category": "终端操作"
+    },
+    {
+      "name": "systeminfo",
+      "alias": [
+        "uname -a"
+      ],
+      "name_cn": "系统信息",
+      "description": "显示计算机的详细配置信息",
+      "usage": "systeminfo",
+      "category": "系统管理"
+    },
+    {
+      "name": "hostname",
+      "alias": [
+        "hostname"
+      ],
+      "name_cn": "主机名",
+      "description": "显示计算机的主机全名",
+      "usage": "hostname",
+      "category": "系统管理"
+    },
+    {
+      "name": "whoami",
+      "alias": [
+        "id"
+      ],
+      "name_cn": "当前用户",
+      "description": "显示当前用户信息",
+      "usage": "whoami [/all]",
+      "category": "系统管理"
+    },
+    {
+      "name": "shutdown",
+      "alias": [
+        "shutdown",
+        "poweroff"
+      ],
+      "name_cn": "关机",
+      "description": "关闭或重启计算机",
+      "usage": "shutdown [/s|/r] [/t <sec>]",
+      "category": "系统管理"
+    },
+    {
+      "name": "shutdown /r",
+      "alias": [
+        "reboot"
+      ],
+      "name_cn": "重启计算机",
+      "description": "重启本地或远程计算机",
+      "usage": "shutdown /r /t <seconds>",
+      "category": "系统管理"
+    },
+    {
+      "name": "shutdown /l",
+      "alias": [
+        "logout"
+      ],
+      "name_cn": "注销",
+      "description": "注销当前用户",
+      "usage": "shutdown /l",
+      "category": "系统管理"
+    },
+    {
+      "name": "sfc",
+      "alias": [],
+      "name_cn": "系统文件检查",
+      "description": "系统文件检查器，扫描修复系统文件",
+      "usage": "sfc /scannow",
+      "category": "系统管理"
+    },
+    {
+      "name": "chkdsk",
+      "alias": [
+        "fsck"
+      ],
+      "name_cn": "磁盘检查",
+      "description": "检查磁盘并修复错误",
+      "usage": "chkdsk [drive:] [/f] [/r]",
+      "category": "系统管理"
+    },
+    {
+      "name": "chkntfs",
+      "alias": [],
+      "name_cn": "启动检查",
+      "description": "显示或修改启动时的磁盘检查",
+      "usage": "chkntfs <drive:>",
+      "category": "系统管理"
+    },
+    {
+      "name": "winget",
+      "alias": [
+        "apt",
+        "yum"
+      ],
+      "name_cn": "包管理器",
+      "description": "Windows包管理器",
+      "usage": "winget <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "choco",
+      "alias": [
+        "apt",
+        "brew"
+      ],
+      "name_cn": "Chocolatey",
+      "description": "Chocolatey包管理器",
+      "usage": "choco <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "scoop",
+      "alias": [
+        "brew"
+      ],
+      "name_cn": "Scoop",
+      "description": "Scoop命令行包管理器",
+      "usage": "scoop <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "dism",
+      "alias": [],
+      "name_cn": "系统映像管理",
+      "description": "部署映像服务和管理工具",
+      "usage": "dism [/online] [/cleanup-image]",
+      "category": "系统管理"
+    },
+    {
+      "name": "bcdedit",
+      "alias": [],
+      "name_cn": "启动配置",
+      "description": "修改启动配置数据存储",
+      "usage": "bcdedit [/store <file>]",
+      "category": "系统管理"
+    },
+    {
+      "name": "bcdboot",
+      "alias": [
+        "grub-install"
+      ],
+      "name_cn": "启动修复",
+      "description": "设置或修复启动环境",
+      "usage": "bcdboot <source>",
+      "category": "系统管理"
+    },
+    {
+      "name": "msconfig",
+      "alias": [],
+      "name_cn": "系统配置",
+      "description": "打开系统配置实用程序",
+      "usage": "msconfig",
+      "category": "系统管理"
+    },
+    {
+      "name": "regedit",
+      "alias": [],
+      "name_cn": "注册表编辑器",
+      "description": "打开注册表编辑器",
+      "usage": "regedit",
+      "category": "系统管理"
+    },
+    {
+      "name": "gpedit",
+      "alias": [],
+      "name_cn": "组策略",
+      "description": "打开组策略编辑器",
+      "usage": "gpedit.msc",
+      "category": "系统管理"
+    },
+    {
+      "name": "msinfo32",
+      "alias": [],
+      "name_cn": "系统信息GUI",
+      "description": "打开系统信息窗口",
+      "usage": "msinfo32",
+      "category": "系统管理"
+    },
+    {
+      "name": "dxdiag",
+      "alias": [],
+      "name_cn": "DirectX诊断",
+      "description": "打开DirectX诊断工具",
+      "usage": "dxdiag",
+      "category": "系统管理"
+    },
+    {
+      "name": "winver",
+      "alias": [],
+      "name_cn": "Windows版本",
+      "description": "显示Windows版本信息对话框",
+      "usage": "winver",
+      "category": "系统管理"
+    },
+    {
+      "name": "powercfg",
+      "alias": [],
+      "name_cn": "电源管理",
+      "description": "控制电源管理设置和报告",
+      "usage": "powercfg <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "driverquery",
+      "alias": [
+        "lsmod"
+      ],
+      "name_cn": "驱动列表",
+      "description": "显示已安装设备驱动列表",
+      "usage": "driverquery [/v]",
+      "category": "系统管理"
+    },
+    {
+      "name": "w32tm",
+      "alias": [
+        "ntpd"
+      ],
+      "name_cn": "时间服务",
+      "description": "Windows时间服务管理",
+      "usage": "w32tm [/resync]",
+      "category": "系统管理"
+    },
+    {
+      "name": "lodctr",
+      "alias": [],
+      "name_cn": "加载计数器",
+      "description": "注册性能计数器名称",
+      "usage": "lodctr <ini-file>",
+      "category": "系统管理"
+    },
+    {
+      "name": "unlodctr",
+      "alias": [],
+      "name_cn": "卸载计数器",
+      "description": "移除性能计数器名称",
+      "usage": "unlodctr <driver>",
+      "category": "系统管理"
+    },
+    {
+      "name": "diskpart",
+      "alias": [
+        "fdisk",
+        "parted"
+      ],
+      "name_cn": "磁盘分区工具",
+      "description": "磁盘分区管理交互式工具",
+      "usage": "diskpart",
+      "category": "系统管理"
+    },
+    {
+      "name": "wmic",
+      "alias": [],
+      "name_cn": "WMI管理",
+      "description": "Windows管理规范命令行工具",
+      "usage": "wmic <alias> <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "getmac",
+      "alias": [
+        "ip link"
+      ],
+      "name_cn": "MAC地址",
+      "description": "显示网络适配器MAC地址",
+      "usage": "getmac [/v]",
+      "category": "系统管理"
+    },
+    {
+      "name": "eventvwr",
+      "alias": [
+        "journalctl"
+      ],
+      "name_cn": "事件查看器",
+      "description": "打开事件查看器",
+      "usage": "eventvwr.msc",
+      "category": "系统管理"
+    },
+    {
+      "name": "wevtutil",
+      "alias": [],
+      "name_cn": "事件日志命令",
+      "description": "命令行事件日志管理工具",
+      "usage": "wevtutil <command>",
+      "category": "系统管理"
+    },
+    {
+      "name": "perfmon",
+      "alias": [
+        "top",
+        "htop"
+      ],
+      "name_cn": "性能监视器",
+      "description": "打开性能监视器",
+      "usage": "perfmon",
+      "category": "系统管理"
+    },
+    {
+      "name": "resmon",
+      "alias": [
+        "top",
+        "htop"
+      ],
+      "name_cn": "资源监视器",
+      "description": "打开资源监视器",
+      "usage": "resmon",
+      "category": "系统管理"
+    },
+    {
+      "name": "compmgmt",
+      "alias": [],
+      "name_cn": "计算机管理",
+      "description": "打开计算机管理控制台",
+      "usage": "compmgmt.msc",
+      "category": "系统管理"
+    },
+    {
+      "name": "devmgmt",
+      "alias": [
+        "lsmod"
+      ],
+      "name_cn": "设备管理器",
+      "description": "打开设备管理器",
+      "usage": "devmgmt.msc",
+      "category": "系统管理"
+    },
+    {
+      "name": "services.msc",
+      "alias": [],
+      "name_cn": "服务管理GUI",
+      "description": "打开服务管理控制台",
+      "usage": "services.msc",
+      "category": "系统管理"
+    },
+    {
+      "name": "control",
+      "alias": [],
+      "name_cn": "控制面板",
+      "description": "打开Windows控制面板",
+      "usage": "control",
+      "category": "系统管理"
+    },
+    {
+      "name": "slmgr",
+      "alias": [],
+      "name_cn": "许可证管理",
+      "description": "Windows软件授权管理工具",
+      "usage": "slmgr [options]",
+      "category": "系统管理"
+    },
+    {
+      "name": "tasklist",
+      "alias": [
+        "ps",
+        "ps aux"
+      ],
+      "name_cn": "进程列表",
+      "description": "显示所有当前运行的进程",
+      "usage": "tasklist [/svc] [/fi]",
+      "category": "系统管理"
+    },
+    {
+      "name": "taskkill",
+      "alias": [
+        "kill"
+      ],
+      "name_cn": "终止进程",
+      "description": "终止正在运行的进程",
+      "usage": "taskkill [/pid <id>] [/im <name>] [/f]",
+      "category": "系统管理"
+    },
+    {
+      "name": "ipconfig",
+      "alias": [
+        "ifconfig",
+        "ip addr"
+      ],
+      "name_cn": "网络配置",
+      "description": "显示网络适配器IP配置",
+      "usage": "ipconfig [/all] [/renew] [/release]",
+      "category": "网络"
+    },
+    {
+      "name": "ping",
+      "alias": [
+        "ping"
+      ],
+      "name_cn": "测试网络",
+      "description": "测试与目标主机的网络连通性",
+      "usage": "ping <host> [-t] [-n count]",
+      "category": "网络"
+    },
+    {
+      "name": "netstat",
+      "alias": [
+        "ss"
+      ],
+      "name_cn": "网络连接",
+      "description": "显示活动的TCP连接和端口",
+      "usage": "netstat [-an] [-o]",
+      "category": "网络"
+    },
+    {
+      "name": "netstat -an",
+      "alias": [
+        "ss -tlnp"
+      ],
+      "name_cn": "端口监听",
+      "description": "显示所有连接和监听端口",
+      "usage": "netstat -an",
+      "category": "网络"
+    },
+    {
+      "name": "tracert",
+      "alias": [
+        "traceroute"
+      ],
+      "name_cn": "路由跟踪",
+      "description": "跟踪数据包到目标的路径",
+      "usage": "tracert [-d] <host>",
+      "category": "网络"
+    },
+    {
+      "name": "pathping",
+      "alias": [
+        "mtr"
+      ],
+      "name_cn": "路径统计",
+      "description": "提供路径中各节点的延迟和丢包信息",
+      "usage": "pathping <host>",
+      "category": "网络"
+    },
+    {
+      "name": "nslookup",
+      "alias": [
+        "dig",
+        "host"
+      ],
+      "name_cn": "DNS查询",
+      "description": "查询DNS名称服务器",
+      "usage": "nslookup <domain>",
+      "category": "网络"
+    },
+    {
+      "name": "curl",
+      "alias": [
+        "wget",
+        "curl"
+      ],
+      "name_cn": "HTTP请求",
+      "description": "发起HTTP/HTTPS请求",
+      "usage": "curl <url> [-o file]",
+      "category": "网络"
+    },
+    {
+      "name": "wget",
+      "alias": [
+        "curl"
+      ],
+      "name_cn": "下载文件",
+      "description": "从网络下载文件",
+      "usage": "wget <url>",
+      "category": "网络"
+    },
+    {
+      "name": "ssh",
+      "alias": [
+        "ssh"
+      ],
+      "name_cn": "远程登录",
+      "description": "SSH安全Shell远程登录",
+      "usage": "ssh <user>@<host>",
+      "category": "网络"
+    },
+    {
+      "name": "scp",
+      "alias": [
+        "scp"
+      ],
+      "name_cn": "远程复制",
+      "description": "通过SSH远程安全复制文件",
+      "usage": "scp <src> <dest>",
+      "category": "网络"
+    },
+    {
+      "name": "ftp",
+      "alias": [
+        "ftp",
+        "sftp"
+      ],
+      "name_cn": "FTP传输",
+      "description": "文件传输协议客户端",
+      "usage": "ftp <host>",
+      "category": "网络"
+    },
+    {
+      "name": "tftp",
+      "alias": [
+        "tftp"
+      ],
+      "name_cn": "TFTP传输",
+      "description": "简单文件传输协议客户端",
+      "usage": "tftp <host>",
+      "category": "网络"
+    },
+    {
+      "name": "netsh",
+      "alias": [
+        "iptables",
+        "nmcli"
+      ],
+      "name_cn": "网络配置",
+      "description": "网络配置命令行工具",
+      "usage": "netsh <context> <command>",
+      "category": "网络"
+    },
+    {
+      "name": "netsh wlan",
+      "alias": [
+        "nmcli dev wifi"
+      ],
+      "name_cn": "WiFi管理",
+      "description": "管理无线网络连接",
+      "usage": "netsh wlan <command>",
+      "category": "网络"
+    },
+    {
+      "name": "net",
+      "alias": [],
+      "name_cn": "网络服务",
+      "description": "网络服务管理命令",
+      "usage": "net <command>",
+      "category": "网络"
+    },
+    {
+      "name": "route",
+      "alias": [
+        "route",
+        "ip route"
+      ],
+      "name_cn": "路由表",
+      "description": "显示或修改本地路由表",
+      "usage": "route [print|add|delete]",
+      "category": "网络"
+    },
+    {
+      "name": "arp",
+      "alias": [
+        "arp"
+      ],
+      "name_cn": "ARP缓存",
+      "description": "显示和修改IP到物理地址的映射",
+      "usage": "arp [-a] [-d]",
+      "category": "网络"
+    },
+    {
+      "name": "nbtstat",
+      "alias": [],
+      "name_cn": "NetBIOS状态",
+      "description": "显示NetBIOS统计和名称缓存",
+      "usage": "nbtstat [-n] [-a]",
+      "category": "网络"
+    },
+    {
+      "name": "getmac",
+      "alias": [
+        "ip link"
+      ],
+      "name_cn": "MAC地址查询",
+      "description": "显示网卡MAC地址",
+      "usage": "getmac [/v]",
+      "category": "网络"
+    },
+    {
+      "name": "dnscmd",
+      "alias": [],
+      "name_cn": "DNS管理",
+      "description": "管理DNS服务器",
+      "usage": "dnscmd <server> <command>",
+      "category": "网络"
+    },
+    {
+      "name": "portqry",
+      "alias": [
+        "nc",
+        "nmap"
+      ],
+      "name_cn": "端口查询",
+      "description": "查询目标主机的端口状态",
+      "usage": "portqry -n <host> -p <protocol> -e <port>",
+      "category": "网络"
+    },
+    {
+      "name": "rpcping",
+      "alias": [],
+      "name_cn": "RPC测试",
+      "description": "测试RPC连接",
+      "usage": "rpcping [options]",
+      "category": "网络"
+    },
+    {
+      "name": "finger",
+      "alias": [
+        "finger"
+      ],
+      "name_cn": "用户信息查询",
+      "description": "显示远程系统上用户的信息",
+      "usage": "finger <user@host>",
+      "category": "网络"
+    },
+    {
+      "name": "lpq",
+      "alias": [
+        "lpq"
+      ],
+      "name_cn": "打印队列",
+      "description": "显示远程打印机的队列状态",
+      "usage": "lpq -S <server> -P <printer>",
+      "category": "网络"
+    },
+    {
+      "name": "lpr",
+      "alias": [
+        "lpr"
+      ],
+      "name_cn": "发送打印任务",
+      "description": "发送文件到远程打印机",
+      "usage": "lpr -S <server> -P <printer> <file>",
+      "category": "网络"
+    },
+    {
+      "name": "ipconfig /flushdns",
+      "alias": [
+        "systemd-resolve --flush-caches"
+      ],
+      "name_cn": "刷新DNS缓存",
+      "description": "清除DNS解析缓存",
+      "usage": "ipconfig /flushdns",
+      "category": "网络"
+    },
+    {
+      "name": "ipconfig /renew",
+      "alias": [
+        "dhclient"
+      ],
+      "name_cn": "续租IP地址",
+      "description": "重新获取DHCP分配的IP地址",
+      "usage": "ipconfig /renew",
+      "category": "网络"
+    },
+    {
+      "name": "ipconfig /release",
+      "alias": [
+        "dhclient -r"
+      ],
+      "name_cn": "释放IP地址",
+      "description": "释放DHCP分配的IP地址",
+      "usage": "ipconfig /release",
+      "category": "网络"
+    },
+    {
+      "name": "Test-NetConnection",
+      "alias": [
+        "nc",
+        "telnet"
+      ],
+      "name_cn": "测试网络连接",
+      "description": "PowerShell测试网络连接和端口",
+      "usage": "powershell Test-NetConnection <host> -Port <port>",
+      "category": "网络"
+    },
+    {
+      "name": "Get-NetAdapter",
+      "alias": [
+        "ip link",
+        "ifconfig"
+      ],
+      "name_cn": "网卡信息",
+      "description": "PowerShell获取网络适配器详细信息",
+      "usage": "powershell Get-NetAdapter",
+      "category": "网络"
+    },
+    {
+      "name": "diskmgmt",
+      "alias": [],
+      "name_cn": "磁盘管理GUI",
+      "description": "打开磁盘管理界面",
+      "usage": "diskmgmt.msc",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "format",
+      "alias": [
+        "mkfs"
+      ],
+      "name_cn": "格式化磁盘",
+      "description": "格式化磁盘分区",
+      "usage": "format <drive:> [/fs:ntfs]",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "label",
+      "alias": [
+        "e2label"
+      ],
+      "name_cn": "卷标管理",
+      "description": "创建、更改或删除磁盘卷标",
+      "usage": "label [drive:] [name]",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "vol",
+      "alias": [
+        "lsblk"
+      ],
+      "name_cn": "卷信息",
+      "description": "显示磁盘卷标和序列号",
+      "usage": "vol [drive:]",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "convert",
+      "alias": [],
+      "name_cn": "转换文件系统",
+      "description": "将FAT卷转换为NTFS",
+      "usage": "convert <drive:> /fs:ntfs",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "defrag",
+      "alias": [],
+      "name_cn": "磁盘碎片整理",
+      "description": "对磁盘进行碎片整理优化",
+      "usage": "defrag <drive:>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "compact",
+      "alias": [
+        "gzip"
+      ],
+      "name_cn": "NTFS压缩",
+      "description": "显示或修改NTFS上的文件压缩状态",
+      "usage": "compact [/c|/u] <path>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "vssadmin",
+      "alias": [
+        "snapshot"
+      ],
+      "name_cn": "卷影副本",
+      "description": "卷影复制服务管理",
+      "usage": "vssadmin <command>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "mountvol",
+      "alias": [
+        "mount",
+        "umount"
+      ],
+      "name_cn": "挂载卷",
+      "description": "创建、删除或列出卷挂载点",
+      "usage": "mountvol <path> <guid>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "diskcopy",
+      "alias": [
+        "dd"
+      ],
+      "name_cn": "磁盘复制",
+      "description": "将一个软盘的内容复制到另一个",
+      "usage": "diskcopy <drive1:> <drive2:>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "recover",
+      "alias": [],
+      "name_cn": "数据恢复",
+      "description": "从损坏的磁盘恢复可读信息",
+      "usage": "recover <drive:> <file>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "wmic diskdrive",
+      "alias": [
+        "lsblk",
+        "fdisk -l"
+      ],
+      "name_cn": "物理磁盘信息",
+      "description": "查询物理磁盘驱动器信息",
+      "usage": "wmic diskdrive list brief",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "wmic logicaldisk",
+      "alias": [
+        "df -h"
+      ],
+      "name_cn": "逻辑磁盘信息",
+      "description": "查询逻辑磁盘分区和空间信息",
+      "usage": "wmic logicaldisk get size,freespace,caption",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "net user",
+      "alias": [
+        "useradd",
+        "passwd"
+      ],
+      "name_cn": "用户管理",
+      "description": "添加或修改用户帐户",
+      "usage": "net user [name [password]]",
+      "category": "用户管理"
+    },
+    {
+      "name": "net localgroup",
+      "alias": [
+        "groupadd",
+        "usermod"
+      ],
+      "name_cn": "用户组管理",
+      "description": "添加或修改本地组",
+      "usage": "net localgroup [group [user]]",
+      "category": "用户管理"
+    },
+    {
+      "name": "net group",
+      "alias": [
+        "groupadd"
+      ],
+      "name_cn": "全局组管理",
+      "description": "管理域环境中的全局组",
+      "usage": "net group [group [options]]",
+      "category": "用户管理"
+    },
+    {
+      "name": "runas",
+      "alias": [
+        "sudo",
+        "su"
+      ],
+      "name_cn": "以其他用户运行",
+      "description": "以其他用户身份运行程序",
+      "usage": "runas /user:<name> <program>",
+      "category": "用户管理"
+    },
+    {
+      "name": "net accounts",
+      "alias": [
+        "chage",
+        "passwd"
+      ],
+      "name_cn": "账户策略",
+      "description": "管理用户账户和密码策略",
+      "usage": "net accounts",
+      "category": "用户管理"
+    },
+    {
+      "name": "lusrmgr",
+      "alias": [],
+      "name_cn": "用户管理GUI",
+      "description": "打开本地用户和组管理",
+      "usage": "lusrmgr.msc",
+      "category": "用户管理"
+    },
+    {
+      "name": "dsadd",
+      "alias": [
+        "useradd"
+      ],
+      "name_cn": "AD添加对象",
+      "description": "向Active Directory添加对象",
+      "usage": "dsadd <object> <dn> [options]",
+      "category": "用户管理"
+    },
+    {
+      "name": "dsquery",
+      "alias": [],
+      "name_cn": "AD查询",
+      "description": "查询Active Directory中的对象",
+      "usage": "dsquery <object> [options]",
+      "category": "用户管理"
+    },
+    {
+      "name": "dsmod",
+      "alias": [
+        "usermod"
+      ],
+      "name_cn": "AD修改对象",
+      "description": "修改Active Directory中的对象",
+      "usage": "dsmod <object> <dn> [options]",
+      "category": "用户管理"
+    },
+    {
+      "name": "dsrm",
+      "alias": [
+        "userdel"
+      ],
+      "name_cn": "AD删除对象",
+      "description": "从Active Directory删除对象",
+      "usage": "dsrm <dn> [options]",
+      "category": "用户管理"
+    },
+    {
+      "name": "whoami /priv",
+      "alias": [
+        "id"
+      ],
+      "name_cn": "当前用户权限",
+      "description": "显示当前用户的安全特权信息",
+      "usage": "whoami /priv",
+      "category": "用户管理"
+    },
+    {
+      "name": "reg",
+      "alias": [],
+      "name_cn": "注册表命令",
+      "description": "命令行注册表编辑器",
+      "usage": "reg [add|delete|query] <key>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg add",
+      "alias": [],
+      "name_cn": "添加注册表项",
+      "description": "向注册表添加子项或条目",
+      "usage": "reg add <key> [/v name] [/d data]",
+      "category": "注册表"
+    },
+    {
+      "name": "reg delete",
+      "alias": [],
+      "name_cn": "删除注册表项",
+      "description": "从注册表删除子项或条目",
+      "usage": "reg delete <key> [/v name] [/f]",
+      "category": "注册表"
+    },
+    {
+      "name": "reg query",
+      "alias": [],
+      "name_cn": "查询注册表",
+      "description": "查询注册表中的子项和值",
+      "usage": "reg query <key> [/v name]",
+      "category": "注册表"
+    },
+    {
+      "name": "reg copy",
+      "alias": [],
+      "name_cn": "复制注册表项",
+      "description": "将一个注册表项复制到指定位置",
+      "usage": "reg copy <src> <dest> [/s]",
+      "category": "注册表"
+    },
+    {
+      "name": "reg export",
+      "alias": [],
+      "name_cn": "导出注册表",
+      "description": "导出注册表子项和值到文件",
+      "usage": "reg export <key> <file>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg import",
+      "alias": [],
+      "name_cn": "导入注册表",
+      "description": "从文件导入注册表内容",
+      "usage": "reg import <file>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg compare",
+      "alias": [],
+      "name_cn": "比较注册表项",
+      "description": "比较两个注册表子项",
+      "usage": "reg compare <key1> <key2>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg save",
+      "alias": [],
+      "name_cn": "保存注册表",
+      "description": "将注册表子项保存到文件",
+      "usage": "reg save <key> <file>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg restore",
+      "alias": [],
+      "name_cn": "恢复注册表",
+      "description": "从文件恢复注册表子项",
+      "usage": "reg restore <key> <file>",
+      "category": "注册表"
+    },
+    {
+      "name": "reg unload",
+      "alias": [],
+      "name_cn": "卸载注册表节",
+      "description": "卸载使用reg load加载的注册表节",
+      "usage": "reg unload <key>",
+      "category": "注册表"
+    },
+    {
+      "name": "sc",
+      "alias": [
+        "systemctl"
+      ],
+      "name_cn": "服务控制",
+      "description": "与服务控制管理器通信",
+      "usage": "sc <command> [service]",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc query",
+      "alias": [
+        "systemctl status"
+      ],
+      "name_cn": "查询服务状态",
+      "description": "查询服务的当前状态",
+      "usage": "sc query [service]",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc start",
+      "alias": [
+        "systemctl start"
+      ],
+      "name_cn": "启动服务",
+      "description": "启动指定的服务",
+      "usage": "sc start <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc stop",
+      "alias": [
+        "systemctl stop"
+      ],
+      "name_cn": "停止服务",
+      "description": "停止指定的服务",
+      "usage": "sc stop <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc create",
+      "alias": [],
+      "name_cn": "创建服务",
+      "description": "创建新的Windows服务",
+      "usage": "sc create <service> [options]",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc delete",
+      "alias": [
+        "systemctl disable"
+      ],
+      "name_cn": "删除服务",
+      "description": "删除Windows服务",
+      "usage": "sc delete <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc config",
+      "alias": [
+        "systemctl enable"
+      ],
+      "name_cn": "配置服务",
+      "description": "修改服务的配置",
+      "usage": "sc config <service> [options]",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc failure",
+      "alias": [],
+      "name_cn": "服务故障操作",
+      "description": "设置服务失败时的操作",
+      "usage": "sc failure <service> [options]",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc qc",
+      "alias": [],
+      "name_cn": "查询服务配置",
+      "description": "查询服务的详细配置信息",
+      "usage": "sc qc <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "sc enumdepend",
+      "alias": [],
+      "name_cn": "服务依赖",
+      "description": "列出服务的依赖关系",
+      "usage": "sc enumdepend <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "net start",
+      "alias": [
+        "systemctl start"
+      ],
+      "name_cn": "启动服务(net)",
+      "description": "启动网络服务",
+      "usage": "net start [service]",
+      "category": "服务管理"
+    },
+    {
+      "name": "net stop",
+      "alias": [
+        "systemctl stop"
+      ],
+      "name_cn": "停止服务(net)",
+      "description": "停止网络服务",
+      "usage": "net stop <service>",
+      "category": "服务管理"
+    },
+    {
+      "name": "schtasks",
+      "alias": [
+        "crontab"
+      ],
+      "name_cn": "计划任务",
+      "description": "管理计划任务",
+      "usage": "schtasks [options]",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /create",
+      "alias": [
+        "crontab -e"
+      ],
+      "name_cn": "创建计划任务",
+      "description": "创建新的计划任务",
+      "usage": "schtasks /create /tn <name> /tr <cmd> /sc <schedule>",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /delete",
+      "alias": [
+        "crontab -r"
+      ],
+      "name_cn": "删除计划任务",
+      "description": "删除指定的计划任务",
+      "usage": "schtasks /delete /tn <name> [/f]",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /query",
+      "alias": [
+        "crontab -l"
+      ],
+      "name_cn": "查询计划任务",
+      "description": "列出所有计划任务",
+      "usage": "schtasks /query [/fo table]",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /change",
+      "alias": [],
+      "name_cn": "修改计划任务",
+      "description": "修改已有的计划任务",
+      "usage": "schtasks /change /tn <name> [options]",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /run",
+      "alias": [],
+      "name_cn": "运行计划任务",
+      "description": "立即运行指定的计划任务",
+      "usage": "schtasks /run /tn <name>",
+      "category": "计划任务"
+    },
+    {
+      "name": "schtasks /end",
+      "alias": [],
+      "name_cn": "停止计划任务",
+      "description": "停止正在运行的计划任务",
+      "usage": "schtasks /end /tn <name>",
+      "category": "计划任务"
+    },
+    {
+      "name": "at",
+      "alias": [
+        "at"
+      ],
+      "name_cn": "定时任务(旧版)",
+      "description": "安排命令在指定时间运行(旧版)",
+      "usage": "at [options] <time> <command>",
+      "category": "计划任务"
+    },
+    {
+      "name": "netsh advfirewall",
+      "alias": [
+        "iptables",
+        "ufw"
+      ],
+      "name_cn": "防火墙管理",
+      "description": "管理Windows高级安全防火墙",
+      "usage": "netsh advfirewall <command>",
+      "category": "安全防护"
+    },
+    {
+      "name": "netsh advfirewall firewall",
+      "alias": [
+        "iptables -A"
+      ],
+      "name_cn": "防火墙规则管理",
+      "description": "管理防火墙入站和出站规则",
+      "usage": "netsh advfirewall firewall add rule [options]",
+      "category": "安全防护"
+    },
+    {
+      "name": "auditpol",
+      "alias": [
+        "auditctl"
+      ],
+      "name_cn": "审计策略",
+      "description": "显示或修改系统审核策略",
+      "usage": "auditpol /get /category:*",
+      "category": "安全防护"
+    },
+    {
+      "name": "cipher /w",
+      "alias": [
+        "shred"
+      ],
+      "name_cn": "安全擦除",
+      "description": "安全擦除磁盘上的已删除数据",
+      "usage": "cipher /w:<path>",
+      "category": "安全防护"
+    },
+    {
+      "name": "manage-bde",
+      "alias": [
+        "cryptsetup"
+      ],
+      "name_cn": "BitLocker管理",
+      "description": "管理BitLocker驱动器加密",
+      "usage": "manage-bde -status",
+      "category": "安全防护"
+    },
+    {
+      "name": "gpupdate",
+      "alias": [],
+      "name_cn": "更新组策略",
+      "description": "刷新本地和Active Directory组策略",
+      "usage": "gpupdate [/force]",
+      "category": "安全防护"
+    },
+    {
+      "name": "gpresult",
+      "alias": [],
+      "name_cn": "组策略结果",
+      "description": "显示计算机的组策略结果集",
+      "usage": "gpresult [/r] [/v]",
+      "category": "安全防护"
+    },
+    {
+      "name": "secpol",
+      "alias": [],
+      "name_cn": "安全策略",
+      "description": "打开本地安全策略管理器",
+      "usage": "secpol.msc",
+      "category": "安全防护"
+    },
+    {
+      "name": "rsop",
+      "alias": [],
+      "name_cn": "策略结果集",
+      "description": "显示策略的结果集管理控制台",
+      "usage": "rsop.msc",
+      "category": "安全防护"
+    },
+    {
+      "name": "cipher",
+      "alias": [],
+      "name_cn": "文件加密",
+      "description": "管理NTFS文件系统加密",
+      "usage": "cipher [/e|/d] <path>",
+      "category": "安全防护"
+    },
+    {
+      "name": "npm",
+      "alias": [],
+      "name_cn": "NPM包管理",
+      "description": "Node.js包管理器",
+      "usage": "npm <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "pnpm",
+      "alias": [],
+      "name_cn": "PNPM包管理",
+      "description": "快速、节省磁盘空间的包管理器",
+      "usage": "pnpm <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "yarn",
+      "alias": [],
+      "name_cn": "Yarn包管理",
+      "description": "快速可靠的依赖管理工具",
+      "usage": "yarn <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "npx",
+      "alias": [],
+      "name_cn": "NPX执行",
+      "description": "执行npm包中的命令",
+      "usage": "npx <package>",
+      "category": "开发工具"
+    },
+    {
+      "name": "node",
+      "alias": [],
+      "name_cn": "运行Node",
+      "description": "运行Node.js程序",
+      "usage": "node <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "git",
+      "alias": [],
+      "name_cn": "版本控制",
+      "description": "分布式版本控制系统",
+      "usage": "git <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "cargo",
+      "alias": [],
+      "name_cn": "Rust构建",
+      "description": "Rust包管理器与构建工具",
+      "usage": "cargo <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "rustc",
+      "alias": [
+        "gcc"
+      ],
+      "name_cn": "Rust编译",
+      "description": "Rust编程语言编译器",
+      "usage": "rustc <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "python",
+      "alias": [
+        "py"
+      ],
+      "name_cn": "运行Python",
+      "description": "运行Python程序",
+      "usage": "python <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "pip",
+      "alias": [],
+      "name_cn": "PIP包管理",
+      "description": "Python包安装器",
+      "usage": "pip <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "code",
+      "alias": [],
+      "name_cn": "VS Code",
+      "description": "打开VS Code编辑器",
+      "usage": "code [file|dir]",
+      "category": "开发工具"
+    },
+    {
+      "name": "dotnet",
+      "alias": [],
+      "name_cn": ".NET CLI",
+      "description": ".NET命令行工具",
+      "usage": "dotnet <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "java",
+      "alias": [],
+      "name_cn": "运行Java",
+      "description": "运行Java程序",
+      "usage": "java -jar <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "javac",
+      "alias": [],
+      "name_cn": "编译Java",
+      "description": "编译Java源文件",
+      "usage": "javac <file.java>",
+      "category": "开发工具"
+    },
+    {
+      "name": "mvn",
+      "alias": [],
+      "name_cn": "Maven构建",
+      "description": "Apache Maven项目构建工具",
+      "usage": "mvn <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "gradle",
+      "alias": [],
+      "name_cn": "Gradle构建",
+      "description": "Gradle构建自动化工具",
+      "usage": "gradle <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "go",
+      "alias": [],
+      "name_cn": "Go语言",
+      "description": "Go编程语言工具",
+      "usage": "go <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "docker",
+      "alias": [],
+      "name_cn": "Docker容器",
+      "description": "容器管理工具",
+      "usage": "docker <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl",
+      "alias": [],
+      "name_cn": "WSL",
+      "description": "Windows Subsystem for Linux",
+      "usage": "wsl [<command>]",
+      "category": "开发工具"
+    },
+    {
+      "name": "msbuild",
+      "alias": [
+        "make"
+      ],
+      "name_cn": "MSBuild",
+      "description": "Microsoft构建引擎",
+      "usage": "msbuild <project>",
+      "category": "开发工具"
+    },
+    {
+      "name": "nuget",
+      "alias": [],
+      "name_cn": "NuGet包管理",
+      "description": ".NET包管理器",
+      "usage": "nuget <command>",
+      "category": "开发工具"
+    },
+    {
+      "name": "tar",
+      "alias": [
+        "tar"
+      ],
+      "name_cn": "归档工具",
+      "description": "创建或提取归档文件",
+      "usage": "tar [-c|-x] [-z] -f <archive> <files>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "tar -czf",
+      "alias": [
+        "tar czf"
+      ],
+      "name_cn": "创建tar.gz",
+      "description": "创建gzip压缩的tar归档",
+      "usage": "tar -czf <archive.tar.gz> <files>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "tar -xzf",
+      "alias": [
+        "tar xzf"
+      ],
+      "name_cn": "解压tar.gz",
+      "description": "解压gzip压缩的tar归档",
+      "usage": "tar -xzf <archive.tar.gz>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "makecab",
+      "alias": [
+        "zip"
+      ],
+      "name_cn": "创建CAB",
+      "description": "将文件压缩为CAB格式",
+      "usage": "makecab <source> <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "extrac32",
+      "alias": [
+        "unzip"
+      ],
+      "name_cn": "解压CAB文件",
+      "description": "解压CAB压缩文件",
+      "usage": "extrac32 <source> [/l] <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "expand",
+      "alias": [
+        "gunzip",
+        "unzip"
+      ],
+      "name_cn": "解压CAB",
+      "description": "展开压缩文件",
+      "usage": "expand <source> <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "compact",
+      "alias": [
+        "gzip"
+      ],
+      "name_cn": "NTFS压缩",
+      "description": "显示或修改NTFS文件压缩状态",
+      "usage": "compact [/c|/u] <path>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "powershell Compress-Archive",
+      "alias": [
+        "zip"
+      ],
+      "name_cn": "压缩为ZIP",
+      "description": "PowerShell将文件压缩为ZIP格式",
+      "usage": "powershell Compress-Archive -Path <src> -DestinationPath <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "powershell Expand-Archive",
+      "alias": [
+        "unzip"
+      ],
+      "name_cn": "解压ZIP",
+      "description": "PowerShell解压ZIP文件",
+      "usage": "powershell Expand-Archive -Path <file> -DestinationPath <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "tasklist",
+      "alias": [
+        "ps",
+        "ps aux"
+      ],
+      "name_cn": "进程列表",
+      "description": "显示所有运行中的进程",
+      "usage": "tasklist [/svc] [/fi]",
+      "category": "进程管理"
+    },
+    {
+      "name": "taskkill",
+      "alias": [
+        "kill"
+      ],
+      "name_cn": "终止进程",
+      "description": "按PID或映像名终止进程",
+      "usage": "taskkill [/pid <id>] [/im <name>] [/f]",
+      "category": "进程管理"
+    },
+    {
+      "name": "wmic process",
+      "alias": [
+        "ps aux"
+      ],
+      "name_cn": "WMI进程查询",
+      "description": "使用WMI查询和管理进程",
+      "usage": "wmic process list brief",
+      "category": "进程管理"
+    },
+    {
+      "name": "start /wait",
+      "alias": [
+        "wait"
+      ],
+      "name_cn": "等待进程",
+      "description": "启动程序并等待其结束",
+      "usage": "start /wait <program>",
+      "category": "进程管理"
+    },
+    {
+      "name": "Get-Process",
+      "alias": [
+        "ps"
+      ],
+      "name_cn": "PowerShell获取进程",
+      "description": "PowerShell获取运行中的进程",
+      "usage": "powershell Get-Process",
+      "category": "进程管理"
+    },
+    {
+      "name": "Start-Process",
+      "alias": [
+        "nohup"
+      ],
+      "name_cn": "PowerShell启动进程",
+      "description": "PowerShell启动新进程",
+      "usage": "powershell Start-Process <file>",
+      "category": "进程管理"
+    },
+    {
+      "name": "Stop-Process",
+      "alias": [
+        "kill"
+      ],
+      "name_cn": "PowerShell停止进程",
+      "description": "PowerShell停止运行中的进程",
+      "usage": "powershell Stop-Process -Name <name>",
+      "category": "进程管理"
+    },
+    {
+      "name": "Wait-Process",
+      "alias": [
+        "wait"
+      ],
+      "name_cn": "PowerShell等待进程",
+      "description": "PowerShell等待进程结束",
+      "usage": "powershell Wait-Process -Name <name>",
+      "category": "进程管理"
+    },
+    {
+      "name": "set",
+      "alias": [
+        "export",
+        "env"
+      ],
+      "name_cn": "查看/设置环境变量",
+      "description": "临时显示或设置环境变量",
+      "usage": "set [var=value]",
+      "category": "环境变量"
+    },
+    {
+      "name": "setx",
+      "alias": [],
+      "name_cn": "永久设置环境变量",
+      "description": "永久设置用户或系统环境变量",
+      "usage": "setx <var> <value>",
+      "category": "环境变量"
+    },
+    {
+      "name": "echo %PATH%",
+      "alias": [
+        "echo $PATH"
+      ],
+      "name_cn": "查看PATH",
+      "description": "显示当前PATH环境变量",
+      "usage": "echo %PATH%",
+      "category": "环境变量"
+    },
+    {
+      "name": "powershell $env:",
+      "alias": [
+        "echo $VAR"
+      ],
+      "name_cn": "PowerShell环境变量",
+      "description": "PowerShell访问环境变量",
+      "usage": "powershell $env:<VAR>",
+      "category": "环境变量"
+    },
+    {
+      "name": "reg query environment",
+      "alias": [],
+      "name_cn": "注册表查询环境变量",
+      "description": "从注册表查询系统环境变量",
+      "usage": "reg query \"HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment\"",
+      "category": "环境变量"
+    },
+    {
+      "name": "Get-ChildItem Env:",
+      "alias": [
+        "env",
+        "printenv"
+      ],
+      "name_cn": "列出所有环境变量",
+      "description": "PowerShell列出所有环境变量",
+      "usage": "powershell Get-ChildItem Env:",
+      "category": "环境变量"
+    },
+    {
+      "name": "[Environment]::SetEnvironmentVariable",
+      "alias": [],
+      "name_cn": "永久修改环境变量",
+      "description": "PowerShell永久设置环境变量",
+      "usage": "powershell [Environment]::SetEnvironmentVariable('<var>', '<value>', 'User')",
+      "category": "环境变量"
+    },
+    {
+      "name": "refreshenv",
+      "alias": [
+        "source ~/.bashrc"
+      ],
+      "name_cn": "刷新环境变量",
+      "description": "刷新当前会话的环境变量",
+      "usage": "refreshenv",
+      "category": "环境变量"
+    },
+    {
+      "name": "Get-Command",
+      "alias": [
+        "gcm"
+      ],
+      "name_cn": "查找命令",
+      "description": "获取所有命令或指定命令信息",
+      "usage": "Get-Command [-Name <string>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Get-Help",
+      "alias": [
+        "help",
+        "man"
+      ],
+      "name_cn": "命令帮助",
+      "description": "获取命令的帮助信息",
+      "usage": "Get-Help <command> [-Detailed]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Get-History",
+      "alias": [
+        "history",
+        "h"
+      ],
+      "name_cn": "命令历史",
+      "description": "获取当前会话的命令历史",
+      "usage": "Get-History",
+      "category": "终端操作"
+    },
+    {
+      "name": "Invoke-History",
+      "alias": [
+        "r"
+      ],
+      "name_cn": "执行历史命令",
+      "description": "从历史记录中运行命令",
+      "usage": "Invoke-History [id]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Write-Output",
+      "alias": [
+        "echo",
+        "write"
+      ],
+      "name_cn": "输出内容",
+      "description": "将对象发送到管道中的下一个命令",
+      "usage": "Write-Output <object>",
+      "category": "终端操作"
+    },
+    {
+      "name": "Write-Host",
+      "alias": [],
+      "name_cn": "控制台输出",
+      "description": "将输出写入控制台",
+      "usage": "Write-Host <message> [-ForegroundColor <color>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Read-Host",
+      "alias": [
+        "input"
+      ],
+      "name_cn": "读取输入",
+      "description": "从控制台读取一行输入",
+      "usage": "Read-Host [-Prompt <string>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Out-File",
+      "alias": [
+        "tee"
+      ],
+      "name_cn": "输出到文件",
+      "description": "将输出发送到文件",
+      "usage": "Out-File [-FilePath] <path> [-Append]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Out-GridView",
+      "alias": [
+        "ogv"
+      ],
+      "name_cn": "图形化显示",
+      "description": "在独立窗口中以交互表格显示输出",
+      "usage": "Out-GridView [-Title <string>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Tee-Object",
+      "alias": [
+        "tee"
+      ],
+      "name_cn": "双向输出",
+      "description": "将输出同时发送到文件和管道",
+      "usage": "Tee-Object -FilePath <path>",
+      "category": "终端操作"
+    },
+    {
+      "name": "Clear-Host",
+      "alias": [
+        "cls",
+        "clear"
+      ],
+      "name_cn": "清屏",
+      "description": "清除控制台显示",
+      "usage": "Clear-Host",
+      "category": "终端操作"
+    },
+    {
+      "name": "Get-Date",
+      "alias": [
+        "date"
+      ],
+      "name_cn": "获取日期",
+      "description": "获取当前日期和时间",
+      "usage": "Get-Date [-Format <string>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Set-Date",
+      "alias": [],
+      "name_cn": "设置日期",
+      "description": "设置系统日期和时间",
+      "usage": "Set-Date [-Date] <datetime>",
+      "category": "终端操作"
+    },
+    {
+      "name": "Start-Sleep",
+      "alias": [
+        "sleep"
+      ],
+      "name_cn": "暂停",
+      "description": "暂停脚本执行指定时间",
+      "usage": "Start-Sleep [-Seconds <int>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Measure-Command",
+      "alias": [
+        "time"
+      ],
+      "name_cn": "计时执行",
+      "description": "测量运行命令所需时间",
+      "usage": "Measure-Command { <command> }",
+      "category": "终端操作"
+    },
+    {
+      "name": "Select-Object",
+      "alias": [
+        "select"
+      ],
+      "name_cn": "选择属性",
+      "description": "选择对象的属性子集",
+      "usage": "Select-Object [-Property <string[]>] [-First <int>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Sort-Object",
+      "alias": [
+        "sort"
+      ],
+      "name_cn": "排序对象",
+      "description": "按属性值对对象排序",
+      "usage": "Sort-Object [-Property <string[]>] [-Descending]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Where-Object",
+      "alias": [
+        "where",
+        "?"
+      ],
+      "name_cn": "过滤对象",
+      "description": "根据条件过滤集合中的对象",
+      "usage": "Where-Object { <condition> }",
+      "category": "终端操作"
+    },
+    {
+      "name": "ForEach-Object",
+      "alias": [
+        "foreach",
+        "%"
+      ],
+      "name_cn": "遍历对象",
+      "description": "对每个输入对象执行操作",
+      "usage": "ForEach-Object { <scriptblock> }",
+      "category": "终端操作"
+    },
+    {
+      "name": "Compare-Object",
+      "alias": [
+        "diff",
+        "compare"
+      ],
+      "name_cn": "比较对象",
+      "description": "比较两组对象",
+      "usage": "Compare-Object <ref> <diff>",
+      "category": "终端操作"
+    },
+    {
+      "name": "Group-Object",
+      "alias": [
+        "group"
+      ],
+      "name_cn": "分组对象",
+      "description": "按属性对对象分组",
+      "usage": "Group-Object [-Property <string>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "Get-Member",
+      "alias": [
+        "gm"
+      ],
+      "name_cn": "查看成员",
+      "description": "获取对象的属性和方法",
+      "usage": "Get-Member [-MemberType <type>]",
+      "category": "终端操作"
+    },
+    {
+      "name": "New-Object",
+      "alias": [],
+      "name_cn": "创建对象",
+      "description": "创建.NET或COM对象",
+      "usage": "New-Object -TypeName <type>",
+      "category": "终端操作"
+    },
+    {
+      "name": "Get-ChildItem",
+      "alias": [
+        "dir",
+        "ls",
+        "gci"
+      ],
+      "name_cn": "列出子项",
+      "description": "获取目录中的项目和子目录",
+      "usage": "Get-ChildItem [-Path <string>] [-Recurse] [-Filter <string>]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Get-Content",
+      "alias": [
+        "cat",
+        "type",
+        "gc"
+      ],
+      "name_cn": "获取内容",
+      "description": "获取指定位置的内容",
+      "usage": "Get-Content <path> [-Head <int>] [-Tail <int>]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Set-Content",
+      "alias": [
+        "sc"
+      ],
+      "name_cn": "写入内容",
+      "description": "写入或替换文件内容",
+      "usage": "Set-Content [-Path] <path> -Value <content>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Add-Content",
+      "alias": [
+        "ac"
+      ],
+      "name_cn": "追加内容",
+      "description": "向文件追加内容",
+      "usage": "Add-Content [-Path] <path> -Value <content>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Select-String",
+      "alias": [
+        "sls",
+        "grep"
+      ],
+      "name_cn": "正则搜索",
+      "description": "在字符串和文件中查找文本",
+      "usage": "Select-String [-Pattern] <regex> [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Copy-Item",
+      "alias": [
+        "copy",
+        "cp",
+        "ci"
+      ],
+      "name_cn": "复制项目",
+      "description": "复制项目到另一位置",
+      "usage": "Copy-Item [-Path] <src> [-Destination] <dest> [-Recurse]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Move-Item",
+      "alias": [
+        "move",
+        "mv",
+        "mi"
+      ],
+      "name_cn": "移动项目",
+      "description": "移动项目到新位置",
+      "usage": "Move-Item [-Path] <src> [-Destination] <dest>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Remove-Item",
+      "alias": [
+        "del",
+        "rm",
+        "ri"
+      ],
+      "name_cn": "删除项目",
+      "description": "删除文件或目录",
+      "usage": "Remove-Item [-Path] <path> [-Recurse] [-Force]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Rename-Item",
+      "alias": [
+        "ren",
+        "rni"
+      ],
+      "name_cn": "重命名项目",
+      "description": "重命名文件或目录",
+      "usage": "Rename-Item [-Path] <old> -NewName <new>",
+      "category": "文件操作"
+    },
+    {
+      "name": "New-Item",
+      "alias": [
+        "ni"
+      ],
+      "name_cn": "创建项目",
+      "description": "创建新文件或目录",
+      "usage": "New-Item [-Path] <path> [-ItemType File|Directory]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Test-Path",
+      "alias": [],
+      "name_cn": "路径检测",
+      "description": "检查路径是否存在",
+      "usage": "Test-Path [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Get-Item",
+      "alias": [
+        "gi"
+      ],
+      "name_cn": "获取项目",
+      "description": "获取指定位置的项",
+      "usage": "Get-Item [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Set-Location",
+      "alias": [
+        "cd",
+        "sl"
+      ],
+      "name_cn": "设置位置",
+      "description": "设置当前工作位置",
+      "usage": "Set-Location [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Get-Location",
+      "alias": [
+        "pwd",
+        "gl"
+      ],
+      "name_cn": "当前位置",
+      "description": "获取当前工作目录",
+      "usage": "Get-Location",
+      "category": "文件操作"
+    },
+    {
+      "name": "Split-Path",
+      "alias": [],
+      "name_cn": "拆分路径",
+      "description": "返回路径的指定部分",
+      "usage": "Split-Path <path> [-Leaf] [-Parent] [-Extension]",
+      "category": "文件操作"
+    },
+    {
+      "name": "Join-Path",
+      "alias": [],
+      "name_cn": "拼接路径",
+      "description": "将路径和子路径合并",
+      "usage": "Join-Path <path> <child>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Resolve-Path",
+      "alias": [
+        "rvpa"
+      ],
+      "name_cn": "解析路径",
+      "description": "解析通配符并返回实际路径",
+      "usage": "Resolve-Path [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Import-Csv",
+      "alias": [],
+      "name_cn": "导入CSV",
+      "description": "从CSV文件创建对象",
+      "usage": "Import-Csv [-Path] <file>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Export-Csv",
+      "alias": [],
+      "name_cn": "导出CSV",
+      "description": "将对象导出为CSV文件",
+      "usage": "Export-Csv [-Path] <file> -NoTypeInformation",
+      "category": "文件操作"
+    },
+    {
+      "name": "ConvertFrom-Json",
+      "alias": [],
+      "name_cn": "解析JSON",
+      "description": "将JSON字符串转换为对象",
+      "usage": "ConvertFrom-Json [-InputObject] <string>",
+      "category": "文件操作"
+    },
+    {
+      "name": "ConvertTo-Json",
+      "alias": [],
+      "name_cn": "转JSON",
+      "description": "将对象转换为JSON字符串",
+      "usage": "ConvertTo-Json [-InputObject] <object>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Get-Acl",
+      "alias": [],
+      "name_cn": "获取ACL",
+      "description": "获取文件访问控制列表",
+      "usage": "Get-Acl [-Path] <path>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Set-Acl",
+      "alias": [],
+      "name_cn": "设置ACL",
+      "description": "设置文件访问控制列表",
+      "usage": "Set-Acl [-Path] <path> -AclObject <acl>",
+      "category": "文件操作"
+    },
+    {
+      "name": "Get-CimInstance",
+      "alias": [
+        "gcim"
+      ],
+      "name_cn": "WMI信息",
+      "description": "获取CIM类的实例",
+      "usage": "Get-CimInstance -ClassName <class>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-WmiObject",
+      "alias": [
+        "gwmi"
+      ],
+      "name_cn": "WMI查询(旧版)",
+      "description": "获取WMI类的实例(旧版)",
+      "usage": "Get-WmiObject -Class <class>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-ComputerInfo",
+      "alias": [],
+      "name_cn": "计算机信息",
+      "description": "获取计算机详细系统信息",
+      "usage": "Get-ComputerInfo",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-HotFix",
+      "alias": [],
+      "name_cn": "已安装补丁",
+      "description": "获取已安装的系统补丁",
+      "usage": "Get-HotFix [-Id <string>]",
+      "category": "系统管理"
+    },
+    {
+      "name": "Restart-Computer",
+      "alias": [
+        "reboot"
+      ],
+      "name_cn": "重启计算机(PS)",
+      "description": "重启本地或远程计算机",
+      "usage": "Restart-Computer [-Force]",
+      "category": "系统管理"
+    },
+    {
+      "name": "Stop-Computer",
+      "alias": [
+        "shutdown",
+        "poweroff"
+      ],
+      "name_cn": "关机(PS)",
+      "description": "关闭计算机",
+      "usage": "Stop-Computer [-Force]",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-AppxPackage",
+      "alias": [],
+      "name_cn": "已安装UWP应用",
+      "description": "获取已安装的UWP应用包",
+      "usage": "Get-AppxPackage [-Name <string>]",
+      "category": "系统管理"
+    },
+    {
+      "name": "Remove-AppxPackage",
+      "alias": [],
+      "name_cn": "卸载UWP应用",
+      "description": "卸载UWP应用包",
+      "usage": "Remove-AppxPackage <package>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-Volume",
+      "alias": [],
+      "name_cn": "卷信息",
+      "description": "获取存储卷信息",
+      "usage": "Get-Volume",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "DISM",
+      "alias": [],
+      "name_cn": "映像管理",
+      "description": "管理和修复Windows映像",
+      "usage": "DISM /Online /Cleanup-Image /RestoreHealth",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-Service",
+      "alias": [
+        "gsv"
+      ],
+      "name_cn": "获取服务(PS)",
+      "description": "获取服务状态信息",
+      "usage": "Get-Service [[-Name] <string>]",
+      "category": "服务管理"
+    },
+    {
+      "name": "Start-Service",
+      "alias": [
+        "sasv"
+      ],
+      "name_cn": "启动服务(PS)",
+      "description": "启动一个或多个服务",
+      "usage": "Start-Service [-Name] <string>",
+      "category": "服务管理"
+    },
+    {
+      "name": "Stop-Service",
+      "alias": [
+        "spsv"
+      ],
+      "name_cn": "停止服务(PS)",
+      "description": "停止一个或多个服务",
+      "usage": "Stop-Service [-Name] <string> [-Force]",
+      "category": "服务管理"
+    },
+    {
+      "name": "Restart-Service",
+      "alias": [],
+      "name_cn": "重启服务(PS)",
+      "description": "重启服务",
+      "usage": "Restart-Service [-Name] <string>",
+      "category": "服务管理"
+    },
+    {
+      "name": "Set-Service",
+      "alias": [],
+      "name_cn": "修改服务(PS)",
+      "description": "修改服务属性",
+      "usage": "Set-Service [-Name] <string> [-StartupType <string>]",
+      "category": "服务管理"
+    },
+    {
+      "name": "New-Service",
+      "alias": [],
+      "name_cn": "创建服务(PS)",
+      "description": "创建新的Windows服务",
+      "usage": "New-Service -Name <name> -BinaryPathName <path>",
+      "category": "服务管理"
+    },
+    {
+      "name": "Register-ScheduledTask",
+      "alias": [],
+      "name_cn": "注册计划任务(PS)",
+      "description": "注册新的计划任务",
+      "usage": "Register-ScheduledTask -Action <action> -Trigger <trigger>",
+      "category": "计划任务"
+    },
+    {
+      "name": "Get-ScheduledTask",
+      "alias": [],
+      "name_cn": "获取计划任务(PS)",
+      "description": "获取计划任务列表",
+      "usage": "Get-ScheduledTask [[-TaskName] <string>]",
+      "category": "计划任务"
+    },
+    {
+      "name": "Start-ScheduledTask",
+      "alias": [],
+      "name_cn": "运行计划任务(PS)",
+      "description": "立即运行计划任务",
+      "usage": "Start-ScheduledTask [-TaskName] <string>",
+      "category": "计划任务"
+    },
+    {
+      "name": "Test-Connection",
+      "alias": [
+        "ping"
+      ],
+      "name_cn": "连通测试(PS)",
+      "description": "PowerShell版ping测试",
+      "usage": "Test-Connection [-ComputerName] <host>",
+      "category": "网络"
+    },
+    {
+      "name": "Get-NetIPAddress",
+      "alias": [],
+      "name_cn": "IP地址(PS)",
+      "description": "获取IP地址配置",
+      "usage": "Get-NetIPAddress [-AddressFamily IPv4]",
+      "category": "网络"
+    },
+    {
+      "name": "Get-NetRoute",
+      "alias": [
+        "route print"
+      ],
+      "name_cn": "路由表(PS)",
+      "description": "获取IP路由表",
+      "usage": "Get-NetRoute",
+      "category": "网络"
+    },
+    {
+      "name": "Get-NetTCPConnection",
+      "alias": [
+        "netstat"
+      ],
+      "name_cn": "TCP连接(PS)",
+      "description": "获取TCP连接信息",
+      "usage": "Get-NetTCPConnection [-State Established]",
+      "category": "网络"
+    },
+    {
+      "name": "Resolve-DnsName",
+      "alias": [
+        "nslookup"
+      ],
+      "name_cn": "DNS解析(PS)",
+      "description": "PowerShell版DNS查询",
+      "usage": "Resolve-DnsName [-Name] <hostname>",
+      "category": "网络"
+    },
+    {
+      "name": "Clear-DnsClientCache",
+      "alias": [
+        "ipconfig /flushdns"
+      ],
+      "name_cn": "清除DNS缓存(PS)",
+      "description": "清除DNS客户端缓存",
+      "usage": "Clear-DnsClientCache",
+      "category": "网络"
+    },
+    {
+      "name": "Enable-NetAdapter",
+      "alias": [],
+      "name_cn": "启用网卡(PS)",
+      "description": "启用网络适配器",
+      "usage": "Enable-NetAdapter [-Name] <adapter>",
+      "category": "网络"
+    },
+    {
+      "name": "Disable-NetAdapter",
+      "alias": [],
+      "name_cn": "禁用网卡(PS)",
+      "description": "禁用网络适配器",
+      "usage": "Disable-NetAdapter [-Name] <adapter>",
+      "category": "网络"
+    },
+    {
+      "name": "Enter-PSSession",
+      "alias": [],
+      "name_cn": "远程会话",
+      "description": "进入远程PowerShell会话",
+      "usage": "Enter-PSSession [-ComputerName] <host>",
+      "category": "网络"
+    },
+    {
+      "name": "Invoke-Command",
+      "alias": [
+        "icm"
+      ],
+      "name_cn": "远程执行",
+      "description": "在远程计算机执行命令",
+      "usage": "Invoke-Command -ComputerName <host> -ScriptBlock { <cmd> }",
+      "category": "网络"
+    },
+    {
+      "name": "net share",
+      "alias": [],
+      "name_cn": "共享管理",
+      "description": "管理文件共享",
+      "usage": "net share [sharename=path]",
+      "category": "网络"
+    },
+    {
+      "name": "net use",
+      "alias": [
+        "mount"
+      ],
+      "name_cn": "网络驱动器",
+      "description": "连接或断开网络共享",
+      "usage": "net use <drive:> \\\\server\\share",
+      "category": "网络"
+    },
+    {
+      "name": "net view",
+      "alias": [],
+      "name_cn": "网络资源",
+      "description": "查看网络共享资源",
+      "usage": "net view [\\\\computer]",
+      "category": "网络"
+    },
+    {
+      "name": "net time",
+      "alias": [],
+      "name_cn": "网络时间",
+      "description": "查看网络时间同步",
+      "usage": "net time \\\\server",
+      "category": "网络"
+    },
+    {
+      "name": "bitsadmin",
+      "alias": [],
+      "name_cn": "后台传输",
+      "description": "管理后台智能传输服务",
+      "usage": "bitsadmin /transfer <name> <url> <path>",
+      "category": "下载工具"
+    },
+    {
+      "name": "Get-NetFirewallRule",
+      "alias": [],
+      "name_cn": "防火墙规则(PS)",
+      "description": "获取防火墙规则",
+      "usage": "Get-NetFirewallRule [-Enabled True]",
+      "category": "安全防护"
+    },
+    {
+      "name": "New-NetFirewallRule",
+      "alias": [],
+      "name_cn": "新建防火墙规则(PS)",
+      "description": "创建防火墙规则",
+      "usage": "New-NetFirewallRule -DisplayName <name> -Direction Inbound -Action Allow",
+      "category": "安全防护"
+    },
+    {
+      "name": "Enable-NetFirewallRule",
+      "alias": [],
+      "name_cn": "启用防火墙规则(PS)",
+      "description": "启用防火墙规则",
+      "usage": "Enable-NetFirewallRule -DisplayName <name>",
+      "category": "安全防护"
+    },
+    {
+      "name": "Disable-NetFirewallRule",
+      "alias": [],
+      "name_cn": "禁用防火墙规则(PS)",
+      "description": "禁用防火墙规则",
+      "usage": "Disable-NetFirewallRule -DisplayName <name>",
+      "category": "安全防护"
+    },
+    {
+      "name": "Get-NetFirewallProfile",
+      "alias": [],
+      "name_cn": "防火墙配置(PS)",
+      "description": "获取防火墙配置文件",
+      "usage": "Get-NetFirewallProfile",
+      "category": "安全防护"
+    },
+    {
+      "name": "Set-NetFirewallProfile",
+      "alias": [],
+      "name_cn": "设置防火墙(PS)",
+      "description": "设置防火墙配置",
+      "usage": "Set-NetFirewallProfile -Enabled True",
+      "category": "安全防护"
+    },
+    {
+      "name": "Get-ExecutionPolicy",
+      "alias": [],
+      "name_cn": "执行策略",
+      "description": "获取PowerShell执行策略",
+      "usage": "Get-ExecutionPolicy",
+      "category": "安全防护"
+    },
+    {
+      "name": "Set-ExecutionPolicy",
+      "alias": [],
+      "name_cn": "设置执行策略",
+      "description": "设置PowerShell执行策略",
+      "usage": "Set-ExecutionPolicy RemoteSigned",
+      "category": "安全防护"
+    },
+    {
+      "name": "Get-AuthenticodeSignature",
+      "alias": [],
+      "name_cn": "签名验证",
+      "description": "验证文件Authenticode签名",
+      "usage": "Get-AuthenticodeSignature <file>",
+      "category": "安全防护"
+    },
+    {
+      "name": "Get-Disk",
+      "alias": [],
+      "name_cn": "磁盘信息(PS)",
+      "description": "获取磁盘信息",
+      "usage": "Get-Disk",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Get-Partition",
+      "alias": [],
+      "name_cn": "分区信息(PS)",
+      "description": "获取分区信息",
+      "usage": "Get-Partition",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Format-Volume",
+      "alias": [
+        "format"
+      ],
+      "name_cn": "格式化卷(PS)",
+      "description": "格式化磁盘卷",
+      "usage": "Format-Volume [-DriveLetter] <char>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Repair-Volume",
+      "alias": [],
+      "name_cn": "修复卷",
+      "description": "修复磁盘卷错误",
+      "usage": "Repair-Volume [-DriveLetter] <char>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Initialize-Disk",
+      "alias": [],
+      "name_cn": "初始化磁盘(PS)",
+      "description": "初始化新磁盘",
+      "usage": "Initialize-Disk [-Number] <int>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "New-Partition",
+      "alias": [],
+      "name_cn": "创建分区(PS)",
+      "description": "创建磁盘分区",
+      "usage": "New-Partition [-DiskNumber] <int> -Size <size>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Resize-Partition",
+      "alias": [],
+      "name_cn": "调整分区(PS)",
+      "description": "调整分区大小",
+      "usage": "Resize-Partition -DiskNumber <int> -PartitionNumber <int> -Size <size>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Get-PSDrive",
+      "alias": [
+        "gdr"
+      ],
+      "name_cn": "驱动器列表(PS)",
+      "description": "获取PowerShell驱动器",
+      "usage": "Get-PSDrive",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "New-PSDrive",
+      "alias": [
+        "mount"
+      ],
+      "name_cn": "映射驱动器(PS)",
+      "description": "创建驱动器映射",
+      "usage": "New-PSDrive -Name <letter> -PSProvider FileSystem -Root <path>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Get-LocalUser",
+      "alias": [],
+      "name_cn": "本地用户(PS)",
+      "description": "获取本地用户账户",
+      "usage": "Get-LocalUser",
+      "category": "用户管理"
+    },
+    {
+      "name": "New-LocalUser",
+      "alias": [],
+      "name_cn": "创建用户(PS)",
+      "description": "创建本地用户",
+      "usage": "New-LocalUser -Name <name>",
+      "category": "用户管理"
+    },
+    {
+      "name": "Remove-LocalUser",
+      "alias": [],
+      "name_cn": "删除用户(PS)",
+      "description": "删除本地用户",
+      "usage": "Remove-LocalUser [-Name] <name>",
+      "category": "用户管理"
+    },
+    {
+      "name": "Enable-LocalUser",
+      "alias": [],
+      "name_cn": "启用用户(PS)",
+      "description": "启用本地用户",
+      "usage": "Enable-LocalUser [-Name] <name>",
+      "category": "用户管理"
+    },
+    {
+      "name": "Disable-LocalUser",
+      "alias": [],
+      "name_cn": "禁用用户(PS)",
+      "description": "禁用本地用户",
+      "usage": "Disable-LocalUser [-Name] <name>",
+      "category": "用户管理"
+    },
+    {
+      "name": "Get-LocalGroup",
+      "alias": [],
+      "name_cn": "本地组(PS)",
+      "description": "获取本地组",
+      "usage": "Get-LocalGroup",
+      "category": "用户管理"
+    },
+    {
+      "name": "Add-LocalGroupMember",
+      "alias": [],
+      "name_cn": "添加组成员(PS)",
+      "description": "将用户添加到本地组",
+      "usage": "Add-LocalGroupMember -Group <group> -Member <user>",
+      "category": "用户管理"
+    },
+    {
+      "name": "Debug-Process",
+      "alias": [],
+      "name_cn": "调试进程",
+      "description": "附加调试器到进程",
+      "usage": "Debug-Process [-Name] <name>",
+      "category": "进程管理"
+    },
+    {
+      "name": "wt",
+      "alias": [],
+      "name_cn": "打开终端",
+      "description": "启动Windows Terminal",
+      "usage": "wt",
+      "category": "终端操作"
+    },
+    {
+      "name": "wt -w 0 sp",
+      "alias": [],
+      "name_cn": "垂直分屏",
+      "description": "Windows Terminal垂直分屏",
+      "usage": "wt -w 0 sp",
+      "category": "终端操作"
+    },
+    {
+      "name": "wt split-pane -V",
+      "alias": [],
+      "name_cn": "水平分屏",
+      "description": "Windows Terminal水平分屏",
+      "usage": "wt split-pane -V",
+      "category": "终端操作"
+    },
+    {
+      "name": "wt new-tab -p",
+      "alias": [],
+      "name_cn": "新标签页",
+      "description": "在新标签页打开配置文件",
+      "usage": "wt new-tab -p <profile>",
+      "category": "终端操作"
+    },
+    {
+      "name": "winget install",
+      "alias": [],
+      "name_cn": "winget安装",
+      "description": "使用winget安装应用",
+      "usage": "winget install <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "winget uninstall",
+      "alias": [],
+      "name_cn": "winget卸载",
+      "description": "使用winget卸载应用",
+      "usage": "winget uninstall <package>",
+      "category": "包管理"
+    },
+    {
+      "name": "winget upgrade",
+      "alias": [],
+      "name_cn": "winget升级",
+      "description": "使用winget升级应用",
+      "usage": "winget upgrade [--all]",
+      "category": "包管理"
+    },
+    {
+      "name": "winget search",
+      "alias": [],
+      "name_cn": "winget搜索",
+      "description": "在winget仓库搜索应用",
+      "usage": "winget search <keyword>",
+      "category": "包管理"
+    },
+    {
+      "name": "winget list",
+      "alias": [],
+      "name_cn": "winget列表",
+      "description": "列出已安装的应用",
+      "usage": "winget list",
+      "category": "包管理"
+    },
+    {
+      "name": "choco install",
+      "alias": [
+        "cinst"
+      ],
+      "name_cn": "choco安装",
+      "description": "使用Chocolatey安装包",
+      "usage": "choco install <package> [-y]",
+      "category": "包管理"
+    },
+    {
+      "name": "choco uninstall",
+      "alias": [
+        "cuninst"
+      ],
+      "name_cn": "choco卸载",
+      "description": "使用Chocolatey卸载包",
+      "usage": "choco uninstall <package> [-y]",
+      "category": "包管理"
+    },
+    {
+      "name": "choco upgrade",
+      "alias": [
+        "cup"
+      ],
+      "name_cn": "choco升级",
+      "description": "使用Chocolatey升级包",
+      "usage": "choco upgrade <package> [-y]",
+      "category": "包管理"
+    },
+    {
+      "name": "choco search",
+      "alias": [
+        "clist"
+      ],
+      "name_cn": "choco搜索",
+      "description": "在Chocolatey中搜索包",
+      "usage": "choco search <keyword>",
+      "category": "包管理"
+    },
+    {
+      "name": "scoop install",
+      "alias": [],
+      "name_cn": "scoop安装",
+      "description": "使用Scoop安装应用",
+      "usage": "scoop install <app>",
+      "category": "包管理"
+    },
+    {
+      "name": "scoop uninstall",
+      "alias": [],
+      "name_cn": "scoop卸载",
+      "description": "使用Scoop卸载应用",
+      "usage": "scoop uninstall <app>",
+      "category": "包管理"
+    },
+    {
+      "name": "scoop update",
+      "alias": [],
+      "name_cn": "scoop更新",
+      "description": "更新Scoop和应用",
+      "usage": "scoop update [<app>]",
+      "category": "包管理"
+    },
+    {
+      "name": "scoop search",
+      "alias": [],
+      "name_cn": "scoop搜索",
+      "description": "在Scoop中搜索应用",
+      "usage": "scoop search <keyword>",
+      "category": "包管理"
+    },
+    {
+      "name": "scoop list",
+      "alias": [],
+      "name_cn": "scoop列表",
+      "description": "列出已安装的Scoop应用",
+      "usage": "scoop list",
+      "category": "包管理"
+    },
+    {
+      "name": "wsl --install",
+      "alias": [],
+      "name_cn": "安装WSL",
+      "description": "安装Windows子系统for Linux",
+      "usage": "wsl --install [-d <distro>]",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --list",
+      "alias": [
+        "wsl -l"
+      ],
+      "name_cn": "WSL发行版列表",
+      "description": "列出已安装的WSL发行版",
+      "usage": "wsl --list [--verbose]",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --set-default",
+      "alias": [],
+      "name_cn": "WSL默认发行版",
+      "description": "设置默认WSL发行版",
+      "usage": "wsl --set-default <distro>",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --export",
+      "alias": [],
+      "name_cn": "导出WSL",
+      "description": "将WSL发行版导出为tar",
+      "usage": "wsl --export <distro> <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --import",
+      "alias": [],
+      "name_cn": "导入WSL",
+      "description": "从tar导入WSL发行版",
+      "usage": "wsl --import <name> <location> <file>",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --shutdown",
+      "alias": [],
+      "name_cn": "关闭WSL",
+      "description": "关闭所有WSL实例",
+      "usage": "wsl --shutdown",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --terminate",
+      "alias": [
+        "wsl -t"
+      ],
+      "name_cn": "终止WSL",
+      "description": "终止指定WSL发行版",
+      "usage": "wsl --terminate <distro>",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --update",
+      "alias": [],
+      "name_cn": "更新WSL",
+      "description": "更新WSL内核",
+      "usage": "wsl --update",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --status",
+      "alias": [],
+      "name_cn": "WSL状态",
+      "description": "查看WSL运行状态",
+      "usage": "wsl --status",
+      "category": "开发工具"
+    },
+    {
+      "name": "wsl --unregister",
+      "alias": [],
+      "name_cn": "注销WSL",
+      "description": "注销并删除WSL发行版",
+      "usage": "wsl --unregister <distro>",
+      "category": "开发工具"
+    },
+    {
+      "name": "Get-VM",
+      "alias": [],
+      "name_cn": "虚拟机列表",
+      "description": "获取Hyper-V虚拟机列表",
+      "usage": "Get-VM",
+      "category": "系统管理"
+    },
+    {
+      "name": "Start-VM",
+      "alias": [],
+      "name_cn": "启动虚拟机",
+      "description": "启动Hyper-V虚拟机",
+      "usage": "Start-VM [-Name] <vm>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Stop-VM",
+      "alias": [],
+      "name_cn": "停止虚拟机",
+      "description": "停止Hyper-V虚拟机",
+      "usage": "Stop-VM [-Name] <vm> [-Force]",
+      "category": "系统管理"
+    },
+    {
+      "name": "Restart-VM",
+      "alias": [],
+      "name_cn": "重启虚拟机",
+      "description": "重启Hyper-V虚拟机",
+      "usage": "Restart-VM [-Name] <vm>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Checkpoint-VM",
+      "alias": [],
+      "name_cn": "创建快照",
+      "description": "创建虚拟机检查点",
+      "usage": "Checkpoint-VM [-Name] <vm>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-VMSnapshot",
+      "alias": [],
+      "name_cn": "虚拟机快照",
+      "description": "获取虚拟机快照列表",
+      "usage": "Get-VMSnapshot [-VMName] <vm>",
+      "category": "系统管理"
+    },
+    {
+      "name": "Get-VHD",
+      "alias": [],
+      "name_cn": "虚拟硬盘信息",
+      "description": "获取虚拟硬盘信息",
+      "usage": "Get-VHD [-Path] <path>",
+      "category": "磁盘管理"
+    },
+    {
+      "name": "Get-VMNetworkAdapter",
+      "alias": [],
+      "name_cn": "虚拟网络适配器",
+      "description": "获取虚拟机网络适配器",
+      "usage": "Get-VMNetworkAdapter [-VMName] <vm>",
+      "category": "网络"
+    },
+    {
+      "name": "[Environment]::GetEnvironmentVariable",
+      "alias": [],
+      "name_cn": "获取环境变量(永久)",
+      "description": "获取永久环境变量",
+      "usage": "[Environment]::GetEnvironmentVariable(<var>, User)",
+      "category": "环境变量"
+    },
+    {
+      "name": "Get-ItemProperty",
+      "alias": [
+        "gp"
+      ],
+      "name_cn": "获取注册表值",
+      "description": "获取注册表键值",
+      "usage": "Get-ItemProperty -Path HKLM:\\<path>",
+      "category": "注册表"
+    },
+    {
+      "name": "Set-ItemProperty",
+      "alias": [
+        "sp"
+      ],
+      "name_cn": "设置注册表值",
+      "description": "设置注册表键值",
+      "usage": "Set-ItemProperty -Path HKLM:\\<path> -Name <name> -Value <val>",
+      "category": "注册表"
+    },
+    {
+      "name": "New-ItemProperty",
+      "alias": [],
+      "name_cn": "新建注册表值",
+      "description": "创建新的注册表值",
+      "usage": "New-ItemProperty -Path HKLM:\\<path> -Name <name> -Value <val>",
+      "category": "注册表"
+    },
+    {
+      "name": "Remove-ItemProperty",
+      "alias": [],
+      "name_cn": "删除注册表值",
+      "description": "删除注册表值",
+      "usage": "Remove-ItemProperty -Path HKLM:\\<path> -Name <name>",
+      "category": "注册表"
+    },
+    {
+      "name": "Compress-Archive",
+      "alias": [],
+      "name_cn": "压缩文件(PS)",
+      "description": "创建压缩归档文件",
+      "usage": "Compress-Archive -Path <src> -DestinationPath <dest>",
+      "category": "压缩解压"
+    },
+    {
+      "name": "Expand-Archive",
+      "alias": [],
+      "name_cn": "解压文件(PS)",
+      "description": "解压归档文件",
+      "usage": "Expand-Archive -Path <archive> -DestinationPath <dest>",
+      "category": "压缩解压"
+    }
+  ]
+}

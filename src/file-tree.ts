@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { t } from './i18n';
 
 interface FileEntry {
   name: string;
@@ -16,6 +17,9 @@ export class FileTree {
   private lastClickedPath = '';
   private allVisibleItems: string[] = [];
   private contextMenu: HTMLDivElement | null = null;
+  private filterInput: HTMLInputElement | null = null;
+  private filterTimer: ReturnType<typeof setTimeout> | null = null;
+  private preFilterExpanded = new Map<string, boolean>();
 
   public onOpenTerminal?: (dirPath: string) => void;
 
@@ -23,10 +27,19 @@ export class FileTree {
     this.container = container;
     this.container.innerHTML = `
       <div class="panel-header">
-        <h2>${folderHeaderSvg()} 文件管理</h2>
+        <h2>${folderHeaderSvg()} ${t('file.title')}</h2>
+      </div>
+      <div class="file-tree-filter" id="file-tree-filter">
+        <input type="text" class="file-filter-input" placeholder="${t('file.filterPlaceholder')}" spellcheck="false" />
       </div>
       <div class="panel-body" id="file-tree-body"></div>
     `;
+
+    this.filterInput = this.container.querySelector('.file-filter-input') as HTMLInputElement;
+    this.filterInput.addEventListener('input', () => {
+      if (this.filterTimer) clearTimeout(this.filterTimer);
+      this.filterTimer = setTimeout(() => this.applyFilter(), 150);
+    });
 
     document.addEventListener('click', (e) => {
       if (!(e.target as HTMLElement).closest('.file-tree') && !(e.target as HTMLElement).closest('.context-menu')) {
@@ -108,7 +121,7 @@ export class FileTree {
     const toggleExpand = async () => {
       expanded = !expanded;
       arrow.classList.toggle('expanded', expanded);
-      children.classList.toggle('collapsed', !expanded);
+      this.setChildrenExpanded(children, drive.path, expanded);
       if (!loaded) {
         loaded = true;
         await this.renderLevel(children, drive.path, 1);
@@ -116,10 +129,13 @@ export class FileTree {
     };
 
     arrow.addEventListener('click', async (e) => { e.stopPropagation(); await toggleExpand(); });
-    item.addEventListener('dblclick', async () => { if (!expanded) await toggleExpand(); });
 
-    // Click to select
-    item.addEventListener('click', (e) => { e.stopPropagation(); this.handleClick(drive.path, e.shiftKey); });
+    // Click to select and toggle expand
+    item.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      this.handleClick(drive.path, e.shiftKey);
+      await toggleExpand();
+    });
 
     // Right-click
     item.addEventListener('contextmenu', (e) => {
@@ -207,27 +223,29 @@ export class FileTree {
         e.stopPropagation();
         expanded = !expanded;
         arrow.classList.toggle('expanded', expanded);
-        children.classList.toggle('collapsed', !expanded);
+        this.setChildrenExpanded(children, entry.path, expanded);
         if (!loaded) {
           loaded = true;
           await this.renderLevel(children, entry.path, depth + 1);
         }
       });
 
-      item.addEventListener('dblclick', async () => {
-        if (!expanded) {
-          expanded = true;
-          arrow.classList.add('expanded');
-          children.classList.remove('collapsed');
-          if (!loaded) {
-            loaded = true;
-            await this.renderLevel(children, entry.path, depth + 1);
-          }
+      // Click on directory: select + toggle expand
+      item.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        this.handleClick(entry.path, e.shiftKey);
+        expanded = !expanded;
+        arrow.classList.toggle('expanded', expanded);
+        this.setChildrenExpanded(children, entry.path, expanded);
+        if (!loaded) {
+          loaded = true;
+          await this.renderLevel(children, entry.path, depth + 1);
         }
       });
+    } else {
+      // Click on file: select only
+      item.addEventListener('click', (e) => { e.stopPropagation(); this.handleClick(entry.path, e.shiftKey); });
     }
-
-    item.addEventListener('click', (e) => { e.stopPropagation(); this.handleClick(entry.path, e.shiftKey); });
 
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -312,29 +330,29 @@ export class FileTree {
     const dirPath = entry.is_dir ? entry.path : entry.path.replace(/[\\/][^\\/]+$/, '');
 
     if (entry.is_dir) {
-      menu.appendChild(this.menuItem('在终端中打开', terminalSvg(), async () => {
+      menu.appendChild(this.menuItem(t('file.openInTerminal'), terminalSvg(), async () => {
         this.onOpenTerminal?.(entry.path);
         this.closeContextMenu();
       }));
       menu.appendChild(this.menuSeparator());
     }
 
-    menu.appendChild(this.menuItem('新建文件', filePlusSvg(), async () => {
+    menu.appendChild(this.menuItem(t('file.newFile'), filePlusSvg(), async () => {
       await this.promptCreate(dirPath, false);
       this.closeContextMenu();
     }));
-    menu.appendChild(this.menuItem('新建文件夹', folderPlusSvg(), async () => {
+    menu.appendChild(this.menuItem(t('file.newFolder'), folderPlusSvg(), async () => {
       await this.promptCreate(dirPath, true);
       this.closeContextMenu();
     }));
     menu.appendChild(this.menuSeparator());
-    menu.appendChild(this.menuItem('重命名', renameSvg(), () => {
+    menu.appendChild(this.menuItem(t('file.rename'), renameSvg(), () => {
       this.startRename(entry);
       this.closeContextMenu();
     }));
 
     const count = this.selectedPaths.size;
-    menu.appendChild(this.menuItem(`删除 (${count})`, trashSvg(), async () => {
+    menu.appendChild(this.menuItem(`${t('file.delete')} (${count})`, trashSvg(), async () => {
       await this.deleteSelected();
       this.closeContextMenu();
     }, true));
@@ -366,13 +384,14 @@ export class FileTree {
   }
 
   private async promptCreate(parentDir: string, isDir: boolean) {
-    const name = prompt(isDir ? '文件夹名称:' : '文件名称:');
+    const name = prompt(isDir ? t('file.folderName') : t('file.fileName'));
     if (!name || !name.trim()) return;
-    const fullPath = parentDir + '\\' + name.trim();
+    const sep = parentDir.includes('\\') ? '\\' : '/';
+    const fullPath = parentDir + sep + name.trim();
     try {
       await invoke(isDir ? 'create_dir' : 'create_file', { path: fullPath });
       this.refresh();
-    } catch (e) { alert('创建失败: ' + e); }
+    } catch (e) { alert(t('file.createFailed', String(e))); }
   }
 
   private startRename(entry: FileEntry) {
@@ -397,7 +416,7 @@ export class FileTree {
         try {
           await invoke('rename_entry', { oldPath: entry.path, newPath });
           this.refresh();
-        } catch (e) { alert('重命名失败: ' + e); this.refresh(); }
+        } catch (e) { alert(t('file.renameFailed', String(e))); this.refresh(); }
       } else { this.refresh(); }
     };
 
@@ -412,18 +431,107 @@ export class FileTree {
     const paths = [...this.selectedPaths];
     if (paths.length === 0) return;
     const msg = paths.length === 1
-      ? `确定删除 ${paths[0].split(/[\\/]/).pop()} ?`
-      : `确定删除 ${paths.length} 个项目?`;
+      ? t('file.confirmDelete', paths[0].split(/[\\/]/).pop() || '')
+      : t('file.confirmDeleteMulti', String(paths.length));
     if (!confirm(msg)) return;
     try {
       await invoke('delete_entries', { paths });
       this.selectedPaths.clear();
       this.refresh();
-    } catch (e) { alert('删除失败: ' + e); }
+    } catch (e) { alert(t('file.deleteFailed', String(e))); }
   }
 
   async refresh() {
     this.init();
+  }
+
+  private applyFilter() {
+    const query = (this.filterInput?.value || '').trim().toLowerCase();
+    const body = this.body;
+    const noResults = body.querySelector('.file-no-results');
+    if (noResults) noResults.remove();
+
+    // Collect all tree-item elements
+    const allItems = body.querySelectorAll('.tree-item') as NodeListOf<HTMLElement>;
+
+    if (!query) {
+      this.restoreFilterState();
+      allItems.forEach(el => { el.style.display = ''; });
+      return;
+    }
+
+    if (this.preFilterExpanded.size === 0) {
+      body.querySelectorAll<HTMLElement>('.tree-children').forEach((children) => {
+        const parentItem = children.previousElementSibling as HTMLElement | null;
+        const path = parentItem?.dataset.path;
+        if (path) {
+          this.preFilterExpanded.set(path, !children.classList.contains('collapsed'));
+        }
+      });
+    }
+
+    // Build a set of matched paths and their ancestor paths
+    const matchedPaths = new Set<string>();
+    allItems.forEach(el => {
+      const name = (el.querySelector('.tree-name')?.textContent || '').toLowerCase();
+      if (name.includes(query)) {
+        const path = el.dataset.path || '';
+        matchedPaths.add(path);
+        // Mark all ancestors
+        let parent = el.parentElement;
+        while (parent && parent !== body) {
+          if (parent.classList.contains('tree-node')) {
+            const pItem = parent.querySelector(':scope > .tree-item') as HTMLElement;
+            if (pItem?.dataset.path) matchedPaths.add(pItem.dataset.path);
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+
+    // Apply visibility
+    allItems.forEach(el => {
+      const path = el.dataset.path || '';
+      el.style.display = matchedPaths.has(path) ? '' : 'none';
+    });
+
+    // Show children containers of matched dirs
+    body.querySelectorAll<HTMLElement>('.tree-children').forEach((el) => {
+      const elH = el as HTMLElement;
+      const siblingItem = elH.previousElementSibling as HTMLElement;
+      if (siblingItem && matchedPaths.has(siblingItem.dataset.path || '')) {
+        elH.style.display = '';
+        elH.classList.remove('collapsed');
+        siblingItem.querySelector('.tree-arrow')?.classList.add('expanded');
+      } else {
+        elH.style.display = 'none';
+      }
+    });
+
+    if (matchedPaths.size === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'file-no-results';
+      msg.textContent = t('file.noResults');
+      body.appendChild(msg);
+    }
+  }
+
+  private setChildrenExpanded(children: HTMLElement, path: string, expanded: boolean) {
+    children.classList.toggle('collapsed', !expanded);
+    children.dataset.path = path;
+  }
+
+  private restoreFilterState() {
+    this.body.querySelectorAll<HTMLElement>('.tree-children').forEach((children) => {
+      children.style.display = '';
+      const parentItem = children.previousElementSibling as HTMLElement | null;
+      const path = parentItem?.dataset.path;
+      const wasExpanded = path ? this.preFilterExpanded.get(path) : undefined;
+      if (wasExpanded === undefined) return;
+      children.classList.toggle('collapsed', !wasExpanded);
+      parentItem?.querySelector('.tree-arrow')?.classList.toggle('expanded', wasExpanded);
+    });
+    this.preFilterExpanded.clear();
   }
 }
 
