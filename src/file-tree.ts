@@ -21,6 +21,7 @@ export class FileTree {
   private filterInput: HTMLInputElement | null = null;
   private filterTimer: ReturnType<typeof setTimeout> | null = null;
   private preFilterExpanded = new Map<string, boolean>();
+  private createModal: HTMLDivElement | null = null;
 
   public onOpenTerminal?: (dirPath: string) => void;
 
@@ -341,11 +342,11 @@ export class FileTree {
     }
 
     menu.appendChild(this.menuItem(t('file.newFile'), filePlusSvg(), async () => {
-      await this.promptCreate(dirPath, false);
+      this.openCreateDialog(dirPath, false);
       this.closeContextMenu();
     }));
     menu.appendChild(this.menuItem(t('file.newFolder'), folderPlusSvg(), async () => {
-      await this.promptCreate(dirPath, true);
+      this.openCreateDialog(dirPath, true);
       this.closeContextMenu();
     }));
     menu.appendChild(this.menuSeparator());
@@ -386,15 +387,73 @@ export class FileTree {
     if (this.contextMenu) { this.contextMenu.remove(); this.contextMenu = null; }
   }
 
-  private async promptCreate(parentDir: string, isDir: boolean) {
-    const name = prompt(isDir ? t('file.folderName') : t('file.fileName'));
-    if (!name || !name.trim()) return;
+  private openCreateDialog(parentDir: string, isDir: boolean) {
+    this.closeCreateDialog();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cmd-overlay file-create-overlay';
+    overlay.innerHTML = `
+      <div class="cmd-overlay-card file-create-card">
+        <div class="cmd-overlay-title">${isDir ? t('file.newFolder') : t('file.newFile')}</div>
+        <div class="cmd-overlay-subtitle">${escapeHtml(parentDir)}</div>
+        <label class="cmd-field">
+          <span>${isDir ? t('file.folderName') : t('file.fileName')}</span>
+          <input id="file-create-name" type="text" spellcheck="false" autocomplete="off" />
+        </label>
+        <div class="cmd-overlay-actions">
+          <button class="cmd-toolbar-btn primary" id="file-create-confirm">${isDir ? t('file.newFolder') : t('file.newFile')}</button>
+          <button class="cmd-toolbar-btn" id="file-create-cancel">${t('cmd.cancel')}</button>
+        </div>
+      </div>
+    `;
+
+    const input = overlay.querySelector('#file-create-name') as HTMLInputElement;
+    const confirmButton = overlay.querySelector('#file-create-confirm') as HTMLButtonElement;
+    const cancelButton = overlay.querySelector('#file-create-cancel') as HTMLButtonElement;
+
+    confirmButton.addEventListener('click', async () => {
+      await this.submitCreate(parentDir, isDir, input.value);
+    });
+    cancelButton.addEventListener('click', () => this.closeCreateDialog());
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        this.closeCreateDialog();
+      }
+    });
+    input.addEventListener('keydown', async (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        await this.submitCreate(parentDir, isDir, input.value);
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.closeCreateDialog();
+      }
+    });
+
+    document.body.appendChild(overlay);
+    this.createModal = overlay;
+    setTimeout(() => input.focus(), 0);
+  }
+
+  private async submitCreate(parentDir: string, isDir: boolean, rawName: string) {
+    const name = rawName.trim();
+    if (!name) return;
     const sep = parentDir.includes('\\') ? '\\' : '/';
-    const fullPath = parentDir + sep + name.trim();
+    const fullPath = parentDir + sep + name;
     try {
       await invoke(isDir ? 'create_dir' : 'create_file', { path: fullPath });
+      this.closeCreateDialog();
       this.refresh();
-    } catch (e) { alert(t('file.createFailed', String(e))); }
+    } catch (e) {
+      alert(t('file.createFailed', String(e)));
+    }
+  }
+
+  private closeCreateDialog() {
+    if (!this.createModal) return;
+    this.createModal.remove();
+    this.createModal = null;
   }
 
   private startRename(entry: FileEntry) {
@@ -596,6 +655,10 @@ export class FileTree {
       await this.renderLevel(children, path, depthFromContainer(parentContainer) + 1);
     }
   }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function normalizePath(path: string): string {

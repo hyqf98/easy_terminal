@@ -180,12 +180,9 @@ export class CommandConfigPanel {
       </div>
     `;
 
-    if (this.overlayState) {
-      html += this.renderOverlay();
-    }
-
     this.body.innerHTML = html;
     this.bindEvents();
+    this.renderOverlayInline();
   }
 
   private renderCategoryCard(category: CategoryView): string {
@@ -249,7 +246,6 @@ export class CommandConfigPanel {
 
     if (overlay.type === 'category') {
       return `
-        <div class="cmd-overlay">
           <div class="cmd-overlay-card">
             <div class="cmd-overlay-title">${t('cmd.addCategory')}</div>
             <label class="cmd-field">
@@ -265,7 +261,6 @@ export class CommandConfigPanel {
               <button class="cmd-toolbar-btn" id="cmd-cancel-overlay">${t('cmd.cancel')}</button>
             </div>
           </div>
-        </div>
       `;
     }
 
@@ -275,7 +270,6 @@ export class CommandConfigPanel {
       : category?.commands[overlay.index] || emptyCommandEntry();
 
     return `
-      <div class="cmd-overlay">
         <div class="cmd-overlay-card wide">
           <div class="cmd-overlay-title">${overlay.index === null ? t('cmd.addCmd') : t('cmd.editCmd')}</div>
           <div class="cmd-overlay-subtitle">${escapeHtml(formatCategoryTitle(overlay.categoryId))}</div>
@@ -305,7 +299,7 @@ export class CommandConfigPanel {
           </label>
           <label class="cmd-field">
             <span>${t('cmd.hint')}</span>
-            <input id="cmd-hint" type="text" value="${escapeHtml(entry.hint)}" placeholder="-r 递归 -f 强制">
+            <input id="cmd-hint" type="text" value="${escapeHtml(entry.hint || '')}" placeholder="-r 递归 -f 强制">
           </label>
           <label class="cmd-field">
             <span>${t('cmd.examples')}</span>
@@ -316,7 +310,6 @@ export class CommandConfigPanel {
             <button class="cmd-toolbar-btn" id="cmd-cancel-overlay">${t('cmd.cancel')}</button>
           </div>
         </div>
-      </div>
     `;
   }
 
@@ -369,18 +362,36 @@ export class CommandConfigPanel {
         this.showContextMenu(event.clientX, event.clientY, categoryId, index);
       });
     });
+  }
 
-    this.body.querySelector('#cmd-cancel-overlay')?.addEventListener('click', () => {
+  private renderOverlayInline() {
+    const existing = this.container.querySelector(':scope > .cmd-overlay-inline');
+    if (existing) existing.remove();
+    if (!this.overlayState) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'cmd-overlay-inline';
+    overlay.innerHTML = this.renderOverlay();
+    this.container.appendChild(overlay);
+    this.bindOverlayEvents(overlay);
+  }
+
+  private bindOverlayEvents(overlay: HTMLElement) {
+    overlay.querySelector('#cmd-save-category')?.addEventListener('click', async () => {
+      await this.saveCategory();
+    });
+    overlay.querySelector('#cmd-save-command')?.addEventListener('click', async () => {
+      await this.saveCommand();
+    });
+    overlay.querySelector('#cmd-cancel-overlay')?.addEventListener('click', () => {
       this.overlayState = null;
       this.render();
     });
-
-    this.body.querySelector('#cmd-save-category')?.addEventListener('click', async () => {
-      await this.saveCategory();
-    });
-
-    this.body.querySelector('#cmd-save-command')?.addEventListener('click', async () => {
-      await this.saveCommand();
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        this.overlayState = null;
+        this.render();
+      }
     });
   }
 
@@ -418,8 +429,9 @@ export class CommandConfigPanel {
   }
 
   private async saveCategory() {
-    const label = (this.body.querySelector('#cmd-category-label') as HTMLInputElement | null)?.value.trim() || '';
-    const rawId = (this.body.querySelector('#cmd-category-id') as HTMLInputElement | null)?.value.trim() || label;
+    const root = this.container.querySelector('.cmd-overlay-inline');
+    const label = (root?.querySelector('#cmd-category-label') as HTMLInputElement | null)?.value.trim() || '';
+    const rawId = (root?.querySelector('#cmd-category-id') as HTMLInputElement | null)?.value.trim() || label;
     const id = slugify(rawId);
 
     if (!label || !id) {
@@ -451,14 +463,15 @@ export class CommandConfigPanel {
     const config = this.getConfigById(this.overlayState.categoryId);
     if (!config) return;
 
-    const name = (this.body.querySelector('#cmd-name') as HTMLInputElement | null)?.value.trim() || '';
-    const command = (this.body.querySelector('#cmd-command') as HTMLTextAreaElement | null)?.value.trim() || '';
-    const nameCn = (this.body.querySelector('#cmd-name-cn') as HTMLInputElement | null)?.value.trim() || '';
-    const description = (this.body.querySelector('#cmd-description') as HTMLInputElement | null)?.value.trim() || '';
-    const aliasInput = (this.body.querySelector('#cmd-aliases') as HTMLInputElement | null)?.value.trim() || '';
-    const tagsInput = (this.body.querySelector('#cmd-tags') as HTMLInputElement | null)?.value.trim() || '';
-    const hint = (this.body.querySelector('#cmd-hint') as HTMLInputElement | null)?.value.trim() || '';
-    const examplesInput = (this.body.querySelector('#cmd-examples') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const root = this.container.querySelector('.cmd-overlay-inline');
+    const name = (root?.querySelector('#cmd-name') as HTMLInputElement | null)?.value.trim() || '';
+    const command = (root?.querySelector('#cmd-command') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const nameCn = (root?.querySelector('#cmd-name-cn') as HTMLInputElement | null)?.value.trim() || '';
+    const description = (root?.querySelector('#cmd-description') as HTMLInputElement | null)?.value.trim() || '';
+    const aliasInput = (root?.querySelector('#cmd-aliases') as HTMLInputElement | null)?.value.trim() || '';
+    const tagsInput = (root?.querySelector('#cmd-tags') as HTMLInputElement | null)?.value.trim() || '';
+    const hint = (root?.querySelector('#cmd-hint') as HTMLInputElement | null)?.value.trim() || '';
+    const examplesInput = (root?.querySelector('#cmd-examples') as HTMLTextAreaElement | null)?.value.trim() || '';
 
     if (!name || !command) {
       alert(t('cmd.nameRequired'));

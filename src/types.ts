@@ -43,7 +43,7 @@ export interface CommandEntry {
   command: string;
   tags: string[];
   examples: string[];
-  hint: string;
+  hint?: string;
 }
 
 export interface CommandConfig {
@@ -69,7 +69,7 @@ export interface CommandMapping {
   description: string;
   tags: string[];
   examples: string[];
-  hint: string;
+  hint?: string;
   enabled: boolean;
 }
 
@@ -80,8 +80,10 @@ export interface SSHProfile {
   host: string;
   port: number;
   user: string;
-  startupPath: string;
   jumpProfileId: string;
+  authType: 'password' | 'key';
+  password: string;
+  privateKeyPath: string;
 }
 
 export interface TerminalLaunchOptions {
@@ -120,7 +122,7 @@ export interface SuggestionItem {
   insertText: string;
   executeText: string;
   usage: string;
-  hint: string;
+  hint?: string;
   examples: string[];
   aliases: string[];
   tags: string[];

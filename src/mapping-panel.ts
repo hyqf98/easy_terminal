@@ -67,18 +67,15 @@ export class MappingPanel {
     }
 
     html += '</div>';
-    if (this.overlayState) {
-      html += this.renderOverlay(this.draft || mappings[this.overlayState.index ?? -1] || emptyMapping());
-    }
 
     this.body.innerHTML = html;
     this.bindEvents();
+    this.renderOverlayInline();
   }
 
   private renderOverlay(mapping: CommandMapping): string {
     return `
-      <div class="cmd-overlay">
-        <div class="cmd-overlay-card mapping-overlay-card">
+      <div class="cmd-overlay-card mapping-overlay-card">
           <div class="cmd-overlay-title">${this.overlayState?.index === null ? t('mapping.modalTitle') : t('mapping.edit')}</div>
           <label class="cmd-field">
             <span>${t('mapping.trigger')}</span>
@@ -97,10 +94,6 @@ export class MappingPanel {
             <input id="mapping-tags" type="text" value="${escapeHtml(mapping.tags.join(', '))}" placeholder="工作路径, workspace">
           </label>
           <label class="cmd-field">
-            <span>${t('cmd.hint')}</span>
-            <input id="mapping-hint" type="text" value="${escapeHtml(mapping.hint)}" placeholder="直接回车会自动执行">
-          </label>
-          <label class="cmd-field">
             <span>${t('cmd.examples')}</span>
             <textarea id="mapping-examples" rows="3" placeholder="去工作路径&#10;去项目目录">${escapeHtml(mapping.examples.join('\n'))}</textarea>
           </label>
@@ -113,8 +106,85 @@ export class MappingPanel {
             <button class="cmd-toolbar-btn" id="mapping-cancel">${t('cmd.cancel')}</button>
           </div>
         </div>
-      </div>
     `;
+  }
+
+  private renderOverlayInline() {
+    const existing = this.container.querySelector(':scope > .cmd-overlay-inline');
+    if (existing) existing.remove();
+
+    if (!this.overlayState) return;
+
+    const mapping = this.draft || this.intelligence.getMappings()[this.overlayState.index ?? -1] || emptyMapping();
+    const overlay = document.createElement('div');
+    overlay.className = 'cmd-overlay-inline';
+    overlay.innerHTML = this.renderOverlay(mapping);
+    this.container.appendChild(overlay);
+    this.bindOverlayEvents(overlay);
+  }
+
+  private bindOverlayEvents(overlay: HTMLElement) {
+    overlay.querySelector('#mapping-save')?.addEventListener('click', async () => {
+      await this.saveMapping(overlay);
+    });
+    overlay.querySelector('#mapping-cancel')?.addEventListener('click', () => {
+      this.overlayState = null;
+      this.draft = null;
+      this.renderOverlayInline();
+    });
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) {
+        this.overlayState = null;
+        this.draft = null;
+        this.renderOverlayInline();
+      }
+    });
+  }
+
+  private async saveMapping(overlay?: HTMLElement) {
+    const root = overlay || this.container.querySelector('.cmd-overlay-inline');
+    if (!root) return;
+
+    const trigger = (root.querySelector('#mapping-trigger') as HTMLInputElement | null)?.value.trim() || '';
+    const command = (root.querySelector('#mapping-command') as HTMLTextAreaElement | null)?.value.trim() || '';
+    const description = (root.querySelector('#mapping-description') as HTMLInputElement | null)?.value.trim() || '';
+    const tags = ((root.querySelector('#mapping-tags') as HTMLInputElement | null)?.value.trim() || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const examples = ((root.querySelector('#mapping-examples') as HTMLTextAreaElement | null)?.value.trim() || '')
+      .split('\n')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const enabled = (root.querySelector('#mapping-enabled') as HTMLInputElement | null)?.checked ?? true;
+
+    if (!trigger || !command) {
+      alert(t('mapping.required'));
+      return;
+    }
+
+    const entries = [...this.intelligence.getMappings()];
+    const entry: CommandMapping = {
+      id: this.overlayState?.index === null ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : entries[this.overlayState?.index ?? 0]?.id || '',
+      trigger,
+      command,
+      description,
+      tags,
+      examples,
+      enabled,
+    };
+
+    if (this.overlayState?.index === null) {
+      entries.unshift(entry);
+    } else {
+      const index = this.overlayState?.index ?? 0;
+      entries[index] = entry;
+    }
+
+    await this.intelligence.saveMappings(entries);
+    this.overlayState = null;
+    this.draft = null;
+    this.render();
   }
 
   private bindEvents() {
@@ -152,60 +222,6 @@ export class MappingPanel {
       });
     });
 
-    this.body.querySelector('#mapping-cancel')?.addEventListener('click', () => {
-      this.overlayState = null;
-      this.draft = null;
-      this.render();
-    });
-
-    this.body.querySelector('#mapping-save')?.addEventListener('click', async () => {
-      await this.saveMapping();
-    });
-  }
-
-  private async saveMapping() {
-    const trigger = (this.body.querySelector('#mapping-trigger') as HTMLInputElement | null)?.value.trim() || '';
-    const command = (this.body.querySelector('#mapping-command') as HTMLTextAreaElement | null)?.value.trim() || '';
-    const description = (this.body.querySelector('#mapping-description') as HTMLInputElement | null)?.value.trim() || '';
-    const tags = ((this.body.querySelector('#mapping-tags') as HTMLInputElement | null)?.value.trim() || '')
-      .split(',')
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const hint = (this.body.querySelector('#mapping-hint') as HTMLInputElement | null)?.value.trim() || '';
-    const examples = ((this.body.querySelector('#mapping-examples') as HTMLTextAreaElement | null)?.value.trim() || '')
-      .split('\n')
-      .map((value) => value.trim())
-      .filter(Boolean);
-    const enabled = (this.body.querySelector('#mapping-enabled') as HTMLInputElement | null)?.checked ?? true;
-
-    if (!trigger || !command) {
-      alert(t('mapping.required'));
-      return;
-    }
-
-    const entries = [...this.intelligence.getMappings()];
-    const entry: CommandMapping = {
-      id: this.overlayState?.index === null ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : entries[this.overlayState?.index ?? 0]?.id || '',
-      trigger,
-      command,
-      description,
-      tags,
-      examples,
-      hint,
-      enabled,
-    };
-
-    if (this.overlayState?.index === null) {
-      entries.unshift(entry);
-    } else {
-      const index = this.overlayState?.index ?? 0;
-      entries[index] = entry;
-    }
-
-    await this.intelligence.saveMappings(entries);
-    this.overlayState = null;
-    this.draft = null;
-    this.render();
   }
 
   openCreate(prefill?: Partial<CommandMapping>) {

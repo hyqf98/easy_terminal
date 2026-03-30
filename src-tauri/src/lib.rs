@@ -173,6 +173,77 @@ fn save_ssh_profiles(entries: Vec<settings::SSHProfile>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn test_ssh_connection(
+    host: String,
+    port: u16,
+    user: String,
+    auth_type: String,
+    private_key_path: String,
+    jump_profile_id: String,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<String, String> {
+    use std::process::Command;
+
+    let lookup: std::collections::HashMap<String, &settings::SSHProfile> = profiles
+        .iter()
+        .map(|p| (p.id.clone(), p))
+        .collect();
+
+    // Build jump chain
+    let mut jump_chain: Vec<String> = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let mut current_id = jump_profile_id.clone();
+
+    while !current_id.is_empty() {
+        if visited.contains(&current_id) {
+            break;
+        }
+        visited.insert(current_id.clone());
+        if let Some(jump) = lookup.get(&current_id) {
+            jump_chain.push(format!("{}@{}:{}", jump.user, jump.host, jump.port));
+            current_id = jump.jump_profile_id.clone();
+        } else {
+            break;
+        }
+    }
+
+    let mut args: Vec<String> = Vec::new();
+    args.push("-o".to_string());
+    args.push("BatchMode=yes".to_string());
+    args.push("-o".to_string());
+    args.push("ConnectTimeout=5".to_string());
+    args.push("-o".to_string());
+    args.push("StrictHostKeyChecking=no".to_string());
+
+    if auth_type == "key" && !private_key_path.is_empty() {
+        args.push("-i".to_string());
+        args.push(private_key_path);
+    }
+
+    if !jump_chain.is_empty() {
+        args.push("-J".to_string());
+        args.push(jump_chain.join(","));
+    }
+
+    args.push("-p".to_string());
+    args.push(port.to_string());
+    args.push(format!("{}@{}", user, host));
+    args.push("exit".to_string());
+
+    let output = Command::new("ssh")
+        .args(&args)
+        .output()
+        .map_err(|e| format!("Failed to execute ssh: {}", e))?;
+
+    if output.status.success() {
+        Ok("连接成功".to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("{}", stderr.trim()))
+    }
+}
+
+#[tauri::command]
 fn load_shortcuts() -> Result<Vec<settings::ShortcutBinding>, String> {
     settings::load_shortcuts()
 }
@@ -234,7 +305,8 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build());
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init());
 
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
@@ -270,6 +342,7 @@ pub fn run() {
             save_command_mappings,
             load_ssh_profiles,
             save_ssh_profiles,
+            test_ssh_connection,
             load_shortcuts,
             save_shortcuts,
             get_platform,

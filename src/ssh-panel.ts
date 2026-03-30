@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { onLangChange, t } from './i18n';
-import { buildSshStartupCommand } from './command-intercept';
 import type { SSHProfile } from './types';
 
 type OverlayState = { index: number | null } | null;
@@ -8,9 +8,9 @@ type OverlayState = { index: number | null } | null;
 export class SSHPanel {
   private container: HTMLDivElement;
   private profiles: SSHProfile[] = [];
-  private selectedId = '';
   private activeDrawId = '';
   private overlayState: OverlayState = null;
+  private groupCollapsed: Record<string, boolean> = {};
 
   public onSelectionChange: ((profile: SSHProfile | null, profiles: SSHProfile[]) => void) | null = null;
   public onConnect: ((profile: SSHProfile, profiles: SSHProfile[]) => Promise<void>) | null = null;
@@ -24,6 +24,7 @@ export class SSHPanel {
     onLangChange(() => {
       this.renderShell();
       this.render();
+      this.renderOverlayToBody();
     });
   }
 
@@ -52,12 +53,6 @@ export class SSHPanel {
 
   private async reload() {
     this.profiles = await invoke<SSHProfile[]>('load_ssh_profiles');
-    if (!this.selectedId && this.profiles.length > 0) {
-      this.selectedId = this.profiles[0].id;
-    }
-    if (this.selectedId && !this.profiles.some((profile) => profile.id === this.selectedId)) {
-      this.selectedId = this.profiles[0]?.id || '';
-    }
     if (this.activeDrawId && !this.profiles.some((profile) => profile.id === this.activeDrawId)) {
       this.activeDrawId = '';
       this.onSelectionChange?.(null, this.profiles);
@@ -66,183 +61,312 @@ export class SSHPanel {
   }
 
   private render() {
-    const selected = this.profiles.find((profile) => profile.id === this.selectedId) || null;
+    const grouped = this.buildGroupedList();
 
     let html = `
       <div class="cmd-toolbar">
         <button class="cmd-toolbar-btn primary" id="ssh-add">${addIcon()} ${t('ssh.add')}</button>
-        <button class="cmd-toolbar-btn" id="ssh-local">${t('ssh.activateLocal')}</button>
       </div>
-      <div class="ssh-status-row">
-        <span class="cmd-chip ${this.activeDrawId ? 'accent' : ''}">${this.activeDrawId ? t('ssh.activeBadge') : t('ssh.localBadge')}</span>
-        <span class="ssh-status-text">${this.activeDrawId ? escapeHtml(this.profiles.find((profile) => profile.id === this.activeDrawId)?.name || '') : escapeHtml(t('ssh.localBadge'))}</span>
-      </div>
-      <div class="cmd-master-detail">
-        <aside class="cmd-card-list">
-          ${this.profiles.length === 0 ? `<div class="cmd-empty">${t('ssh.empty')}</div>` : this.profiles.map((profile) => this.renderCard(profile)).join('')}
-        </aside>
-        <section class="cmd-detail-pane">
-          ${selected ? this.renderDetail(selected) : `<div class="cmd-empty">${t('ssh.detailEmpty')}</div>`}
-        </section>
+      <div class="ssh-profile-list">
+        ${grouped.length === 0 ? `<div class="cmd-empty">${t('ssh.empty')}</div>` : grouped.map((g) => this.renderGroup(g)).join('')}
       </div>
     `;
-
-    if (this.overlayState) {
-      html += this.renderOverlay();
-    }
 
     this.body.innerHTML = html;
     this.bindEvents();
+    this.renderOverlayToBody();
+  }
+
+  private buildGroupedList(): { name: string; profiles: SSHProfile[] }[] {
+    const map = new Map<string, SSHProfile[]>();
+    for (const p of this.profiles) {
+      const key = p.group || 'default';
+      let list = map.get(key);
+      if (!list) { list = []; map.set(key, list); }
+      list.push(p);
+    }
+    const result: { name: string; profiles: SSHProfile[] }[] = [];
+    for (const [name, profiles] of map) {
+      result.push({ name, profiles });
+    }
+    return result;
+  }
+
+  private renderGroup(group: { name: string; profiles: SSHProfile[] }): string {
+    const collapsed = this.groupCollapsed[group.name] ?? false;
+    return `
+      <div class="ssh-group" data-ssh-group="${escapeHtml(group.name)}">
+        <div class="ssh-group-header" data-ssh-group-toggle="${escapeHtml(group.name)}">
+          <span class="ssh-group-arrow${collapsed ? '' : ' open'}">${chevronIcon()}</span>
+          <span class="ssh-group-name">${escapeHtml(group.name)}</span>
+          <span class="ssh-group-count">${group.profiles.length}</span>
+        </div>
+        <div class="ssh-group-body"${collapsed ? ' style="display:none"' : ''}>
+          ${group.profiles.map((profile) => this.renderCard(profile)).join('')}
+        </div>
+      </div>
+    `;
   }
 
   private renderCard(profile: SSHProfile): string {
+    const isActive = profile.id === this.activeDrawId;
     return `
-      <button class="cmd-card-item${profile.id === this.selectedId ? ' active' : ''}" data-ssh-card="${escapeHtml(profile.id)}">
-        <div class="cmd-card-head">
-          <span class="cmd-card-title">${escapeHtml(profile.name)}</span>
-          ${profile.id === this.activeDrawId ? `<span class="cmd-chip accent">${t('ssh.activeBadge')}</span>` : ''}
-        </div>
-        <div class="cmd-card-subtitle">${escapeHtml(profile.user)}@${escapeHtml(profile.host)}:${profile.port}</div>
-        <div class="cmd-card-footer">
-          <span class="cmd-chip">${escapeHtml(profile.group || 'default')}</span>
-          <span class="cmd-count">${escapeHtml(profile.startupPath || '~')}</span>
-        </div>
-      </button>
-    `;
-  }
-
-  private renderDetail(profile: SSHProfile): string {
-    const command = buildSshStartupCommand(profile, this.profiles);
-    return `
-      <div class="cmd-detail-header">
-        <div class="cmd-detail-header-main">
-          <div class="cmd-detail-title-row">
-            <h3>${escapeHtml(profile.name)}</h3>
-            ${profile.id === this.activeDrawId ? `<span class="cmd-chip accent">${t('ssh.activeBadge')}</span>` : ''}
+      <div class="ssh-profile-item${isActive ? ' active' : ''}">
+        <div class="ssh-profile-main">
+          <div class="ssh-profile-name-row">
+            <span class="ssh-profile-name">${escapeHtml(profile.name)}</span>
+            ${isActive ? `<span class="cmd-chip accent">${t('ssh.activeBadge')}</span>` : ''}
           </div>
-          <div class="cmd-detail-subtitle">${escapeHtml(profile.user)}@${escapeHtml(profile.host)}:${profile.port}</div>
+          <div class="ssh-profile-host">${escapeHtml(profile.user)}@${escapeHtml(profile.host)}:${profile.port}</div>
         </div>
-        <div class="ssh-detail-actions">
-          <button class="cmd-toolbar-btn primary" data-ssh-connect="${escapeHtml(profile.id)}">${t('ssh.connectNow')}</button>
-          <button class="cmd-toolbar-btn" data-ssh-edit="${escapeHtml(profile.id)}">${t('cmd.edit')}</button>
-          <button class="cmd-toolbar-btn" data-ssh-delete="${escapeHtml(profile.id)}">${t('cmd.delete')}</button>
+        <div class="ssh-profile-actions">
+          <button class="ssh-action-btn" data-ssh-connect="${escapeHtml(profile.id)}" title="${t('ssh.connectNow')}">${connectIcon()}</button>
+          <button class="ssh-action-btn" data-ssh-activate="${escapeHtml(profile.id)}" title="${t('ssh.activate')}">${activateIcon()}</button>
+          <button class="ssh-action-btn" data-ssh-edit="${escapeHtml(profile.id)}" title="${t('cmd.edit')}">${editIcon()}</button>
+          <button class="ssh-action-btn danger" data-ssh-delete="${escapeHtml(profile.id)}" title="${t('cmd.delete')}">${deleteIcon()}</button>
         </div>
-      </div>
-      <div class="ssh-detail-grid">
-        <div class="cmd-summary-card">
-          <span>${t('ssh.group')}</span>
-          <strong>${escapeHtml(profile.group || 'default')}</strong>
-        </div>
-        <div class="cmd-summary-card">
-          <span>${t('ssh.startupPath')}</span>
-          <strong>${escapeHtml(profile.startupPath || '~')}</strong>
-        </div>
-        <div class="cmd-summary-card">
-          <span>${t('ssh.jumpServer')}</span>
-          <strong>${escapeHtml(this.profiles.find((item) => item.id === profile.jumpProfileId)?.name || '-')}</strong>
-        </div>
-      </div>
-      <div class="cmd-detail-section">${t('ssh.command')}</div>
-      <div class="cmd-detail-code">${escapeHtml(command)}</div>
-      <div class="cmd-overlay-actions ssh-inline-actions">
-        <button class="cmd-toolbar-btn primary" data-ssh-activate="${escapeHtml(profile.id)}">${t('ssh.activate')}</button>
       </div>
     `;
   }
 
-  private renderOverlay(): string {
+  private renderOverlayHTML(): string {
     const profile = this.overlayState?.index === null
       ? emptyProfile()
       : this.profiles[this.overlayState?.index ?? -1] || emptyProfile();
 
+    const groups = [...new Set(this.profiles.map((p) => p.group).filter(Boolean))];
+    const authType = profile.authType || 'password';
+    const isKey = authType === 'key';
+
     return `
-      <div class="cmd-overlay">
-        <div class="cmd-overlay-card ssh-overlay-card">
-          <div class="cmd-overlay-title">${this.overlayState?.index === null ? t('ssh.add') : t('cmd.edit')}</div>
+      <div class="cmd-overlay-card ssh-overlay-card">
+        <div class="cmd-overlay-title">${this.overlayState?.index === null ? t('ssh.add') : t('cmd.edit')}</div>
+        <label class="cmd-field">
+          <span>${t('cmd.name')}<em class="ssh-required">*</em></span>
+          <input id="ssh-name" type="text" value="${escapeHtml(profile.name)}" placeholder="Prod API">
+        </label>
+        <label class="cmd-field">
+          <span>${t('ssh.group')}</span>
+          <input id="ssh-group" type="text" value="${escapeHtml(profile.group)}" placeholder="${t('ssh.group')}" list="ssh-group-list">
+          <datalist id="ssh-group-list">
+            ${groups.map((g) => `<option value="${escapeHtml(g)}">`).join('')}
+          </datalist>
+        </label>
+        <div class="ssh-form-grid">
           <label class="cmd-field">
-            <span>${t('cmd.name')}</span>
-            <input id="ssh-name" type="text" value="${escapeHtml(profile.name)}" placeholder="Prod API">
+            <span>${t('ssh.host')}<em class="ssh-required">*</em></span>
+            <input id="ssh-host" type="text" value="${escapeHtml(profile.host)}" placeholder="10.10.1.8">
           </label>
           <label class="cmd-field">
-            <span>${t('ssh.group')}</span>
-            <input id="ssh-group" type="text" value="${escapeHtml(profile.group)}" placeholder="生产环境">
+            <span>${t('ssh.port')}</span>
+            <input id="ssh-port" type="number" value="${profile.port || 22}" placeholder="22">
           </label>
-          <div class="ssh-form-grid">
-            <label class="cmd-field">
-              <span>${t('ssh.host')}</span>
-              <input id="ssh-host" type="text" value="${escapeHtml(profile.host)}" placeholder="10.10.1.8">
-            </label>
-            <label class="cmd-field">
-              <span>${t('ssh.port')}</span>
-              <input id="ssh-port" type="number" value="${profile.port || 22}" placeholder="22">
-            </label>
+        </div>
+        <label class="cmd-field">
+          <span>${t('ssh.user')}<em class="ssh-required">*</em></span>
+          <input id="ssh-user" type="text" value="${escapeHtml(profile.user)}" placeholder="ubuntu">
+        </label>
+        <label class="cmd-field">
+          <span>${t('ssh.authType')}</span>
+          <select id="ssh-auth-type">
+            <option value="password"${!isKey ? ' selected' : ''}>${t('ssh.authPassword')}</option>
+            <option value="key"${isKey ? ' selected' : ''}>${t('ssh.authKey')}</option>
+          </select>
+        </label>
+        <label class="cmd-field ssh-password-field" style="display:${!isKey ? 'flex' : 'none'}">
+          <span>${t('ssh.password')}</span>
+          <input id="ssh-password" type="password" value="${escapeHtml(profile.password || '')}" placeholder="${t('ssh.passwordPlaceholder')}">
+        </label>
+        <label class="cmd-field ssh-key-field" style="display:${isKey ? 'flex' : 'none'}">
+          <span>${t('ssh.privateKeyPath')}<em class="ssh-required">*</em></span>
+          <div class="ssh-file-row">
+            <input id="ssh-key-path" type="text" value="${escapeHtml(profile.privateKeyPath || '')}" placeholder="${t('ssh.privateKeyPathPlaceholder')}">
+            <button class="ssh-file-btn" id="ssh-pick-key">${folderIcon()}</button>
           </div>
-          <label class="cmd-field">
-            <span>${t('ssh.user')}</span>
-            <input id="ssh-user" type="text" value="${escapeHtml(profile.user)}" placeholder="ubuntu">
-          </label>
-          <label class="cmd-field">
-            <span>${t('ssh.startupPath')}</span>
-            <input id="ssh-startup-path" type="text" value="${escapeHtml(profile.startupPath)}" placeholder="/srv/project">
-          </label>
-          <label class="cmd-field">
-            <span>${t('ssh.jumpServer')}</span>
-            <select id="ssh-jump-profile">
-              <option value="">${escapeHtml(t('ssh.noJumpServer'))}</option>
-              ${this.profiles
-                .filter((item) => item.id !== profile.id)
-                .map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.jumpProfileId ? ' selected' : ''}>${escapeHtml(item.name)} (${escapeHtml(item.user)}@${escapeHtml(item.host)})</option>`)
-                .join('')}
-            </select>
-          </label>
-          <div class="cmd-overlay-actions">
-            <button class="cmd-toolbar-btn primary" id="ssh-save">${t('cmd.save')}</button>
-            <button class="cmd-toolbar-btn" id="ssh-cancel">${t('cmd.cancel')}</button>
-          </div>
+        </label>
+        <label class="cmd-field">
+          <span>${t('ssh.proxyJump')}</span>
+          <select id="ssh-jump-profile">
+            ${(() => {
+              const items = this.profiles.filter((item) => item.id !== profile.id);
+              if (items.length === 0) {
+                return `<option value="" disabled selected>${t('ssh.noJumpServer')}</option>`;
+              }
+              return `<option value="">${t('ssh.noJumpServer')}</option>` +
+                items.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === profile.jumpProfileId ? ' selected' : ''}>${escapeHtml(item.name)} (${escapeHtml(item.user)}@${escapeHtml(item.host)})</option>`).join('');
+            })()}
+          </select>
+        </label>
+        <div class="cmd-overlay-actions">
+          <button class="cmd-toolbar-btn primary" id="ssh-save">${t('cmd.save')}</button>
+          <button class="cmd-toolbar-btn" id="ssh-test">${t('ssh.testConnection')}</button>
+          <button class="cmd-toolbar-btn" id="ssh-cancel">${t('cmd.cancel')}</button>
         </div>
       </div>
     `;
   }
 
+  private renderOverlayToBody() {
+    const existing = document.getElementById('ssh-overlay-root');
+    if (existing) {
+      existing.remove();
+    }
+
+    if (!this.overlayState) return;
+
+    const root = document.createElement('div');
+    root.id = 'ssh-overlay-root';
+    root.className = 'cmd-overlay';
+    root.innerHTML = this.renderOverlayHTML();
+    document.body.appendChild(root);
+    this.bindOverlayEvents(root);
+  }
+
+  private bindOverlayEvents(root: HTMLElement) {
+    // Auth type toggle
+    const authSelect = root.querySelector('#ssh-auth-type') as HTMLSelectElement | null;
+    const keyField = root.querySelector('.ssh-key-field') as HTMLElement | null;
+    const passwordField = root.querySelector('.ssh-password-field') as HTMLElement | null;
+    authSelect?.addEventListener('change', () => {
+      const isKey = authSelect.value === 'key';
+      if (keyField) {
+        keyField.style.display = isKey ? 'flex' : 'none';
+      }
+      if (passwordField) {
+        passwordField.style.display = isKey ? 'none' : 'flex';
+      }
+    });
+
+    // Pick key file
+    root.querySelector('#ssh-pick-key')?.addEventListener('click', async () => {
+      try {
+        const selected = await open({
+          title: t('ssh.privateKeyPath'),
+          multiple: false,
+          directory: false,
+        });
+        if (selected) {
+          const input = root.querySelector('#ssh-key-path') as HTMLInputElement | null;
+          if (input) input.value = selected;
+        }
+      } catch {
+        // User cancelled dialog
+      }
+    });
+
+    // Save
+    root.querySelector('#ssh-save')?.addEventListener('click', async () => {
+      await this.saveCurrentProfile(root);
+    });
+
+    // Test connection
+    root.querySelector('#ssh-test')?.addEventListener('click', async () => {
+      await this.testConnection(root);
+    });
+
+    // Cancel
+    root.querySelector('#ssh-cancel')?.addEventListener('click', () => {
+      this.overlayState = null;
+      this.renderOverlayToBody();
+    });
+
+    // Click outside to close
+    root.addEventListener('click', (e) => {
+      if (e.target === root) {
+        this.overlayState = null;
+        this.renderOverlayToBody();
+      }
+    });
+  }
+
+  private async testConnection(root: HTMLElement) {
+    const host = (root.querySelector('#ssh-host') as HTMLInputElement | null)?.value.trim() || '';
+    const port = Number((root.querySelector('#ssh-port') as HTMLInputElement | null)?.value || 22) || 22;
+    const user = (root.querySelector('#ssh-user') as HTMLInputElement | null)?.value.trim() || '';
+    const authType = (root.querySelector('#ssh-auth-type') as HTMLSelectElement | null)?.value || 'password';
+    const password = (root.querySelector('#ssh-password') as HTMLInputElement | null)?.value || '';
+    const privateKeyPath = (root.querySelector('#ssh-key-path') as HTMLInputElement | null)?.value.trim() || '';
+    const jumpProfileId = (root.querySelector('#ssh-jump-profile') as HTMLSelectElement | null)?.value.trim() || '';
+
+    if (!host || !user) {
+      alert(t('ssh.required'));
+      return;
+    }
+
+    const testBtn = root.querySelector('#ssh-test') as HTMLButtonElement | null;
+    if (testBtn) {
+      testBtn.disabled = true;
+      testBtn.textContent = t('ssh.testing');
+    }
+
+    try {
+      await invoke<string>('test_ssh_connection', {
+        host, port, user, authType, password, privateKeyPath, jumpProfileId,
+        profiles: this.profiles,
+      });
+      this.showToast(t('ssh.testSuccess'), 'success');
+    } catch (err) {
+      this.showToast(t('ssh.testFailed', String(err)), 'error');
+    } finally {
+      if (testBtn) {
+        testBtn.disabled = false;
+        testBtn.textContent = t('ssh.testConnection');
+      }
+    }
+  }
+
+  private showToast(message: string, type: 'success' | 'error') {
+    const existing = document.getElementById('ssh-toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.id = 'ssh-toast';
+    toast.className = `ssh-toast ssh-toast-${type}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+
+    requestAnimationFrame(() => toast.classList.add('ssh-toast-visible'));
+    setTimeout(() => {
+      toast.classList.remove('ssh-toast-visible');
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
+  }
+
   private bindEvents() {
-    this.body.querySelector('#ssh-add')?.addEventListener('click', () => {
-      this.overlayState = { index: null };
-      this.render();
-    });
-
-    this.body.querySelector('#ssh-local')?.addEventListener('click', () => {
-      this.activeDrawId = '';
-      this.onSelectionChange?.(null, this.profiles);
-      this.render();
-    });
-
-    this.body.querySelectorAll<HTMLElement>('[data-ssh-card]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.selectedId = button.dataset.sshCard || '';
-        const profile = this.profiles.find((item) => item.id === this.selectedId) || null;
-        this.activeDrawId = profile?.id || '';
-        this.onSelectionChange?.(profile, this.profiles);
+    // Group toggle
+    this.body.querySelectorAll<HTMLElement>('[data-ssh-group-toggle]').forEach((header) => {
+      header.addEventListener('click', () => {
+        const name = header.dataset.sshGroupToggle || '';
+        this.groupCollapsed[name] = !(this.groupCollapsed[name] ?? false);
         this.render();
       });
     });
 
+    this.body.querySelector('#ssh-add')?.addEventListener('click', () => {
+      this.overlayState = { index: null };
+      this.renderOverlayToBody();
+    });
+
     this.body.querySelectorAll<HTMLElement>('[data-ssh-edit]').forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
         const index = this.profiles.findIndex((profile) => profile.id === button.dataset.sshEdit);
         this.overlayState = { index };
-        this.render();
+        this.renderOverlayToBody();
       });
     });
 
     this.body.querySelectorAll<HTMLElement>('[data-ssh-delete]').forEach((button) => {
-      button.addEventListener('click', async () => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const next = this.profiles.filter((profile) => profile.id !== button.dataset.sshDelete);
         await this.saveProfiles(next);
       });
     });
 
     this.body.querySelectorAll<HTMLElement>('[data-ssh-activate]').forEach((button) => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
         this.activeDrawId = button.dataset.sshActivate || '';
         const profile = this.profiles.find((item) => item.id === this.activeDrawId) || null;
         this.onSelectionChange?.(profile, this.profiles);
@@ -251,32 +375,26 @@ export class SSHPanel {
     });
 
     this.body.querySelectorAll<HTMLElement>('[data-ssh-connect]').forEach((button) => {
-      button.addEventListener('click', async () => {
+      button.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const profile = this.profiles.find((item) => item.id === button.dataset.sshConnect);
         if (profile) {
           await this.onConnect?.(profile, this.profiles);
         }
       });
     });
-
-    this.body.querySelector('#ssh-cancel')?.addEventListener('click', () => {
-      this.overlayState = null;
-      this.render();
-    });
-
-    this.body.querySelector('#ssh-save')?.addEventListener('click', async () => {
-      await this.saveCurrentProfile();
-    });
   }
 
-  private async saveCurrentProfile() {
-    const name = (this.body.querySelector('#ssh-name') as HTMLInputElement | null)?.value.trim() || '';
-    const group = (this.body.querySelector('#ssh-group') as HTMLInputElement | null)?.value.trim() || '';
-    const host = (this.body.querySelector('#ssh-host') as HTMLInputElement | null)?.value.trim() || '';
-    const port = Number((this.body.querySelector('#ssh-port') as HTMLInputElement | null)?.value || 22) || 22;
-    const user = (this.body.querySelector('#ssh-user') as HTMLInputElement | null)?.value.trim() || '';
-    const startupPath = (this.body.querySelector('#ssh-startup-path') as HTMLInputElement | null)?.value.trim() || '';
-    const jumpProfileId = (this.body.querySelector('#ssh-jump-profile') as HTMLSelectElement | null)?.value.trim() || '';
+  private async saveCurrentProfile(root: HTMLElement) {
+    const name = (root.querySelector('#ssh-name') as HTMLInputElement | null)?.value.trim() || '';
+    const group = (root.querySelector('#ssh-group') as HTMLInputElement | null)?.value.trim() || '';
+    const host = (root.querySelector('#ssh-host') as HTMLInputElement | null)?.value.trim() || '';
+    const port = Number((root.querySelector('#ssh-port') as HTMLInputElement | null)?.value || 22) || 22;
+    const user = (root.querySelector('#ssh-user') as HTMLInputElement | null)?.value.trim() || '';
+    const authType = ((root.querySelector('#ssh-auth-type') as HTMLSelectElement | null)?.value || 'password') as 'password' | 'key';
+    const password = (root.querySelector('#ssh-password') as HTMLInputElement | null)?.value || '';
+    const privateKeyPath = (root.querySelector('#ssh-key-path') as HTMLInputElement | null)?.value.trim() || '';
+    const jumpProfileId = (root.querySelector('#ssh-jump-profile') as HTMLSelectElement | null)?.value.trim() || '';
 
     if (!name || !host || !user) {
       alert(t('ssh.required'));
@@ -291,7 +409,9 @@ export class SSHPanel {
       host,
       port,
       user,
-      startupPath,
+      authType,
+      password,
+      privateKeyPath,
       jumpProfileId,
     };
 
@@ -301,14 +421,14 @@ export class SSHPanel {
       next[this.overlayState?.index ?? 0] = entry;
     }
 
-    await this.saveProfiles(next, entry.id);
+    await this.saveProfiles(next);
   }
 
-  private async saveProfiles(next: SSHProfile[], selectedId = this.selectedId) {
+  private async saveProfiles(next: SSHProfile[]) {
     await invoke('save_ssh_profiles', { entries: next });
     this.overlayState = null;
+    this.renderOverlayToBody();
     await this.reload();
-    this.selectedId = selectedId && next.some((profile) => profile.id === selectedId) ? selectedId : next[0]?.id || '';
     if (this.activeDrawId && !next.some((profile) => profile.id === this.activeDrawId)) {
       this.activeDrawId = '';
       this.onSelectionChange?.(null, next);
@@ -326,7 +446,9 @@ function emptyProfile(): SSHProfile {
     host: '',
     port: 22,
     user: '',
-    startupPath: '',
+    authType: 'password',
+    password: '',
+    privateKeyPath: '',
     jumpProfileId: '',
   };
 }
@@ -341,4 +463,28 @@ function sshIcon(): string {
 
 function addIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+}
+
+function connectIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>`;
+}
+
+function activateIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+}
+
+function editIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+}
+
+function deleteIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+}
+
+function folderIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>`;
+}
+
+function chevronIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><polyline points="6 9 12 15 18 9"></polyline></svg>`;
 }

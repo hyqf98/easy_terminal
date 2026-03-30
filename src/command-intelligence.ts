@@ -418,22 +418,22 @@ export function normalizeCommandEntry(entry: Partial<CommandEntry>): CommandEntr
     command,
     tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [],
     examples: Array.isArray(entry.examples) ? entry.examples.filter(Boolean) : [],
-    hint: entry.hint || '',
+    hint: entry.hint || resolveEntryHint(entry),
   };
 }
 
-function resolveEntryHint(entry: CommandEntry): string {
-  if (entry.hint.trim()) return entry.hint.trim();
-  const key = normalize(entry.name);
+function resolveEntryHint(entry: Partial<CommandEntry>): string {
+  if (entry.hint?.trim()) return entry.hint.trim();
+  const key = normalize(entry.name || '');
   const builtin = DEFAULT_HINTS[key];
   if (builtin) return builtin;
   if (entry.usage && normalize(entry.usage) !== key) return entry.usage.trim();
-  if (entry.examples.length > 0) return entry.examples[0];
+  if (entry.examples && entry.examples.length > 0) return entry.examples[0];
   return '';
 }
 
 function resolveHintText(item: SuggestionItem): string {
-  if (item.hint.trim()) return item.hint.trim();
+  if (item.hint?.trim()) return item.hint.trim();
   const builtin = DEFAULT_HINTS[normalize(item.title)];
   if (builtin) return builtin;
   if (item.usage && normalize(item.usage) !== normalize(item.title)) return item.usage.trim();

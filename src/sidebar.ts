@@ -5,6 +5,7 @@ export class Sidebar {
   private activeTab = '';
   private panelArea: HTMLDivElement;
   private tabs: Map<string, HTMLButtonElement> = new Map();
+  public onTabChange: ((tab: string | null) => void) | null = null;
 
   constructor(container: HTMLDivElement, panelArea: HTMLDivElement) {
     this.panelArea = panelArea;
@@ -37,7 +38,9 @@ export class Sidebar {
         settings: t('sidebar.settings'),
       };
       this.tabs.forEach((btn, id) => {
-        btn.title = titleMap[id] || id;
+        const label = titleMap[id] || id;
+        btn.title = label;
+        btn.dataset.tooltip = label;
       });
     });
   }
@@ -46,6 +49,7 @@ export class Sidebar {
     const btn = document.createElement('button');
     btn.className = 'sidebar-tab';
     btn.dataset.tab = id;
+    btn.dataset.tooltip = _label;
     btn.innerHTML = iconHtml;
     btn.title = _label;
     btn.addEventListener('click', () => this.switchTab(id));
@@ -71,6 +75,7 @@ export class Sidebar {
     this.panelArea.querySelectorAll('.panel-content').forEach((p) => {
       (p as HTMLDivElement).classList.toggle('active', (p as HTMLDivElement).id === `panel-${tab}`);
     });
+    this.onTabChange?.(tab);
   }
 
   openTab(tab: string) {
@@ -88,6 +93,7 @@ export class Sidebar {
     this.panelArea.querySelectorAll('.panel-content').forEach((p) => {
       (p as HTMLDivElement).classList.remove('active');
     });
+    this.onTabChange?.(null);
   }
 
   getActiveTab(): string {

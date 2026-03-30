@@ -23,11 +23,8 @@ export function buildSshStartupCommand(profile: SSHProfile, profiles: SSHProfile
   const target = profile.user ? `${profile.user}@${profile.host}` : profile.host;
   const jumpChain = resolveJumpChain(profile, profiles);
   const jumpArg = jumpChain.length > 0 ? ` -J ${jumpChain.join(',')}` : '';
-  if (profile.startupPath.trim()) {
-    const path = profile.startupPath.replace(/'/g, `'\"'\"'`);
-    return `ssh${jumpArg} -t -p ${profile.port} ${target} 'cd ${path} && exec \${SHELL:-/bin/bash} -l'`;
-  }
-  return `ssh${jumpArg} -p ${profile.port} ${target}`;
+  const keyArg = profile.authType === 'key' && profile.privateKeyPath ? ` -i ${profile.privateKeyPath}` : '';
+  return `ssh${keyArg}${jumpArg} -p ${profile.port} ${target}`;
 }
 
 function resolvePath(cwd: string, input: string): string {

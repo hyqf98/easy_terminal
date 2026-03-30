@@ -5,6 +5,7 @@ import type { CommandIntelligence } from './command-intelligence';
 export class HistoryPanel {
   private container: HTMLDivElement;
   private contextMenu: HTMLDivElement | null = null;
+  private activeId = '';
 
   constructor(
     container: HTMLDivElement,
@@ -43,28 +44,34 @@ export class HistoryPanel {
 
   private render() {
     const items = this.intelligence.getHistory();
+    if (this.activeId && !items.some((item) => item.id === this.activeId)) {
+      this.activeId = '';
+    }
+    if (!this.activeId && items.length > 0) {
+      this.activeId = items[0].id;
+    }
+    const activeItem = items.find((item) => item.id === this.activeId) || null;
     let html = `
       <div class="history-toolbar">
         <div class="history-summary">${t('history.summary', String(items.length))}</div>
         <button class="cmd-toolbar-btn" id="history-clear">${t('history.clear')}</button>
       </div>
-      <div class="history-list">
+      <div class="cmd-master-detail history-master-detail">
+        <div class="history-list">
+          ${items.length === 0 ? `<div class="cmd-empty">${t('history.empty')}</div>` : items.map((item) => this.renderItem(item)).join('')}
+        </div>
+        <section class="cmd-detail-pane">
+          ${activeItem ? this.renderDetail(activeItem) : `<div class="cmd-empty">${t('history.empty')}</div>`}
+        </section>
+      </div>
     `;
-
-    if (items.length === 0) {
-      html += `<div class="cmd-empty">${t('history.empty')}</div>`;
-    } else {
-      html += items.map((item) => this.renderItem(item)).join('');
-    }
-
-    html += '</div>';
     this.body.innerHTML = html;
     this.bindEvents();
   }
 
   private renderItem(item: CommandHistoryEntry): string {
     return `
-      <div class="history-item" data-history-id="${escapeHtml(item.id)}">
+      <div class="history-item${item.id === this.activeId ? ' active' : ''}" data-history-id="${escapeHtml(item.id)}" role="button" tabindex="0">
         <div class="history-main">
           <div class="history-command">${escapeHtml(item.command)}</div>
           <div class="history-meta">${escapeHtml(item.cwd || '-') } · ${formatTime(item.timestamp)} · ${t('history.count', String(item.count))}</div>
@@ -74,9 +81,40 @@ export class HistoryPanel {
     `;
   }
 
+  private renderDetail(item: CommandHistoryEntry): string {
+    return `
+      <div class="cmd-detail-header">
+        <div class="cmd-detail-header-main">
+          <div class="cmd-detail-title-row">
+            <h3>${t('history.title')}</h3>
+            <span class="cmd-chip accent">${t('history.count', String(item.count))}</span>
+          </div>
+          <div class="cmd-detail-subtitle">${formatTime(item.timestamp)}</div>
+        </div>
+        <div class="ssh-detail-actions">
+          <button class="cmd-toolbar-btn primary" data-history-send="${escapeHtml(item.id)}">${t('cmd.sendToTerminal')}</button>
+          <button class="cmd-toolbar-btn" data-history-delete="${escapeHtml(item.id)}">${t('history.delete')}</button>
+        </div>
+      </div>
+      <div class="ssh-detail-grid">
+        <div class="cmd-summary-card">
+          <span>CWD</span>
+          <strong>${escapeHtml(item.cwd || '-')}</strong>
+        </div>
+        <div class="cmd-summary-card">
+          <span>Runs</span>
+          <strong>${item.count}</strong>
+        </div>
+      </div>
+      <div class="cmd-detail-section">${t('cmd.command')}</div>
+      <div class="cmd-detail-code">${escapeHtml(item.command)}</div>
+    `;
+  }
+
   private bindEvents() {
     this.body.querySelector('#history-clear')?.addEventListener('click', async () => {
       await this.intelligence.saveHistory([]);
+      this.activeId = '';
       this.render();
     });
 
@@ -93,7 +131,31 @@ export class HistoryPanel {
       });
     });
 
+    this.body.querySelectorAll<HTMLElement>('[data-history-delete]').forEach((button) => {
+      button.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        const id = button.dataset.historyDelete!;
+        const next = this.intelligence.getHistory().filter((entry) => entry.id !== id);
+        await this.intelligence.saveHistory(next);
+        if (this.activeId === id) {
+          this.activeId = next[0]?.id || '';
+        }
+      });
+    });
+
     this.body.querySelectorAll<HTMLElement>('.history-item').forEach((element) => {
+      element.addEventListener('click', () => {
+        this.activeId = element.dataset.historyId || '';
+        this.render();
+      });
+      element.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          this.activeId = element.dataset.historyId || '';
+          this.render();
+        }
+      });
+
       element.addEventListener('contextmenu', (event) => {
         event.preventDefault();
         const id = element.dataset.historyId!;

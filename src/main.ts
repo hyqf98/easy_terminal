@@ -33,6 +33,7 @@ function showToast(message: string) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  const appBody = document.getElementById('app-body')! as HTMLDivElement;
   const viewport = document.getElementById('app-viewport')! as HTMLDivElement;
   const canvasEl = document.getElementById('canvas')! as HTMLDivElement;
   const selectionRect = document.getElementById('selection-rect')! as HTMLDivElement;
@@ -65,6 +66,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Sidebar (three-column layout)
   const sidebar = new Sidebar(sidebarContainer, panelArea);
+  const updateLayoutMode = (tab: string | null) => {
+    appBody.dataset.layout = (tab === 'files' || tab === 'ssh') ? 'files' : tab ? 'workspace' : 'canvas';
+  };
+  sidebar.onTabChange = updateLayoutMode;
+  updateLayoutMode(sidebar.getActiveTab() || null);
 
   // File Tree Panel
   const fileTree = new FileTree(panelFiles);

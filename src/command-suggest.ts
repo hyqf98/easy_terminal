@@ -5,7 +5,7 @@ import type { SuggestionItem } from './types';
 export class CommandSuggest {
   private popup: HTMLDivElement | null = null;
   private detailPopup: HTMLDivElement | null = null;
-  private activeIndex = 0;
+  private activeIndex: number | null = null;
   private filteredItems: SuggestionItem[] = [];
   private visible = false;
 
@@ -50,7 +50,7 @@ export class CommandSuggest {
       return false;
     }
 
-    this.activeIndex = 0;
+    this.activeIndex = null;
     this.show();
     return true;
   }
@@ -62,7 +62,7 @@ export class CommandSuggest {
     }
     this.hideDetail();
     this.filteredItems = [];
-    this.activeIndex = 0;
+    this.activeIndex = null;
     this.visible = false;
   }
 
@@ -77,7 +77,20 @@ export class CommandSuggest {
     let left = rect.left + cursorX;
     let top = rect.top + cursorY + 12;
     const popupWidth = Math.max(280, Math.min(420, rect.width * 0.62));
-    const maxH = Math.min(320, Math.max(160, window.innerHeight - top - 16));
+
+    // Calculate available space below and above the cursor
+    const spaceBelow = window.innerHeight - top - 8;
+    const spaceAbove = rect.top + cursorY - 8;
+    const preferBelow = spaceBelow >= spaceAbove;
+
+    let maxH: number;
+    if (preferBelow) {
+      maxH = Math.min(320, Math.max(160, spaceBelow));
+    } else {
+      // Flip above: position popup above the cursor line
+      maxH = Math.min(320, Math.max(160, spaceAbove));
+      top = Math.max(8, top - maxH - 24);
+    }
 
     this.popup.style.minWidth = '240px';
     this.popup.style.maxWidth = `${popupWidth}px`;
@@ -88,8 +101,9 @@ export class CommandSuggest {
     }
     if (left < 8) left = 8;
 
+    // Final clamp: ensure popup stays in viewport
     if (top + maxH > window.innerHeight) {
-      top = Math.max(8, top - maxH - 32);
+      top = Math.max(8, window.innerHeight - maxH - 8);
     }
 
     this.popup.style.left = `${left}px`;
@@ -102,22 +116,37 @@ export class CommandSuggest {
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        this.activeIndex = Math.min(this.activeIndex + 1, this.filteredItems.length - 1);
+        this.activeIndex = this.activeIndex === null
+          ? 0
+          : Math.min(this.activeIndex + 1, this.filteredItems.length - 1);
         this.highlightActive();
-        this.showDetail(this.filteredItems[this.activeIndex]);
+        this.showDetail(this.activeIndex === null ? null : this.filteredItems[this.activeIndex]);
         return true;
       case 'ArrowUp':
         e.preventDefault();
-        this.activeIndex = Math.max(this.activeIndex - 1, 0);
+        if (this.activeIndex === null) {
+          this.activeIndex = this.filteredItems.length - 1;
+        } else if (this.activeIndex === 0) {
+          this.activeIndex = null;
+        } else {
+          this.activeIndex -= 1;
+        }
         this.highlightActive();
-        this.showDetail(this.filteredItems[this.activeIndex]);
+        this.showDetail(this.activeIndex === null ? null : this.filteredItems[this.activeIndex]);
         return true;
       case 'Enter':
-      case 'Tab':
-        e.preventDefault();
-        if (this.filteredItems[this.activeIndex]) {
+        if (this.activeIndex !== null && this.filteredItems[this.activeIndex]) {
+          e.preventDefault();
           this.selectItem(this.filteredItems[this.activeIndex]);
+          return true;
         }
+        return false;
+      case 'Tab':
+        if (this.activeIndex === null || !this.filteredItems[this.activeIndex]) {
+          return false;
+        }
+        e.preventDefault();
+        this.selectItem(this.filteredItems[this.activeIndex]);
         return true;
       case 'Escape':
         e.preventDefault();
@@ -141,14 +170,16 @@ export class CommandSuggest {
   private render() {
     if (!this.popup) return;
 
-    this.popup.innerHTML = this.filteredItems.map((item, index) => `
+    this.popup.innerHTML = `
+      ${this.filteredItems.map((item, index) => `
       <div class="cmd-suggest-item simple${index === this.activeIndex ? ' active' : ''}" data-index="${index}">
         <div class="cmd-suggest-line">
           <span class="cmd-suggest-title">${escapeHtml(item.title)}</span>
           ${item.description || item.subtitle ? `<span class="cmd-suggest-inline-note">(${escapeHtml(item.description || item.subtitle)})</span>` : ''}
         </div>
       </div>
-    `).join('');
+    `).join('')}
+    `;
 
     this.popup.querySelectorAll<HTMLElement>('.cmd-suggest-item').forEach((element) => {
       element.addEventListener('mousedown', (event) => {
@@ -169,7 +200,7 @@ export class CommandSuggest {
       });
     });
 
-    this.showDetail(this.filteredItems[this.activeIndex]);
+    this.showDetail(this.activeIndex === null ? null : this.filteredItems[this.activeIndex]);
   }
 
   private selectItem(item: SuggestionItem) {
@@ -180,11 +211,11 @@ export class CommandSuggest {
   private highlightActive() {
     if (!this.popup) return;
     this.popup.querySelectorAll('.cmd-suggest-item').forEach((element, index) => {
-      element.classList.toggle('active', index === this.activeIndex);
+      element.classList.toggle('active', this.activeIndex !== null && index === this.activeIndex);
     });
   }
 
-  private showDetail(item: SuggestionItem) {
+  private showDetail(item: SuggestionItem | null) {
     this.hideDetail();
     if (!item || !this.popup) return;
 
@@ -201,10 +232,6 @@ export class CommandSuggest {
     html += `<div class="cmd-detail-section">${t('suggest.usage')}</div>`;
     html += `<div class="cmd-detail-code">${escapeHtml(item.usage || item.executeText)}</div>`;
 
-    if (item.hint) {
-      html += `<div class="cmd-detail-section">${t('suggest.hint')}</div>`;
-      html += `<div class="cmd-detail-code">${escapeHtml(item.hint)}</div>`;
-    }
     if (item.tags.length) {
       html += `<div class="cmd-detail-section">${t('suggest.tags')}</div>`;
       html += `<div class="cmd-detail-text">${escapeHtml(item.tags.join(' / '))}</div>`;

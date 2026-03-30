@@ -11,50 +11,79 @@ import { openFilePreview } from './file-preview';
 import type { ShortcutManager } from './shortcut-manager';
 
 const DARK_THEME = {
-  background: '#1e1e2e',
-  foreground: '#cdd6f4',
-  cursor: '#f5e0dc',
-  selectionBackground: '#45475a',
-  black: '#45475a',
-  red: '#f38ba8',
-  green: '#a6e3a1',
-  yellow: '#f9e2af',
-  blue: '#89b4fa',
-  magenta: '#f5c2e7',
-  cyan: '#94e2d5',
-  white: '#bac2de',
-  brightBlack: '#585b70',
-  brightRed: '#f38ba8',
-  brightGreen: '#a6e3a1',
-  brightYellow: '#f9e2af',
-  brightBlue: '#89b4fa',
-  brightMagenta: '#f5c2e7',
-  brightCyan: '#94e2d5',
-  brightWhite: '#a6adc8',
+  background: '#1a1b2e',
+  foreground: '#a9b1d6',
+  cursor: '#c0caf5',
+  selectionBackground: '#2f3347',
+  black: '#15161e',
+  red: '#f7768e',
+  green: '#9ece6a',
+  yellow: '#e0af68',
+  blue: '#7aa2f7',
+  magenta: '#bb9af7',
+  cyan: '#7dcfff',
+  white: '#a9b1d6',
+  brightBlack: '#414868',
+  brightRed: '#f7768e',
+  brightGreen: '#9ece6a',
+  brightYellow: '#e0af68',
+  brightBlue: '#7aa2f7',
+  brightMagenta: '#bb9af7',
+  brightCyan: '#7dcfff',
+  brightWhite: '#c0caf5',
 };
 
 const LIGHT_THEME = {
-  background: '#eff1f5',
-  foreground: '#4c4f69',
-  cursor: '#dc8a78',
-  selectionBackground: '#bcc0cc',
-  black: '#bcc0cc',
-  red: '#d20f39',
-  green: '#40a02b',
-  yellow: '#df8e1d',
-  blue: '#1e66f5',
-  magenta: '#ea76cb',
-  cyan: '#179299',
-  white: '#5c5f77',
-  brightBlack: '#7c7f93',
-  brightRed: '#d20f39',
-  brightGreen: '#40a02b',
-  brightYellow: '#df8e1d',
-  brightBlue: '#1e66f5',
-  brightMagenta: '#ea76cb',
-  brightCyan: '#179299',
-  brightWhite: '#4c4f69',
+  background: '#ffffff',
+  foreground: '#1d1d1f',
+  cursor: '#0071e3',
+  selectionBackground: '#e0e0e5',
+  black: '#1d1d1f',
+  red: '#ff3b30',
+  green: '#34c759',
+  yellow: '#ff9f0a',
+  blue: '#0071e3',
+  magenta: '#af52de',
+  cyan: '#5ac8fa',
+  white: '#8e8e93',
+  brightBlack: '#636366',
+  brightRed: '#ff453a',
+  brightGreen: '#30d158',
+  brightYellow: '#ffd60a',
+  brightBlue: '#0a84ff',
+  brightMagenta: '#bf5af2',
+  brightCyan: '#64d2ff',
+  brightWhite: '#f5f5f7',
 };
+
+const WARM_THEME = {
+  background: '#f2ece4',
+  foreground: '#2f2923',
+  cursor: '#0d7a6d',
+  selectionBackground: '#e0d8cc',
+  black: '#51473d',
+  red: '#c05621',
+  green: '#2f855a',
+  yellow: '#b7791f',
+  blue: '#0d7a6d',
+  magenta: '#7c3aed',
+  cyan: '#0d7a6d',
+  white: '#2f2923',
+  brightBlack: '#7a7062',
+  brightRed: '#dd6b20',
+  brightGreen: '#38a169',
+  brightYellow: '#d69e2e',
+  brightBlue: '#0d7a6d',
+  brightMagenta: '#9f7aea',
+  brightCyan: '#0d9488',
+  brightWhite: '#1a1510',
+};
+
+function getTermTheme(theme: string) {
+  if (theme === 'light') return LIGHT_THEME;
+  if (theme === 'warm') return WARM_THEME;
+  return DARK_THEME;
+}
 
 export class TerminalWindow {
   private id = '';
@@ -66,9 +95,11 @@ export class TerminalWindow {
   private commandSuggest: CommandSuggest;
   private currentLine = '';
   private cursorPos = 0;
+  private lineStartCell: number | null = null;
   private selectionAnchor: number | null = null;
   private selectionOverlays: HTMLDivElement[] = [];
   private terminalContextMenu: HTMLDivElement | null = null;
+  private currentGhostText = '';
 
   // Drag state
   private isDragging = false;
@@ -96,8 +127,7 @@ export class TerminalWindow {
 
   // Focus & CWD state
   private cwdPath = '';
-  private ghostOverlay: HTMLSpanElement | null = null;
-  private ghostText = '';
+  private ghostOverlay: HTMLDivElement | null = null;
   private launchOptions: TerminalLaunchOptions = { mode: 'local' };
 
   public onActivate: ((id: string) => void) | null = null;
@@ -119,9 +149,9 @@ export class TerminalWindow {
     this.commandSuggest = commandSuggest;
     this.container = this.buildDOM(parentEl);
     const baseFontSize = this.calcFontSize(this.width, this.height);
-    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const themeName = document.documentElement.getAttribute('data-theme') || 'dark';
     this.term = new Terminal({
-      theme: isLight ? LIGHT_THEME : DARK_THEME,
+      theme: getTermTheme(themeName),
       fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace',
       fontSize: baseFontSize,
       fontWeight: '400',
@@ -222,6 +252,7 @@ export class TerminalWindow {
       const trimmed = rawLine.trim();
       this.currentLine = '';
       this.cursorPos = 0;
+      this.lineStartCell = null;
       this.clearLineSelection();
       this.commandSuggest.hide();
       this.hideGhostText();
@@ -268,17 +299,20 @@ export class TerminalWindow {
       // Ctrl+C
       this.currentLine = '';
       this.cursorPos = 0;
+      this.lineStartCell = null;
       this.clearLineSelection();
     } else if (data === '\x15') {
       // Ctrl+U - clear line
       this.currentLine = '';
       this.cursorPos = 0;
+      this.lineStartCell = null;
       this.clearLineSelection();
     } else if (this.isPrintableInput(data)) {
+      this.ensureLineStartCell();
       this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${data}${this.currentLine.slice(this.cursorPos)}`;
       this.cursorPos += data.length;
     } else if (data === '\t') {
-      // Tab - handled by suggestion selector
+      this.ensureLineStartCell();
       return false;
     }
 
@@ -316,42 +350,38 @@ export class TerminalWindow {
       this.hideGhostText();
       return;
     }
+    this.currentGhostText = ghost.text;
     this.showGhostText(ghost.text);
   }
 
   private showGhostText(text: string) {
-    this.ghostText = text;
-    const metrics = this.getOverlayMetrics();
-    if (!metrics) return;
+    const terminalBody = this.container.querySelector('.terminal-body') as HTMLDivElement;
 
     if (!this.ghostOverlay) {
-      this.ghostOverlay = document.createElement('span');
+      this.ghostOverlay = document.createElement('div');
       this.ghostOverlay.className = 'ghost-text-overlay';
-      metrics.terminalBody.appendChild(this.ghostOverlay);
+      terminalBody.appendChild(this.ghostOverlay);
     }
 
-    this.ghostOverlay.textContent = text;
-    this.ghostOverlay.style.left = `${metrics.offsetX + metrics.cursorX * metrics.colWidth}px`;
-    this.ghostOverlay.style.top = `${metrics.offsetY + metrics.cursorY * metrics.rowHeight}px`;
-    this.ghostOverlay.style.fontSize = `${this.term.options.fontSize}px`;
-    this.ghostOverlay.style.lineHeight = `${(this.term.options.fontSize || 14) * 1.2}px`;
-    this.ghostOverlay.style.display = 'block';
+    this.ghostOverlay.innerHTML = `<span class="ghost-text-value">${escapeHtml(text)}</span>`;
+    this.ghostOverlay.style.display = 'inline-flex';
   }
 
   private hideGhostText() {
-    this.ghostText = '';
+    this.currentGhostText = '';
     if (this.ghostOverlay) {
       this.ghostOverlay.style.display = 'none';
     }
   }
 
-  private acceptGhostText() {
-    if (!this.ghostText) return;
-    // Send ghost text to PTY
-    invoke('write_pty', { sessionId: this.id, data: this.ghostText }).catch(console.error);
-    this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${this.ghostText}${this.currentLine.slice(this.cursorPos)}`;
-    this.cursorPos += this.ghostText.length;
-    this.refreshSuggestions();
+  private async acceptGhostText() {
+    const ghost = this.currentGhostText;
+    if (!ghost) return;
+    this.hideGhostText();
+    this.commandSuggest.hide();
+    await invoke('write_pty', { sessionId: this.id, data: ghost });
+    this.currentLine += ghost;
+    this.cursorPos = this.currentLine.length;
   }
 
   private bindCommandSuggest() {
@@ -374,19 +404,13 @@ export class TerminalWindow {
         return;
       }
 
-      // Tab - accept ghost text if no suggestion popup visible
-      if (e.key === 'Tab' && this.ghostText && !this.commandSuggest.isVisible()) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.acceptGhostText();
-        return;
-      }
-
       if (this.commandSuggest.isVisible()) {
         const handled = this.commandSuggest.handleKey(e);
         if (handled) {
+          e.preventDefault();
           e.stopPropagation();
         }
+        return;
       }
     }, true); // capture phase to intercept before xterm
   }
@@ -412,7 +436,22 @@ export class TerminalWindow {
       return true;
     }
 
+    // Accept ghost suggestion with ArrowRight at end of line
+    if (event.key === 'ArrowRight' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey
+      && this.currentGhostText && this.cursorPos === this.currentLine.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.acceptGhostText();
+      return true;
+    }
+
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      // Let ArrowRight pass through when at end of line with no ghost text,
+      // so zsh autosuggestions can be accepted natively
+      if (event.key === 'ArrowRight' && !event.shiftKey && this.cursorPos >= this.currentLine.length && !this.currentGhostText) {
+        this.clearLineSelection();
+        return false;
+      }
       event.preventDefault();
       event.stopPropagation();
       this.clearLineSelection();
@@ -427,8 +466,11 @@ export class TerminalWindow {
     const metrics = this.getOverlayMetrics();
     if (!metrics) return;
 
-    const pixelX = metrics.offsetX + metrics.cursorX * metrics.colWidth;
-    const pixelY = metrics.offsetY + (metrics.cursorY + 1.7) * metrics.rowHeight;
+    const cursorCell = this.getCursorCell(metrics);
+    const cursorX = this.mod(cursorCell, metrics.cols);
+    const cursorY = Math.floor(cursorCell / metrics.cols);
+    const pixelX = metrics.offsetX + cursorX * metrics.colWidth;
+    const pixelY = metrics.offsetY + (cursorY + 1.7) * metrics.rowHeight;
 
     this.commandSuggest.positionAt(metrics.terminalBody, pixelX, pixelY);
   }
@@ -463,6 +505,7 @@ export class TerminalWindow {
 
   private async extendSelection(key: string) {
     if (!this.currentLine) return;
+    this.ensureLineStartCell();
     if (this.selectionAnchor === null) {
       this.selectionAnchor = this.cursorPos;
     }
@@ -471,6 +514,7 @@ export class TerminalWindow {
   }
 
   private async moveCursorTo(target: number) {
+    this.ensureLineStartCell();
     const next = Math.max(0, Math.min(target, this.currentLine.length));
     const delta = next - this.cursorPos;
     if (delta === 0) {
@@ -517,9 +561,9 @@ export class TerminalWindow {
       return;
     }
 
-    const promptStartIndex = this.getPromptStartIndex(metrics);
-    const startCell = promptStartIndex + range.start;
-    const endCell = promptStartIndex + range.end;
+    const lineStartCell = this.getLineStartCell(metrics);
+    const startCell = lineStartCell + range.start;
+    const endCell = lineStartCell + range.end;
     const startRow = Math.floor(startCell / metrics.cols);
     const endRow = Math.floor(Math.max(startCell, endCell - 1) / metrics.cols);
     const visibleRows: Array<{ row: number; startCol: number; endCol: number }> = [];
@@ -658,6 +702,7 @@ export class TerminalWindow {
 
   private async selectLineRange(start: number, end: number) {
     if (!this.currentLine) return;
+    this.ensureLineStartCell();
     this.selectionAnchor = Math.max(0, Math.min(start, this.currentLine.length));
     await this.moveCursorTo(Math.max(0, Math.min(end, this.currentLine.length)));
     this.updateLineSelectionOverlay();
@@ -677,13 +722,12 @@ export class TerminalWindow {
     const col = Math.floor(gridX / metrics.colWidth);
     if (row < 0 || row >= metrics.rows || col < 0 || col >= metrics.cols) return null;
 
-    const promptStartIndex = this.getPromptStartIndex(metrics);
     const clickedCell = row * metrics.cols + col;
-    const lineStartCell = promptStartIndex;
-    const lineEndCell = promptStartIndex + this.currentLine.length;
+    const lineStartCell = this.getLineStartCell(metrics);
+    const lineEndCell = lineStartCell + this.currentLine.length;
     if (clickedCell < lineStartCell || clickedCell > lineEndCell) return null;
 
-    let charIndex = Math.min(Math.max(clickedCell - promptStartIndex, 0), Math.max(this.currentLine.length - 1, 0));
+    let charIndex = Math.min(Math.max(clickedCell - lineStartCell, 0), Math.max(this.currentLine.length - 1, 0));
     if (/\s/.test(this.currentLine[charIndex] || '')) {
       const prev = charIndex > 0 ? this.currentLine[charIndex - 1] : '';
       const next = charIndex < this.currentLine.length - 1 ? this.currentLine[charIndex + 1] : '';
@@ -1061,7 +1105,7 @@ export class TerminalWindow {
   }
 
   setTheme(theme: string) {
-    this.term.options.theme = theme === 'light' ? LIGHT_THEME : DARK_THEME;
+    this.term.options.theme = getTermTheme(theme);
   }
 
   setZIndex(zIndex: number) {
@@ -1132,8 +1176,22 @@ export class TerminalWindow {
     };
   }
 
-  private getPromptStartIndex(metrics: { cols: number; cursorX: number; cursorY: number }): number {
-    return metrics.cursorY * metrics.cols + metrics.cursorX - this.cursorPos;
+  private ensureLineStartCell() {
+    if (this.lineStartCell !== null) return;
+    const metrics = this.getOverlayMetrics();
+    if (!metrics) return;
+    this.lineStartCell = metrics.cursorY * metrics.cols + metrics.cursorX - this.cursorPos;
+  }
+
+  private getLineStartCell(metrics: { cols: number; cursorX: number; cursorY: number }): number {
+    if (this.lineStartCell === null) {
+      this.lineStartCell = metrics.cursorY * metrics.cols + metrics.cursorX - this.cursorPos;
+    }
+    return this.lineStartCell;
+  }
+
+  private getCursorCell(metrics: { cols: number; cursorX: number; cursorY: number }): number {
+    return this.getLineStartCell(metrics) + this.cursorPos;
   }
 
   private ensureSelectionOverlayCount(count: number, terminalBody: HTMLElement) {
@@ -1149,4 +1207,8 @@ export class TerminalWindow {
   private mod(value: number, divisor: number): number {
     return ((value % divisor) + divisor) % divisor;
   }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

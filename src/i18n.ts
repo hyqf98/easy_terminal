@@ -21,6 +21,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'settings.appearance': '外观',
     'settings.dark': '暗色',
     'settings.light': '亮色',
+    'settings.warm': '暖色',
     'settings.language': '语言',
     'settings.langZh': '简体中文',
     'settings.langEn': 'English',
@@ -91,7 +92,6 @@ const messages: Record<Lang, Record<string, string>> = {
     'cmd.emptySection': '当前没有可显示的命令分类',
     'cmd.alias': '别名',
     'cmd.tags': '标签',
-    'cmd.hint': '影子提示',
     'cmd.examples': '示例',
 
     // File Tree
@@ -124,7 +124,6 @@ const messages: Record<Lang, Record<string, string>> = {
     'suggest.tags': '标签',
     'suggest.examples': '示例',
     'suggest.source': '来源',
-    'suggest.hint': '影子提示',
 
     // Terminal
     'terminal.copied': '成功复制终端',
@@ -163,6 +162,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'ssh.startupPath': '启动路径',
     'ssh.jumpServer': '跳板服务器',
     'ssh.noJumpServer': '不使用跳板',
+    'ssh.proxyJump': '代理跳板',
     'ssh.activate': '设为绘制目标',
     'ssh.activateLocal': '切回本地终端',
     'ssh.connectNow': '立即连接',
@@ -171,6 +171,17 @@ const messages: Record<Lang, Record<string, string>> = {
     'ssh.required': '名称、主机和用户不能为空',
     'ssh.command': '连接命令',
     'ssh.detailEmpty': '从左侧选择一个服务器，后续在画布上新建终端会自动连接',
+    'ssh.authType': '认证方式',
+    'ssh.authPassword': '密码认证',
+    'ssh.authKey': '密钥认证',
+    'ssh.password': '密码',
+    'ssh.passwordPlaceholder': 'SSH 登录密码',
+    'ssh.privateKeyPath': '密钥路径',
+    'ssh.privateKeyPathPlaceholder': '~/.ssh/id_rsa',
+    'ssh.testConnection': '测试连接',
+    'ssh.testing': '正在测试...',
+    'ssh.testSuccess': '连接成功',
+    'ssh.testFailed': '连接失败: {0}',
 
     // Shortcut
     'shortcut.title': '快捷键设置',
@@ -192,6 +203,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'settings.appearance': 'Appearance',
     'settings.dark': 'Dark',
     'settings.light': 'Light',
+    'settings.warm': 'Warm',
     'settings.language': 'Language',
     'settings.langZh': '简体中文',
     'settings.langEn': 'English',
@@ -262,7 +274,6 @@ const messages: Record<Lang, Record<string, string>> = {
     'cmd.emptySection': 'No command categories yet',
     'cmd.alias': 'Aliases',
     'cmd.tags': 'Tags',
-    'cmd.hint': 'Ghost Hint',
     'cmd.examples': 'Examples',
 
     // File Tree
@@ -295,7 +306,6 @@ const messages: Record<Lang, Record<string, string>> = {
     'suggest.tags': 'Tags',
     'suggest.examples': 'Examples',
     'suggest.source': 'Source',
-    'suggest.hint': 'Hint',
 
     // Terminal
     'terminal.copied': 'Terminal copied',
@@ -334,6 +344,7 @@ const messages: Record<Lang, Record<string, string>> = {
     'ssh.startupPath': 'Startup Path',
     'ssh.jumpServer': 'Jump Server',
     'ssh.noJumpServer': 'No Jump Server',
+    'ssh.proxyJump': 'Proxy Jump',
     'ssh.activate': 'Use For New Terminals',
     'ssh.activateLocal': 'Back To Local',
     'ssh.connectNow': 'Connect Now',
@@ -342,6 +353,17 @@ const messages: Record<Lang, Record<string, string>> = {
     'ssh.required': 'Name, host, and user are required',
     'ssh.command': 'Connect Command',
     'ssh.detailEmpty': 'Select a server on the left. New canvas terminals will auto-connect to it.',
+    'ssh.authType': 'Auth Type',
+    'ssh.authPassword': 'Password',
+    'ssh.authKey': 'Private Key',
+    'ssh.password': 'Password',
+    'ssh.passwordPlaceholder': 'SSH login password',
+    'ssh.privateKeyPath': 'Key Path',
+    'ssh.privateKeyPathPlaceholder': '~/.ssh/id_rsa',
+    'ssh.testConnection': 'Test Connection',
+    'ssh.testing': 'Testing...',
+    'ssh.testSuccess': 'Connection successful',
+    'ssh.testFailed': 'Connection failed: {0}',
 
     // Shortcut
     'shortcut.title': 'Shortcut Settings',

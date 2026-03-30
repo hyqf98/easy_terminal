@@ -165,9 +165,17 @@ pub struct SSHProfile {
     #[serde(default)]
     pub user: String,
     #[serde(default)]
-    pub startup_path: String,
-    #[serde(default)]
     pub jump_profile_id: String,
+    #[serde(default = "default_auth_type")]
+    pub auth_type: String,
+    #[serde(default)]
+    pub password: String,
+    #[serde(default)]
+    pub private_key_path: String,
+}
+
+fn default_auth_type() -> String {
+    "password".to_string()
 }
 
 fn default_ssh_port() -> u16 {

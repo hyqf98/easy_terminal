@@ -98,6 +98,19 @@ export class Settings {
           </div>
           <span class="theme-card-label">${t('settings.light')}</span>
         </div>
+        <div class="theme-card ${this.currentTheme === 'warm' ? 'active' : ''}" data-theme="warm">
+          <div class="theme-card-preview warm-card">
+            <div class="tbar">
+              <div class="tbar-header"><span></span><span></span><span></span></div>
+              <div class="tbar-body">
+                <span style="width:70%"></span>
+                <span style="width:45%"></span>
+                <span style="width:60%"></span>
+              </div>
+            </div>
+          </div>
+          <span class="theme-card-label">${t('settings.warm')}</span>
+        </div>
       </div>
 
       <h3 style="margin-top:20px">${t('settings.language')}</h3>
@@ -125,7 +138,13 @@ export class Settings {
         <div class="settings-update-status">${escapeHtml(this.describeUpdateState())}</div>
         ${(updateState.status === 'downloading' || updateState.status === 'installing') && updateState.progressPercent !== null ? `
           <div class="settings-update-progress">
-            <div class="settings-update-progress-bar" style="width:${updateState.progressPercent}%"></div>
+            <div class="settings-update-progress-head">
+              <span>${updateState.status === 'downloading' ? 'Downloading' : 'Installing'}</span>
+              <strong>${Math.round(updateState.progressPercent)}%</strong>
+            </div>
+            <div class="settings-update-progress-track">
+              <div class="settings-update-progress-bar" style="width:${updateState.progressPercent}%"></div>
+            </div>
           </div>
         ` : ''}
         <label class="mapping-toggle-row settings-toggle-row">
