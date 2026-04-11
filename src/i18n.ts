@@ -221,6 +221,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shortcut.categoryTerminal': '终端操作',
     'shortcut.categoryNavigation': '导航切换',
     'shortcut.categoryWorkspace': '工作台',
+    'desktop.drawTitle': '自由终端',
+    'desktop.drawHint': '按住鼠标左键拖拽一个区域，释放后立即生成独立终端窗口，按 Esc 取消',
   },
 
   'en-US': {
@@ -442,6 +444,8 @@ const messages: Record<Lang, Record<string, string>> = {
     'shortcut.categoryTerminal': 'Terminal',
     'shortcut.categoryNavigation': 'Navigation',
     'shortcut.categoryWorkspace': 'Workspace',
+    'desktop.drawTitle': 'Free Terminal',
+    'desktop.drawHint': 'Drag with the left mouse button to create a detached terminal window. Press Escape to cancel.',
   },
 };
 

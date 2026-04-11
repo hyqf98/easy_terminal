@@ -197,20 +197,6 @@ export class CommandSuggest {
         void this.showDetail(this.activeIndex === null ? null : this.filteredItems[this.activeIndex]);
         this.emitActiveChange();
         return true;
-      case 'Enter':
-        if (this.activeIndex !== null && this.filteredItems[this.activeIndex]) {
-          e.preventDefault();
-          this.selectItem(this.filteredItems[this.activeIndex]);
-          return true;
-        }
-        return false;
-      case 'Tab':
-        if (this.activeIndex === null || !this.filteredItems[this.activeIndex]) {
-          return false;
-        }
-        e.preventDefault();
-        this.selectItem(this.filteredItems[this.activeIndex]);
-        return true;
       case 'Escape':
         e.preventDefault();
         this.hide();

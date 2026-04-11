@@ -4,6 +4,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import type { CanvasController, PtyOutputEvent, SSHProfile, SuggestionItem, TerminalLaunchOptions } from './types';
 import { CommandSuggest } from './command-suggest';
 import { resolvePreviewPath, resolveSshPreviewPath } from './command-intercept';
@@ -86,6 +87,8 @@ function getTermTheme(theme: string) {
   return DARK_THEME;
 }
 
+type TerminalHostMode = 'canvas' | 'native-window';
+
 export class TerminalWindow {
   private id = '';
   private container: HTMLDivElement;
@@ -107,7 +110,10 @@ export class TerminalWindow {
   private currentGhostPreserveLeadingWhitespace = false;
   private overlaySyncFrame: number | null = null;
   private syntaxRefreshFrame: number | null = null;
+  private pendingWriteFrame: number | null = null;
+  private pendingOutput = '';
   private lastOverlayPositionStale = false;
+  private overlayMismatchCount = 0;
   private passwordQueue: string[] = [];
   private acceptedUnknownHost = false;
   private passwordPromptBuffer = '';
@@ -148,6 +154,7 @@ export class TerminalWindow {
   private cwdPath = '';
   private ghostOverlay: HTMLDivElement | null = null;
   private launchOptions: TerminalLaunchOptions = { mode: 'local' };
+  private appWindow = getCurrentWindow();
 
   public onActivate: ((id: string) => void) | null = null;
   public onCommandExecuted: ((command: string, cwd: string) => void | Promise<void>) | null = null;
@@ -164,7 +171,8 @@ export class TerminalWindow {
     private height: number,
     canvasController: CanvasController,
     commandSuggest: CommandSuggest,
-    private shortcutManager?: ShortcutManager
+    private shortcutManager?: ShortcutManager,
+    private hostMode: TerminalHostMode = 'canvas'
   ) {
     this.canvasController = canvasController;
     this.commandSuggest = commandSuggest;
@@ -253,9 +261,7 @@ export class TerminalWindow {
         }
         this.extractTitleFromOsc(data);
         this.handleSshHandshakeOutput(data);
-        this.term.write(data, () => {
-          this.scheduleOverlayReposition();
-        });
+        this.enqueueTerminalOutput(data);
       }
     });
 
@@ -290,6 +296,11 @@ export class TerminalWindow {
       // Only save cwd path — don't overwrite user's custom title
       this.cwdPath = title.trim();
       this.onCwdChange?.(this.cwdPath);
+    });
+
+    this.term.onCursorMove(() => {
+      if (this.frozen) return;
+      this.scheduleOverlayReposition();
     });
 
     // Bind command suggestion to this terminal
@@ -426,12 +437,14 @@ export class TerminalWindow {
 
   private async refreshSuggestions() {
     if (this.isInAltBuffer()) {
+      this.overlayMismatchCount = 0;
       this.commandSuggest.hide();
       this.hideSyntaxHighlight();
       this.hideGhostText();
       return;
     }
     if (this.lastOverlayPositionStale) {
+      this.overlayMismatchCount = 0;
       this.commandSuggest.hide();
       this.hideSyntaxHighlight();
       this.hideGhostText();
@@ -444,12 +457,17 @@ export class TerminalWindow {
         const expectedCell = this.lineStartCell + this.cursorPos;
         const actualCell = metrics.cursorY * metrics.cols + metrics.cursorX;
         if (Math.abs(expectedCell - actualCell) > 3) {
-          this.lastOverlayPositionStale = true;
+          this.overlayMismatchCount += 1;
+          if (this.overlayMismatchCount >= 2) {
+            this.lastOverlayPositionStale = true;
+          }
+          this.lineStartCell = null;
           this.commandSuggest.hide();
           this.hideSyntaxHighlight();
           this.hideGhostText();
           return;
         }
+        this.overlayMismatchCount = 0;
       }
     }
     if (this.currentLine.trim()) {
@@ -651,30 +669,6 @@ export class TerminalWindow {
         return;
       }
 
-      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        if (this.launchOptions.mode === 'ssh') {
-          return;
-        }
-        if (this.commandSuggest.isVisible()) {
-          e.preventDefault();
-          e.stopPropagation();
-          const activeItem = this.commandSuggest.getActiveItem();
-          if (activeItem) {
-            void this.replaceCurrentInput(this.resolveSuggestionReplacement(activeItem), activeItem.type === 'completion');
-          } else {
-            this.commandSuggest.hide();
-          }
-          return;
-        }
-        if (this.currentGhostText && this.cursorPos === this.currentLine.length) {
-          e.preventDefault();
-          e.stopPropagation();
-          void this.acceptGhostText();
-          return;
-        }
-        return;
-      }
-
       if (this.commandSuggest.isVisible()) {
         const handled = this.commandSuggest.handleKey(e);
         if (handled) {
@@ -752,6 +746,7 @@ export class TerminalWindow {
     this.cursorPos = replacement.length;
     this.lineStartCell = null;
     this.lastOverlayPositionStale = false;
+    this.overlayMismatchCount = 0;
     this.clearLineSelection();
     this.hideGhostText();
     this.scheduleSuggestionRefresh();
@@ -779,6 +774,7 @@ export class TerminalWindow {
     this.overlaySyncFrame = window.requestAnimationFrame(() => {
       this.overlaySyncFrame = null;
       if (this.isInAltBuffer()) {
+        this.overlayMismatchCount = 0;
         this.lineStartCell = null;
         this.hideSyntaxHighlight();
         this.hideGhostText();
@@ -786,6 +782,7 @@ export class TerminalWindow {
         return;
       }
       if (!this.currentLine.trim()) {
+        this.overlayMismatchCount = 0;
         this.lineStartCell = null;
         this.hideSyntaxHighlight();
         this.hideGhostText();
@@ -801,13 +798,17 @@ export class TerminalWindow {
           const expectedCell = this.lineStartCell + this.cursorPos;
           const actualCell = metrics.cursorY * metrics.cols + metrics.cursorX;
           if (Math.abs(expectedCell - actualCell) > 3) {
-            this.lastOverlayPositionStale = true;
+            this.overlayMismatchCount += 1;
+            if (this.overlayMismatchCount >= 2) {
+              this.lastOverlayPositionStale = true;
+            }
             this.lineStartCell = null;
             this.hideSyntaxHighlight();
             this.hideGhostText();
             this.commandSuggest.hide();
             return;
           }
+          this.overlayMismatchCount = 0;
         }
       }
       this.lineStartCell = null;
@@ -908,6 +909,15 @@ export class TerminalWindow {
   }
 
   private handleLineEditingShortcut(event: KeyboardEvent): boolean {
+    if (this.isInAltBuffer() || this.lastOverlayPositionStale) {
+      return false;
+    }
+
+    const shouldHandleInlineEditing = Boolean(this.currentLine || this.currentGhostText || this.hasLineSelection());
+    if (!shouldHandleInlineEditing) {
+      return false;
+    }
+
     const isPrimaryA = this.shortcutManager
       ? this.shortcutManager.matches('terminal.selectLine', event)
       : ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'a');
@@ -1026,7 +1036,10 @@ export class TerminalWindow {
       await invoke('write_pty', { sessionId: this.id, data: '\x1b[D'.repeat(Math.abs(delta)) });
     }
     this.cursorPos = next;
+    this.lastOverlayPositionStale = false;
+    this.overlayMismatchCount = 0;
     this.updateLineSelectionOverlay();
+    this.scheduleOverlayReposition();
   }
 
   private async replaceLineSelection(text: string) {
@@ -1134,7 +1147,7 @@ export class TerminalWindow {
 
   private buildDOM(parent: HTMLElement): HTMLDivElement {
     const el = document.createElement('div');
-    el.className = 'terminal-window';
+    el.className = `terminal-window${this.hostMode === 'native-window' ? ' terminal-window-native-host' : ''}`;
     el.style.left = `${this.x}px`;
     el.style.top = `${this.y}px`;
     el.style.width = `${this.width}px`;
@@ -1288,6 +1301,21 @@ export class TerminalWindow {
     });
   }
 
+  private enqueueTerminalOutput(data: string) {
+    if (!data) return;
+    this.pendingOutput += data;
+    if (this.pendingWriteFrame !== null) return;
+    this.pendingWriteFrame = window.requestAnimationFrame(() => {
+      this.pendingWriteFrame = null;
+      const batch = this.pendingOutput;
+      this.pendingOutput = '';
+      if (!batch) return;
+      this.term.write(batch, () => {
+        this.scheduleOverlayReposition();
+      });
+    });
+  }
+
   private installZoomMouseFix(body: HTMLDivElement) {
     let redispatching = false;
     let capturing = false;
@@ -1388,6 +1416,12 @@ export class TerminalWindow {
   private bindWindowControls() {
     this.container.querySelector('.btn-close')!.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (this.hostMode === 'native-window') {
+        void this.appWindow.destroy().catch((error) => {
+          console.error('detached window destroy failed', error);
+        });
+        return;
+      }
       if (this.id) {
         this.onCloseRequested?.(this.id);
       } else {
@@ -1396,6 +1430,12 @@ export class TerminalWindow {
     });
     this.container.querySelector('.btn-minimize')!.addEventListener('click', (e) => {
       e.stopPropagation();
+      if (this.hostMode === 'native-window') {
+        void this.appWindow.minimize().catch((error) => {
+          console.error('detached window minimize failed', error);
+        });
+        return;
+      }
       this.toggleMinimize();
     });
     this.container.querySelector('.btn-maximize')!.addEventListener('click', (e) => {
@@ -1406,6 +1446,21 @@ export class TerminalWindow {
 
   private bindDrag() {
     const titleBar = this.container.querySelector('.title-bar') as HTMLDivElement;
+    if (this.hostMode === 'native-window') {
+      titleBar.addEventListener('mousedown', (e) => {
+        if ((e.target as HTMLElement).closest('.window-controls')) return;
+        if (e.button !== 0) return;
+        e.preventDefault();
+        if (this.id) {
+          this.onActivate?.(this.id);
+        }
+        void this.appWindow.startDragging().catch((error) => {
+          console.error('detached window drag failed', error);
+        });
+      });
+      return;
+    }
+
     let dragStartX = 0;
     let dragStartY = 0;
     let dragStarted = false;
@@ -1511,6 +1566,36 @@ export class TerminalWindow {
 
   private bindResize() {
     const handles = this.container.querySelectorAll<HTMLElement>('.resize-handle');
+    if (this.hostMode === 'native-window') {
+      const directionMap: Record<string, Parameters<typeof this.appWindow.startResizeDragging>[0]> = {
+        n: 'North',
+        s: 'South',
+        e: 'East',
+        w: 'West',
+        ne: 'NorthEast',
+        nw: 'NorthWest',
+        se: 'SouthEast',
+        sw: 'SouthWest',
+      };
+      handles.forEach((handle) => {
+        handle.addEventListener('mousedown', (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (this.id) {
+            this.onActivate?.(this.id);
+          }
+          const dir = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].find((d) =>
+            handle.classList.contains(`resize-${d}`)
+          );
+          if (!dir) return;
+          void this.appWindow.startResizeDragging(directionMap[dir]).catch((error) => {
+            console.error('detached window resize drag failed', error);
+          });
+        });
+      });
+      return;
+    }
+
     handles.forEach((handle) => {
       handle.addEventListener('mousedown', (e: MouseEvent) => {
         if (this.isMaximized) return;
@@ -1664,6 +1749,12 @@ export class TerminalWindow {
   }
 
   toggleMinimize() {
+    if (this.hostMode === 'native-window') {
+      void this.appWindow.minimize().catch((error) => {
+        console.error('detached window minimize failed', error);
+      });
+      return;
+    }
     this.isMinimized = !this.isMinimized;
     this.container.classList.toggle('minimized', this.isMinimized);
     if (!this.isMinimized) {
@@ -1674,6 +1765,17 @@ export class TerminalWindow {
   }
 
   toggleMaximize() {
+    if (this.hostMode === 'native-window') {
+      this.isMaximized = !this.isMaximized;
+      void this.appWindow.toggleMaximize().catch((error) => {
+        console.error('detached window maximize toggle failed', error);
+      });
+      setTimeout(() => {
+        this.updateFontSizeAndFit();
+      }, 50);
+      return;
+    }
+
     if (this.isMaximized) {
       if (this.savedRect) {
         this.container.style.left = `${this.savedRect.x}px`;
@@ -1773,6 +1875,14 @@ export class TerminalWindow {
   }
 
   freeze() {
+    if (this.pendingWriteFrame !== null) {
+      window.cancelAnimationFrame(this.pendingWriteFrame);
+      this.pendingWriteFrame = null;
+    }
+    if (this.pendingOutput) {
+      this.frozenOutput.push(this.pendingOutput);
+      this.pendingOutput = '';
+    }
     this.frozen = true;
     this.cancelOverlaySync();
     if (this.syntaxRefreshFrame !== null) {
@@ -1792,7 +1902,7 @@ export class TerminalWindow {
       this.frozenOutput = [];
       this.extractTitleFromOsc(batch);
       this.handleSshHandshakeOutput(batch);
-      this.term.write(batch);
+      this.enqueueTerminalOutput(batch);
     }
   }
 

@@ -185,10 +185,26 @@ export class TerminalManager {
     }
   }
 
+  freezeAll() {
+    for (const [, tw] of this.terminals) {
+      tw.freeze();
+    }
+  }
+
+  freezeTerminal(id: string) {
+    const tw = this.terminals.get(id);
+    if (tw) tw.freeze();
+  }
+
   thawAll() {
     for (const [, tw] of this.terminals) {
       tw.thaw();
     }
+  }
+
+  thawTerminal(id: string) {
+    const tw = this.terminals.get(id);
+    if (tw) tw.thaw();
   }
 
   getActiveId(): string | null {

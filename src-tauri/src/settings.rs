@@ -1174,6 +1174,17 @@ fn current_platform_id() -> &'static str {
 fn default_shortcuts() -> Vec<ShortcutBinding> {
     vec![
         ShortcutBinding {
+            id: "desktop.drawTerminal".to_string(),
+            label: "唤起自由终端".to_string(),
+            description: "在桌面任意位置拖拽创建独立终端窗口".to_string(),
+            category: "workspace".to_string(),
+            editable: true,
+            deletable: false,
+            windows: "Ctrl+Alt+Enter".to_string(),
+            darwin: "Cmd+Alt+Enter".to_string(),
+            linux: "Ctrl+Alt+Enter".to_string(),
+        },
+        ShortcutBinding {
             id: "terminal.duplicate".to_string(),
             label: "复制终端实例".to_string(),
             description: "复制当前激活终端到新的画布位置".to_string(),

@@ -161,6 +161,106 @@ body {
   position: relative;
 }
 
+html.mode-desktop-draw,
+body.mode-desktop-draw {
+  background: transparent;
+}
+
+html.mode-detached-terminal,
+body.mode-detached-terminal {
+  background: var(--bg-crust);
+}
+
+#desktop-draw-root {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.desktop-draw-backdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.desktop-draw-hint {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 360px;
+  max-width: min(720px, calc(100vw - 48px));
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-mantle) 78%, transparent);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  z-index: 3;
+  pointer-events: none;
+}
+
+.desktop-draw-hint strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.desktop-draw-hint span {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.5;
+}
+
+#desktop-draw-selection {
+  position: absolute;
+  display: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 90%, white 10%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow:
+    0 0 0 1px rgba(122, 162, 247, 0.24) inset,
+    0 20px 40px rgba(11, 16, 28, 0.24);
+  z-index: 2;
+}
+
+.detached-viewport,
+.detached-canvas {
+  position: fixed;
+  inset: 0;
+}
+
+.detached-viewport {
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+.detached-canvas {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    var(--bg-base);
+}
+
+.terminal-window-native-host {
+  position: fixed;
+  inset: 0;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  animation: none;
+  min-width: 0;
+  min-height: 0;
+}
+
 #app-resize-handles {
   position: fixed;
   inset: 0;
@@ -2088,6 +2188,28 @@ body {
   contain: layout style;
 }
 
+body.mode-detached-terminal #app-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  flex: none;
+  overflow: hidden;
+  background: var(--bg-crust);
+  box-shadow: none;
+}
+
+body.mode-detached-terminal #canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  transform: none !important;
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    var(--bg-base);
+}
+
 #selection-rect {
   display: none;
   position: absolute;
@@ -2136,6 +2258,17 @@ body {
   transition: border-color 0.15s, box-shadow 0.2s ease;
   will-change: left, top, width, height;
   contain: layout style;
+}
+
+body.mode-detached-terminal .terminal-window-native-host {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
 }
 
 .terminal-window.focused {

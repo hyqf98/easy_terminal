@@ -12,6 +12,9 @@ import { SSHPanel } from './ssh-panel';
 import { AppUpdater } from './app-update';
 import { ShortcutManager } from './shortcut-manager';
 import { ShortcutPanel } from './shortcut-panel';
+import { initDesktopDrawMode } from './desktop-draw';
+import { initDetachedTerminalMode } from './detached-terminal';
+import { setupDesktopDrawShortcut } from './global-shortcut';
 import { t, onLangChange } from './i18n';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
@@ -36,6 +39,16 @@ function showToast(message: string) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  const mode = new URLSearchParams(window.location.search).get('mode');
+  if (mode === 'desktop-draw') {
+    await initDesktopDrawMode();
+    return;
+  }
+  if (mode === 'detached-terminal') {
+    await initDetachedTerminalMode();
+    return;
+  }
+
   const appBody = document.getElementById('app-body')! as HTMLDivElement;
   const viewport = document.getElementById('app-viewport')! as HTMLDivElement;
   const canvasEl = document.getElementById('canvas')! as HTMLDivElement;
@@ -70,6 +83,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const updater = new AppUpdater();
   const shortcutManager = new ShortcutManager();
   await shortcutManager.init();
+  setupDesktopDrawShortcut(shortcutManager);
   let announcedUpdateVersion = '';
 
   // Canvas
@@ -376,10 +390,15 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (!tw) return;
     const titleBar = (e.target as HTMLElement).closest('.title-bar');
     const resizeHandle = (e.target as HTMLElement).closest('.resize-handle');
+    const xtermArea = (e.target as HTMLElement).closest('.terminal-body .xterm');
     if (titleBar || resizeHandle) {
       globalInteractionActive = true;
-      const activeId = terminalManager.getActiveId();
-      terminalManager.freezeAllExcept(activeId ?? undefined);
+      terminalManager.freezeAll();
+      return;
+    }
+    if (xtermArea) {
+      globalInteractionActive = true;
+      terminalManager.freezeAll();
     }
   }, true);
   document.addEventListener('mouseup', () => {

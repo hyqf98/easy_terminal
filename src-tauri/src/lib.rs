@@ -7,13 +7,111 @@ mod ssh;
 
 use pty::PtyManager;
 use settings::AppSettings;
+use serde::Deserialize;
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 struct AppState {
     pty_manager: Mutex<PtyManager>,
     settings: Mutex<AppSettings>,
     command_db: db::Db,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DetachedTerminalBounds {
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+}
+
+fn desktop_draw_monitor(app_handle: &tauri::AppHandle) -> Result<tauri::Monitor, String> {
+    let cursor = app_handle.cursor_position().map_err(|e| e.to_string())?;
+    app_handle
+        .monitor_from_point(cursor.x, cursor.y)
+        .map_err(|e| e.to_string())?
+        .or(app_handle.primary_monitor().map_err(|e| e.to_string())?)
+        .ok_or_else(|| "未找到可用显示器".to_string())
+}
+
+fn desktop_draw_url() -> WebviewUrl {
+    WebviewUrl::App("index.html?mode=desktop-draw".into())
+}
+
+fn detached_terminal_url() -> WebviewUrl {
+    WebviewUrl::App("index.html?mode=detached-terminal".into())
+}
+
+#[tauri::command]
+async fn open_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let monitor = desktop_draw_monitor(&app_handle)?;
+    let scale = monitor.scale_factor();
+    let logical_position = monitor.position().to_logical::<f64>(scale);
+    let logical_size = monitor.size().to_logical::<f64>(scale);
+
+    if let Some(window) = app_handle.get_webview_window("desktop-draw") {
+        window
+            .set_position(tauri::Position::Logical(logical_position))
+            .map_err(|e| e.to_string())?;
+        window
+            .set_size(tauri::Size::Logical(logical_size))
+            .map_err(|e| e.to_string())?;
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app_handle, "desktop-draw", desktop_draw_url())
+        .title("Easy Terminal Draw")
+        .position(logical_position.x, logical_position.y)
+        .inner_size(logical_size.width, logical_size.height)
+        .decorations(false)
+        .transparent(true)
+        .shadow(false)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .focused(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn create_detached_terminal_window(
+    window: tauri::WebviewWindow,
+    bounds: DetachedTerminalBounds,
+) -> Result<String, String> {
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let origin = window
+        .outer_position()
+        .map_err(|e| e.to_string())?
+        .to_logical::<f64>(scale);
+
+    let x = origin.x + bounds.x.max(0.0);
+    let y = origin.y + bounds.y.max(0.0);
+    let w = bounds.w.max(320.0);
+    let h = bounds.h.max(220.0);
+    let label = format!("free-terminal-{}", uuid::Uuid::new_v4().simple());
+
+    WebviewWindowBuilder::new(window.app_handle(), &label, detached_terminal_url())
+        .title("Easy Terminal")
+        .position(x, y)
+        .inner_size(w, h)
+        .decorations(false)
+        .transparent(false)
+        .shadow(true)
+        .visible_on_all_workspaces(true)
+        .skip_taskbar(true)
+        .resizable(true)
+        .focused(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(label)
 }
 
 // === PTY Commands ===
@@ -402,7 +500,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
 
     #[cfg(debug_assertions)]
     let builder = builder.plugin(tauri_plugin_mcp_bridge::init());
@@ -468,6 +567,8 @@ pub fn run() {
             import_command_library,
             export_command_library,
             reset_builtin_library,
+            open_desktop_draw_window,
+            create_detached_terminal_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
