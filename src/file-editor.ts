@@ -318,6 +318,7 @@ export async function openRemoteFileEditor(
   path: string,
   profile: SSHProfile,
   profiles: SSHProfile[],
+  commandLine?: string,
 ): Promise<void> {
   try {
     const preview = await invoke<FilePreviewData>('read_remote_file', {
@@ -331,6 +332,7 @@ export async function openRemoteFileEditor(
       content: preview.content,
       truncated: preview.truncated,
       size: preview.size,
+      commandLine,
       remote: { profile, profiles },
     });
   } catch (err) {

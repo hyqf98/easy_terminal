@@ -30,6 +30,8 @@ interface TransferProgressPayload {
   progressPercent: number;
 }
 
+const INTERNAL_DRAG_MIME = 'application/x-easy-terminal-paths';
+
 type FileTreeSource =
   | { kind: 'local' }
   | { kind: 'remote'; profileId: string; home: string };
@@ -401,35 +403,38 @@ export class FileTree {
       this.showContextMenu(event.clientX, event.clientY, entry);
     });
 
-    if (this.source.kind === 'local') {
-      item.draggable = true;
-      item.addEventListener('dragstart', (event) => {
-        if (!this.selectedPaths.has(entry.path)) {
-          this.selectSinglePath(entry.path, item);
-        }
-        event.dataTransfer?.setData('text/plain', JSON.stringify([...this.selectedPaths]));
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-      });
-
-      if (entry.is_dir) {
-        item.addEventListener('dragover', (event) => {
-          event.preventDefault();
-          item.classList.add('drop-target');
-        });
-        item.addEventListener('dragleave', () => item.classList.remove('drop-target'));
-        item.addEventListener('drop', async (event) => {
-          event.preventDefault();
-          item.classList.remove('drop-target');
-          try {
-            const data = event.dataTransfer?.getData('text/plain') || '';
-            const sources: string[] = JSON.parse(data);
-            await invoke('move_entries', { sources, destDir: entry.path });
-            await this.refresh();
-          } catch (error) {
-            console.error('Move failed:', error);
-          }
-        });
+    item.draggable = true;
+    item.addEventListener('dragstart', (event) => {
+      if (!this.selectedPaths.has(entry.path)) {
+        this.selectSinglePath(entry.path, item);
       }
+      const payload = JSON.stringify([...this.selectedPaths]);
+      event.dataTransfer?.setData(INTERNAL_DRAG_MIME, payload);
+      event.dataTransfer?.setData('text/plain', payload);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+    });
+
+    if (entry.is_dir) {
+      item.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        item.classList.add('drop-target');
+      });
+      item.addEventListener('dragleave', () => item.classList.remove('drop-target'));
+      item.addEventListener('drop', async (event) => {
+        event.preventDefault();
+        item.classList.remove('drop-target');
+        try {
+          const data = event.dataTransfer?.getData(INTERNAL_DRAG_MIME)
+            || event.dataTransfer?.getData('text/plain')
+            || '';
+          if (!data) return;
+          const sources: string[] = JSON.parse(data);
+          await this.moveSelectedEntriesTo(entry.path, sources);
+        } catch (error) {
+          console.error('Move failed:', error);
+          alert(`移动失败: ${String(error)}`);
+        }
+      });
     }
 
     return wrapper;
@@ -543,6 +548,16 @@ export class FileTree {
         await this.downloadSelectedRemoteEntries();
         this.closeContextMenu();
       }));
+      menu.appendChild(this.menuSeparator());
+      menu.appendChild(this.menuItem(t('file.rename'), renameSvg(), () => {
+        this.startRename(entry);
+        this.closeContextMenu();
+      }));
+      menu.appendChild(this.menuItem(`${t('file.delete')} (${this.selectedPaths.size})`, trashSvg(), async () => {
+        await this.deleteSelected();
+        this.closeContextMenu();
+      }, true));
+      menu.appendChild(this.menuSeparator());
       menu.appendChild(this.menuItem('刷新目录', refreshSvg(), async () => {
         await this.refresh();
         this.closeContextMenu();
@@ -669,7 +684,6 @@ export class FileTree {
   }
 
   private startRename(entry: FileEntry) {
-    if (this.source.kind === 'remote') return;
     const item = this.container.querySelector(`[data-path="${CSS.escape(entry.path)}"]`);
     if (!item) return;
     const nameEl = item.querySelector('.tree-name') as HTMLSpanElement | null;
@@ -685,11 +699,21 @@ export class FileTree {
     const finish = async () => {
       const newName = input.value.trim();
       if (newName && newName !== entry.name) {
-        const sep = entry.path.includes('\\') ? '\\' : '/';
-        const parentDir = parentPath(entry.path, this.platform);
-        const newPath = `${parentDir}${sep}${newName}`;
+        const parentDir = parentPath(entry.path, this.source.kind === 'remote' ? 'unix' : this.platform);
+        const newPath = joinPath(parentDir, newName, this.source.kind === 'remote' ? 'unix' : this.platform);
         try {
-          await invoke('rename_entry', { oldPath: entry.path, newPath });
+          if (this.source.kind === 'remote') {
+            const profile = this.getCurrentRemoteProfile();
+            if (!profile) throw new Error('missing remote profile');
+            await invoke('rename_remote_entry', {
+              profile,
+              oldPath: entry.path,
+              newPath,
+              profiles: this.sshProfiles,
+            });
+          } else {
+            await invoke('rename_entry', { oldPath: entry.path, newPath });
+          }
         } catch (error) {
           alert(t('file.renameFailed', String(error)));
         }
@@ -705,7 +729,6 @@ export class FileTree {
   }
 
   private async deleteSelected() {
-    if (this.source.kind === 'remote') return;
     const paths = [...this.selectedPaths];
     if (paths.length === 0) return;
     const message = paths.length === 1
@@ -713,7 +736,17 @@ export class FileTree {
       : t('file.confirmDeleteMulti', String(paths.length));
     if (!confirm(message)) return;
     try {
-      await invoke('delete_entries', { paths });
+      if (this.source.kind === 'remote') {
+        const profile = this.getCurrentRemoteProfile();
+        if (!profile) throw new Error('missing remote profile');
+        await invoke('delete_remote_entries', {
+          profile,
+          paths,
+          profiles: this.sshProfiles,
+        });
+      } else {
+        await invoke('delete_entries', { paths });
+      }
       this.selectedPaths.clear();
       await this.refresh();
     } catch (error) {
@@ -908,6 +941,38 @@ export class FileTree {
         progressPercent: 0,
       });
     }
+  }
+
+  private async moveSelectedEntriesTo(destDir: string, sources: string[]) {
+    if (!destDir || sources.length === 0) return;
+    const normalizedDest = this.source.kind === 'remote' ? normalizeRemotePath(destDir) : normalizePath(destDir);
+    const normalizedSources = sources.map((source) => (
+      this.source.kind === 'remote' ? normalizeRemotePath(source) : normalizePath(source)
+    ));
+    const filtered = normalizedSources.filter((source) => source && source !== normalizedDest && !this.isAncestorPath(source, normalizedDest));
+    if (filtered.length === 0) return;
+
+    if (this.source.kind === 'remote') {
+      const profile = this.getCurrentRemoteProfile();
+      if (!profile) return;
+      await invoke('move_remote_entries', {
+        profile,
+        sources: filtered,
+        destDir: normalizedDest,
+        profiles: this.sshProfiles,
+      });
+    } else {
+      await invoke('move_entries', { sources: filtered, destDir: normalizedDest });
+    }
+    await this.refresh();
+  }
+
+  private isAncestorPath(ancestor: string, target: string): boolean {
+    if (!ancestor || !target || ancestor === target) return false;
+    const normalizedAncestor = this.source.kind === 'remote' ? normalizeRemotePath(ancestor) : normalizePath(ancestor);
+    const normalizedTarget = this.source.kind === 'remote' ? normalizeRemotePath(target) : normalizePath(target);
+    const separator = this.source.kind === 'remote' ? '/' : (this.platform === 'windows' ? '\\' : '/');
+    return normalizedTarget.startsWith(`${normalizedAncestor}${separator}`);
   }
 
   private createTransferBar() {

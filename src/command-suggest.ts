@@ -162,6 +162,7 @@ export class CommandSuggest {
     if (left + popupWidth > window.innerWidth) {
       left = Math.max(8, window.innerWidth - popupWidth - 8);
     }
+    left = Math.max(8, left);
 
     popup.style.minWidth = '240px';
     popup.style.width = `${popupWidth}px`;

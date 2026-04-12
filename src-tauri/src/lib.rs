@@ -346,6 +346,35 @@ fn upload_local_entries(
 }
 
 #[tauri::command]
+fn rename_remote_entry(
+    profile: settings::SSHProfile,
+    old_path: String,
+    new_path: String,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    ssh::rename_remote_entry(profile, old_path, new_path, profiles)
+}
+
+#[tauri::command]
+fn move_remote_entries(
+    profile: settings::SSHProfile,
+    sources: Vec<String>,
+    dest_dir: String,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    ssh::move_remote_entries(profile, sources, dest_dir, profiles)
+}
+
+#[tauri::command]
+fn delete_remote_entries(
+    profile: settings::SSHProfile,
+    paths: Vec<String>,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    ssh::delete_remote_entries(profile, paths, profiles)
+}
+
+#[tauri::command]
 fn read_remote_file(
     profile: settings::SSHProfile,
     path: String,
@@ -547,6 +576,9 @@ pub fn run() {
             read_remote_dir,
             download_remote_entries,
             upload_local_entries,
+            rename_remote_entry,
+            move_remote_entries,
+            delete_remote_entries,
             read_remote_file,
             write_remote_file,
             load_shortcuts,

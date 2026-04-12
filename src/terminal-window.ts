@@ -430,7 +430,7 @@ export class TerminalWindow {
       const profiles = await invoke<SSHProfile[]>('load_ssh_profiles');
       const profile = profiles.find((p) => p.id === this.launchOptions.profileId);
       if (!profile) return false;
-      openRemoteFileEditor(sshPath, profile, profiles);
+      openRemoteFileEditor(sshPath, profile, profiles, commandLine);
       return true;
     }
     const path = resolvePreviewPath(commandLine, this.cwdPath);
@@ -551,9 +551,7 @@ export class TerminalWindow {
     const rows = xtermScreen?.querySelectorAll<HTMLDivElement>(':scope .xterm-rows > div');
     let rowTop = top;
     if (rows && rows[cursorCell.y]) {
-      const bodyRect = terminalBody.getBoundingClientRect();
-      const rowRect = rows[cursorCell.y].getBoundingClientRect();
-      rowTop = rowRect.top - bodyRect.top;
+      rowTop = metrics.offsetY + rows[cursorCell.y].offsetTop;
     }
 
     this.ghostOverlay.textContent = text;
@@ -967,19 +965,8 @@ export class TerminalWindow {
     const metrics = this.getOverlayMetrics();
     if (!metrics) return;
     const cursorCell = this.resolveOverlayCursorCell(metrics);
-
-    // Use getBoundingClientRect() which reflects the current CSS transform
-    // (canvas translate + scale) to get accurate screen-space coordinates.
-    const screen = metrics.terminalBody.querySelector('.xterm-screen') as HTMLElement | null;
-    const host = screen || metrics.terminalBody;
-    const hostRect = host.getBoundingClientRect();
-
-    // Screen-space cell dimensions (already scaled by canvas zoom)
-    const scaledColWidth = hostRect.width / metrics.cols;
-    const scaledRowHeight = hostRect.height / metrics.rows;
-
-    const cursorScreenX = hostRect.left + cursorCell.x * scaledColWidth;
-    const cursorScreenY = hostRect.top + (cursorCell.y + 1) * scaledRowHeight;
+    const cursorScreenX = metrics.screenLeft + cursorCell.x * metrics.screenColWidth;
+    const cursorScreenY = metrics.screenTop + (cursorCell.y + 1) * metrics.screenRowHeight;
 
     this.commandSuggest.positionAtScreen(cursorScreenX, cursorScreenY);
   }
@@ -1631,6 +1618,7 @@ export class TerminalWindow {
         ) || '';
         this.isResizing = true;
         this.freeze();
+        this.container.classList.add('resizing');
         this.resizeDirection = dir;
         this.resizeStartX = e.clientX;
         this.resizeStartY = e.clientY;
@@ -1761,6 +1749,7 @@ export class TerminalWindow {
       this.resizeRaf = null;
     }
     this.pendingResizeEvent = null;
+    this.container.classList.remove('resizing');
     window.removeEventListener('mousemove', this.boundResizeMove);
     window.removeEventListener('mouseup', this.boundResizeEnd);
     this.canvasController.clearGuides();
@@ -1988,6 +1977,16 @@ export class TerminalWindow {
     return this.getSuggestionDebugState();
   }
 
+  async debugSubmitCurrentInput(): Promise<boolean> {
+    this.focus();
+    const handled = await this.handleTerminalInput('\r');
+    if (!handled && this.id) {
+      await invoke('write_pty', { sessionId: this.id, data: '\r' });
+    }
+    await this.waitForSuggestionCycle();
+    return handled;
+  }
+
   getSuggestionDebugState() {
     const visibleItems = this.commandSuggest.getVisibleItems();
     const activeItem = this.commandSuggest.getActiveItem();
@@ -2086,6 +2085,10 @@ export class TerminalWindow {
     rows: number;
     cursorX: number;
     cursorY: number;
+    screenLeft: number;
+    screenTop: number;
+    screenColWidth: number;
+    screenRowHeight: number;
   } | null {
     const terminalBody = this.container.querySelector('.terminal-body') as HTMLElement | null;
     if (!terminalBody || this.term.cols <= 0 || this.term.rows <= 0) return null;
@@ -2111,17 +2114,32 @@ export class TerminalWindow {
       // Fall back to computed values if internal API is unavailable
     }
 
+    const screenColWidth = hostRect.width / this.term.cols;
+    const screenRowHeight = hostRect.height / this.term.rows;
+    const scaleX = cellWidth > 0 ? screenColWidth / cellWidth : 1;
+    const scaleY = cellHeight > 0 ? screenRowHeight / cellHeight : 1;
+    const offsetX = host instanceof HTMLElement
+      ? host.offsetLeft
+      : (hostRect.left - terminalRect.left) / Math.max(scaleX, 1);
+    const offsetY = host instanceof HTMLElement
+      ? host.offsetTop
+      : (hostRect.top - terminalRect.top) / Math.max(scaleY, 1);
+
     const buffer = this.term.buffer.active;
     return {
       terminalBody,
-      offsetX: hostRect.left - terminalRect.left,
-      offsetY: hostRect.top - terminalRect.top,
+      offsetX,
+      offsetY,
       colWidth: cellWidth,
       rowHeight: cellHeight,
       cols: this.term.cols,
       rows: this.term.rows,
       cursorX: buffer.cursorX,
       cursorY: buffer.cursorY,
+      screenLeft: hostRect.left,
+      screenTop: hostRect.top,
+      screenColWidth,
+      screenRowHeight,
     };
   }
 

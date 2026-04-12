@@ -1,6 +1,6 @@
 use crate::{fs, settings};
 use serde::Serialize;
-use ssh2::{Session, Sftp};
+use ssh2::{RenameFlags, Session, Sftp};
 use std::fs::{self as local_fs, File as LocalFile};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -423,6 +423,98 @@ pub fn upload_local_entries(
     Ok(())
 }
 
+pub fn rename_remote_entry(
+    profile: settings::SSHProfile,
+    old_path: String,
+    new_path: String,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    let session = connect_session(&profile)?;
+    let sftp = session
+        .sftp()
+        .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
+    let from = normalize_remote_path(&old_path);
+    let to = normalize_remote_path(&new_path);
+
+    if from == to {
+        return Ok(());
+    }
+
+    if sftp.stat(Path::new(&from)).is_err() {
+        return Err(format!("远程路径不存在: {}", from));
+    }
+    if sftp.stat(Path::new(&to)).is_ok() {
+        return Err(format!("目标已存在: {}", to));
+    }
+
+    sftp.rename(Path::new(&from), Path::new(&to), Some(RenameFlags::empty()))
+        .map_err(|e| format!("远程重命名失败: {}", e))
+}
+
+pub fn move_remote_entries(
+    profile: settings::SSHProfile,
+    sources: Vec<String>,
+    dest_dir: String,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    if sources.is_empty() {
+        return Ok(());
+    }
+
+    let session = connect_session(&profile)?;
+    let sftp = session
+        .sftp()
+        .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
+    let target_dir = normalize_remote_path(&dest_dir);
+    let target_stat = sftp
+        .stat(Path::new(&target_dir))
+        .map_err(|e| format!("读取目标目录失败: {}", e))?;
+    if !target_stat.is_dir() {
+        return Err(format!("目标不是目录: {}", target_dir));
+    }
+
+    for source in sources {
+        let from = normalize_remote_path(&source);
+        let file_name = Path::new(&from)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| format!("无效路径: {}", from))?;
+        let to = join_remote_path(&target_dir, file_name);
+        if from == to {
+            continue;
+        }
+        if sftp.stat(Path::new(&to)).is_ok() {
+            return Err(format!("目标已存在: {}", to));
+        }
+        sftp.rename(Path::new(&from), Path::new(&to), Some(RenameFlags::empty()))
+            .map_err(|e| format!("远程移动失败: {}", e))?;
+    }
+
+    Ok(())
+}
+
+pub fn delete_remote_entries(
+    profile: settings::SSHProfile,
+    paths: Vec<String>,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<(), String> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    let session = connect_session(&profile)?;
+    let sftp = session
+        .sftp()
+        .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
+
+    for path in paths {
+        let normalized = normalize_remote_path(&path);
+        delete_remote_entry_recursive(&sftp, Path::new(&normalized))?;
+    }
+
+    Ok(())
+}
+
 fn test_direct_connection(
     host: String,
     port: u16,
@@ -816,6 +908,35 @@ fn ensure_remote_dir(sftp: &Sftp, remote_path: &Path) -> Result<(), String> {
     Ok(())
 }
 
+fn delete_remote_entry_recursive(sftp: &Sftp, path: &Path) -> Result<(), String> {
+    let stat = match sftp.stat(path) {
+        Ok(stat) => stat,
+        Err(_) => return Ok(()),
+    };
+
+    if stat.is_dir() {
+        for (child_path, _) in sftp
+            .readdir(path)
+            .map_err(|e| format!("读取远程目录失败: {}", e))?
+        {
+            let name = child_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("");
+            if name == "." || name == ".." {
+                continue;
+            }
+            delete_remote_entry_recursive(sftp, &child_path)?;
+        }
+        sftp.rmdir(path)
+            .map_err(|e| format!("删除远程目录失败: {}", e))?;
+        return Ok(());
+    }
+
+    sftp.unlink(path)
+        .map_err(|e| format!("删除远程文件失败: {}", e))
+}
+
 fn progress_payload(
     direction: &str,
     status: &str,
@@ -913,6 +1034,15 @@ fn normalize_remote_path(path: &str) -> String {
         normalized
     } else {
         format!("/{}", normalized)
+    }
+}
+
+fn join_remote_path(base: &str, name: &str) -> String {
+    let normalized_base = normalize_remote_path(base);
+    if normalized_base == "/" {
+        format!("/{}", name)
+    } else {
+        format!("{}/{}", normalized_base.trim_end_matches('/'), name)
     }
 }
 

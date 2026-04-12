@@ -101,6 +101,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         handleFocusedSuggestionKey: (key: string) => Promise<boolean>;
         getFocusedSuggestionState: () => unknown;
         refreshFocusedSuggestions: () => Promise<unknown>;
+        submitFocusedInput: () => Promise<boolean>;
         searchSuggestions: (value: string) => Promise<unknown>;
       };
     }).__EASY_TERMINAL_DEBUG__ = {
@@ -108,6 +109,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       handleFocusedSuggestionKey: (key: string) => terminalManager.debugHandleFocusedSuggestionKey(key),
       getFocusedSuggestionState: () => terminalManager.getFocusedSuggestionState(),
       refreshFocusedSuggestions: () => terminalManager.debugRefreshFocusedSuggestions(),
+      submitFocusedInput: () => terminalManager.debugSubmitFocusedInput(),
       searchSuggestions: (value: string) => intelligence.searchSuggestions(value),
     };
   }

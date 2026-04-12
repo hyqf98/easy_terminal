@@ -250,6 +250,12 @@ export class TerminalManager {
     return tw ? tw.debugRefreshSuggestions() : null;
   }
 
+  async debugSubmitFocusedInput(): Promise<boolean> {
+    if (!this.activeId) return false;
+    const tw = this.terminals.get(this.activeId);
+    return tw ? tw.debugSubmitCurrentInput() : false;
+  }
+
   getFocusedSuggestionState() {
     if (!this.activeId) return null;
     const tw = this.terminals.get(this.activeId);
