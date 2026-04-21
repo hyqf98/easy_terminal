@@ -32,6 +32,9 @@ export interface CanvasController {
   snapPoint(x: number, y: number, sourceId?: string): SnapPoint;
   snapRect(rect: Rect, options: SnapOptions): Rect;
   clearGuides(): void;
+  refreshSnapTargets?(excludeId?: string): Promise<void>;
+  getNativeWindowRect?(): Rect;
+  updateNativeWindowRect?(rect: Rect): void;
 }
 
 export interface CommandEntry {

@@ -1,63 +1,26 @@
 import { invoke } from '@tauri-apps/api/core';
-import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import type { ShortcutManager } from './shortcut-manager';
 
-function normalizeGlobalShortcut(shortcut: string): string {
-  if (!shortcut.trim()) return '';
-
-  return shortcut
-    .split('+')
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const lower = part.toLowerCase();
-      if (lower === 'cmd' || lower === 'meta' || lower === 'command') return 'Command';
-      if (lower === 'ctrl' || lower === 'control') return 'Ctrl';
-      if (lower === 'alt' || lower === 'option') return 'Alt';
-      if (lower === 'shift') return 'Shift';
-      if (lower === 'space') return 'Space';
-      if (lower === 'left') return 'Left';
-      if (lower === 'right') return 'Right';
-      if (lower === 'up') return 'Up';
-      if (lower === 'down') return 'Down';
-      if (part.length === 1) return part.toUpperCase();
-      return part;
-    })
-    .join('+');
-}
-
 export function setupDesktopDrawShortcut(shortcutManager: ShortcutManager) {
-  let registered = '';
-  let syncToken = 0;
+  let syncedShortcut = '';
 
   const sync = async () => {
-    const token = ++syncToken;
-    const next = normalizeGlobalShortcut(shortcutManager.getBindingLabel('desktop.drawTerminal'));
-    if (registered === next) return;
+    const next = shortcutManager.getBindingLabel('desktop.drawTerminal').trim();
+    if (syncedShortcut === next) return;
 
-    if (registered) {
-      try {
-        await unregister(registered);
-      } catch (error) {
-        console.error('unregister desktop draw shortcut failed', error);
-      }
-      if (token !== syncToken) return;
-      registered = '';
-    }
-
-    if (!next) return;
+    const previous = syncedShortcut;
+    syncedShortcut = next;
 
     try {
-      await register(next, () => {
-        void invoke('open_desktop_draw_window').catch((error) => {
-          console.error('open desktop draw window failed', error);
-        });
-      });
-      if (token === syncToken) {
-        registered = next;
+      const registered = await invoke<string | null>('sync_desktop_draw_shortcut', { shortcut: next });
+      if (registered) {
+        console.info('desktop draw shortcut registered', registered);
+      } else if (next) {
+        console.warn('desktop draw shortcut registration failed', next);
       }
     } catch (error) {
-      console.error('register desktop draw shortcut failed', error);
+      syncedShortcut = previous;
+      console.error('sync desktop draw shortcut failed', error);
     }
   };
 

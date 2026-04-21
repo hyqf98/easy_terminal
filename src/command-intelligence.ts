@@ -6,10 +6,13 @@ import type {
   CommandLibrarySummary,
   CommandMapping,
   CommandSummary,
+  SSHProfile,
   SuggestionItem,
   SuggestionSourceType,
 } from './types';
 import { getLang, t } from './i18n';
+import { buildSshStartupCommand, resolveSshKeyPath } from './command-intercept';
+import { parseCommandLine } from './shell-parse';
 
 type Listener = () => void;
 
@@ -34,6 +37,7 @@ export class CommandIntelligence {
   private libraries: CommandLibrarySummary[] = [];
   private mappings: CommandMapping[] = [];
   private history: CommandHistoryEntry[] = [];
+  private sshProfiles: SSHProfile[] = [];
   private detailCache = new Map<number, CommandDetail>();
   private listeners = new Set<Listener>();
 
@@ -51,16 +55,18 @@ export class CommandIntelligence {
   }
 
   async reloadAll() {
-    const [platform, libraries, mappings, history] = await Promise.all([
+    const [platform, libraries, mappings, history, sshProfiles] = await Promise.all([
       invoke<string>('get_platform'),
       invoke<CommandLibrarySummary[]>('list_command_libraries'),
       invoke<CommandMapping[]>('load_command_mappings'),
       invoke<CommandHistoryEntry[]>('load_command_history'),
+      invoke<SSHProfile[]>('load_ssh_profiles'),
     ]);
     this.platform = platform;
     this.libraries = libraries;
     this.mappings = mappings;
     this.history = history.sort((left, right) => right.timestamp - left.timestamp);
+    this.sshProfiles = sshProfiles;
     this.detailCache.clear();
     this.emitChange();
   }
@@ -143,7 +149,8 @@ export class CommandIntelligence {
     const normalizedQuery = normalize(query);
     if (!normalizedQuery) return [];
 
-    const [commandItems] = await Promise.all([
+    const [sshItems, commandItems] = await Promise.all([
+      this.searchSshProfileCompletions(query, normalizedQuery),
       this.searchRemoteCommands(normalizedQuery),
     ]);
     const localItems = this.searchLocalItems(normalizedQuery);
@@ -155,7 +162,7 @@ export class CommandIntelligence {
         || left.title.localeCompare(right.title, 'zh-CN'))
       .slice(0, 12);
 
-    return dedupeSuggestions(ranked);
+    return dedupeSuggestions([...sshItems, ...ranked]).slice(0, 12);
   }
 
   async hydrateSuggestionItem(item: SuggestionItem): Promise<SuggestionItem> {
@@ -439,6 +446,29 @@ export class CommandIntelligence {
       score: Math.min(entry.count * 3, 30),
     }));
   }
+
+  private async searchSshProfileCompletions(rawQuery: string, normalizedQuery: string): Promise<SuggestionItem[]> {
+    const input = rawQuery.trim();
+    const args = parseCommandLine(input);
+    const command = (args[0] || '').toLowerCase();
+    if (command !== 'ssh') {
+      return [];
+    }
+
+    const searchTerm = normalize(args.slice(1).join(' '));
+    const items = await Promise.all(
+      this.sshProfiles.map((profile, index) => sshProfileToSuggestionItem(profile, this.sshProfiles, index))
+    );
+    return items
+      .map((item) => {
+        const query = searchTerm || normalizedQuery;
+        const score = searchTerm ? this.scoreItem(item, query) : item.score + 40;
+        return { item, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((left, right) => right.score - left.score || left.item.title.localeCompare(right.item.title, 'zh-CN'))
+      .map((entry) => ({ ...entry.item, score: entry.score }));
+  }
 }
 
 function commandSummaryToSuggestionItem(item: CommandSummary, index: number): SuggestionItem {
@@ -592,12 +622,48 @@ function suggestionTypeRank(type: SuggestionSourceType): number {
       return 300;
     case 'mapping':
       return 200;
+    case 'completion':
+      return 150;
     case 'command':
       return 100;
-    case 'completion':
     default:
       return 0;
   }
+}
+
+async function sshProfileToSuggestionItem(profile: SSHProfile, profiles: SSHProfile[], index: number): Promise<SuggestionItem> {
+  const target = profile.user ? `${profile.user}@${profile.host}` : profile.host;
+  let resolvedKeyPath: string | undefined;
+  if (profile.authType === 'key' && profile.privateKeyPath) {
+    resolvedKeyPath = await resolveSshKeyPath(profile.privateKeyPath);
+  }
+  const startup = buildSshStartupCommand(profile, profiles, resolvedKeyPath);
+  const authLabel = profile.authType === 'key' ? 'SSH Key' : 'Password';
+  const description = [
+    profile.group || 'SSH',
+    `${target}:${profile.port}`,
+    authLabel,
+    profile.jumpProfileId ? 'Jump Host' : '',
+  ].filter(Boolean).join(' · ');
+
+  return {
+    id: `ssh-profile:${profile.id}`,
+    type: 'completion',
+    title: profile.name || target,
+    subtitle: `${target}:${profile.port}`,
+    description,
+    insertText: startup,
+    executeText: startup,
+    usage: startup,
+    hint: startup,
+    examples: [],
+    aliases: [profile.host, target, profile.user, profile.group].filter(Boolean) as string[],
+    tags: [profile.group, profile.host, profile.user, String(profile.port), 'ssh'].filter(Boolean) as string[],
+    category: 'SSH',
+    sourceLabel: t('sidebar.ssh'),
+    score: 220 - index * 2,
+    language: 'ssh',
+  };
 }
 
 function buildSuffixGhost(input: string, candidate: string): string {

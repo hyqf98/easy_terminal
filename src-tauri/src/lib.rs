@@ -9,12 +9,15 @@ use pty::PtyManager;
 use settings::AppSettings;
 use serde::Deserialize;
 use std::sync::Mutex;
+use tauri::webview::{Color, PageLoadEvent};
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 struct AppState {
     pty_manager: Mutex<PtyManager>,
     settings: Mutex<AppSettings>,
     command_db: db::Db,
+    desktop_draw_shortcut: Mutex<Option<String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -43,6 +46,145 @@ fn detached_terminal_url() -> WebviewUrl {
     WebviewUrl::App("index.html?mode=detached-terminal".into())
 }
 
+fn minimize_main_window(app_handle: &tauri::AppHandle) {
+    if let Some(main) = app_handle.get_webview_window("main") {
+        let _ = main.minimize();
+    }
+}
+
+fn normalize_global_shortcut(shortcut: &str) -> Vec<String> {
+    if shortcut.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let mut uses_cmd_modifier = false;
+    let normalized_parts = shortcut
+        .split('+')
+        .map(|part| part.trim())
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let lower = part.to_ascii_lowercase();
+            match lower.as_str() {
+                "cmd" | "meta" | "command" => {
+                    uses_cmd_modifier = true;
+                    "CmdOrControl".to_string()
+                }
+                "ctrl" | "control" => "Ctrl".to_string(),
+                "alt" | "option" => "Alt".to_string(),
+                "shift" => "Shift".to_string(),
+                "space" => "Space".to_string(),
+                "left" | "arrowleft" => "Left".to_string(),
+                "right" | "arrowright" => "Right".to_string(),
+                "up" | "arrowup" => "Up".to_string(),
+                "down" | "arrowdown" => "Down".to_string(),
+                "enter" | "return" => "Enter".to_string(),
+                _ if part.len() == 1 => part.to_ascii_uppercase(),
+                _ => part.to_string(),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut candidates = vec![normalized_parts.clone()];
+    if uses_cmd_modifier {
+        candidates.push(
+            normalized_parts
+                .iter()
+                .map(|part| {
+                    if part == "CmdOrControl" {
+                        "CommandOrControl".to_string()
+                    } else {
+                        part.clone()
+                    }
+                })
+                .collect(),
+        );
+    }
+
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        let joined = candidate.join("+");
+        if !joined.is_empty() && !unique.iter().any(|item| item == &joined) {
+            unique.push(joined);
+        }
+    }
+    unique
+}
+
+fn current_platform_shortcut(binding: &settings::ShortcutBinding) -> String {
+    if cfg!(windows) {
+        binding.windows.clone()
+    } else if cfg!(target_os = "macos") {
+        binding.darwin.clone()
+    } else {
+        binding.linux.clone()
+    }
+}
+
+fn load_desktop_draw_shortcut() -> String {
+    settings::load_shortcuts()
+        .unwrap_or_else(|_| settings::default_shortcuts_public())
+        .into_iter()
+        .find(|binding| binding.id == "desktop.drawTerminal")
+        .map(|binding| current_platform_shortcut(&binding))
+        .unwrap_or_default()
+}
+
+fn sync_desktop_draw_shortcut_inner(
+    app_handle: &tauri::AppHandle,
+    requested_shortcuts: Vec<String>,
+) -> Result<Option<String>, String> {
+    let previous = {
+        let state = app_handle.state::<AppState>();
+        let mut active = state
+            .desktop_draw_shortcut
+            .lock()
+            .map_err(|e| e.to_string())?;
+        active.take()
+    };
+
+    if let Some(shortcut) = previous {
+        if let Err(error) = app_handle.global_shortcut().unregister(shortcut.as_str()) {
+            eprintln!("desktop draw shortcut unregister failed for {shortcut}: {error}");
+        }
+    }
+
+    if requested_shortcuts.is_empty() {
+        return Ok(None);
+    }
+
+    for candidate in requested_shortcuts {
+        match app_handle
+            .global_shortcut()
+            .on_shortcut(candidate.as_str(), |app, _shortcut, event| {
+            if event.state != ShortcutState::Pressed {
+                return;
+            }
+
+            let app_handle = app.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = open_desktop_draw_window(app_handle).await {
+                    eprintln!("open desktop draw window failed: {error}");
+                }
+            });
+        }) {
+            Ok(()) => {
+                let state = app_handle.state::<AppState>();
+                let mut active = state
+                    .desktop_draw_shortcut
+                    .lock()
+                    .map_err(|e| e.to_string())?;
+                *active = Some(candidate.clone());
+                return Ok(Some(candidate));
+            }
+            Err(error) => {
+                eprintln!("desktop draw shortcut register failed for {candidate}: {error}");
+            }
+        }
+    }
+
+    Ok(None)
+}
+
 #[tauri::command]
 async fn open_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     let monitor = desktop_draw_monitor(&app_handle)?;
@@ -59,6 +201,7 @@ async fn open_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), St
             .map_err(|e| e.to_string())?;
         window.show().map_err(|e| e.to_string())?;
         window.set_focus().map_err(|e| e.to_string())?;
+        minimize_main_window(&app_handle);
         return Ok(());
     }
 
@@ -66,6 +209,7 @@ async fn open_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), St
         .title("Easy Terminal Draw")
         .position(logical_position.x, logical_position.y)
         .inner_size(logical_size.width, logical_size.height)
+        .background_color(Color(0, 0, 0, 0))
         .decorations(false)
         .transparent(true)
         .shadow(false)
@@ -73,11 +217,38 @@ async fn open_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), St
         .visible_on_all_workspaces(true)
         .skip_taskbar(true)
         .resizable(false)
-        .focused(true)
+        .visible(false)
+        .focused(false)
+        .on_page_load(|window, payload| {
+            if payload.event() != PageLoadEvent::Finished {
+                return;
+            }
+
+            let _ = window.show();
+            let _ = window.set_focus();
+            minimize_main_window(&window.app_handle());
+        })
         .build()
         .map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+async fn show_desktop_draw_window(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app_handle.get_webview_window("desktop-draw") {
+        window.show().map_err(|e| e.to_string())?;
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn sync_desktop_draw_shortcut(
+    app_handle: tauri::AppHandle,
+    shortcut: String,
+) -> Result<Option<String>, String> {
+    sync_desktop_draw_shortcut_inner(&app_handle, normalize_global_shortcut(&shortcut))
 }
 
 #[tauri::command]
@@ -540,6 +711,16 @@ pub fn run() {
             pty_manager: Mutex::new(PtyManager::new()),
             settings: Mutex::new(loaded_settings),
             command_db,
+            desktop_draw_shortcut: Mutex::new(None),
+        })
+        .setup(|app| {
+            let shortcut = load_desktop_draw_shortcut();
+            let registered =
+                sync_desktop_draw_shortcut_inner(app.handle(), normalize_global_shortcut(&shortcut))?;
+            if !shortcut.trim().is_empty() && registered.is_none() {
+                eprintln!("failed to register desktop draw shortcut on startup: {shortcut}");
+            }
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             create_pty,
@@ -600,6 +781,8 @@ pub fn run() {
             export_command_library,
             reset_builtin_library,
             open_desktop_draw_window,
+            sync_desktop_draw_shortcut,
+            show_desktop_draw_window,
             create_detached_terminal_window,
         ])
         .run(tauri::generate_context!())

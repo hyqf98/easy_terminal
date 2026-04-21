@@ -2,6 +2,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -110,6 +111,11 @@ type WindowRect = {
   w: number;
   h: number;
 };
+type TerminalFocusOptions = {
+  focusInput?: boolean;
+  pulse?: boolean;
+  syncContext?: boolean;
+};
 
 export class TerminalWindow {
   private id = '';
@@ -136,6 +142,7 @@ export class TerminalWindow {
   private pendingOutput = '';
   private lastOverlayPositionStale = false;
   private overlayMismatchCount = 0;
+  private shellCompletionActive = false;
   private passwordQueue: string[] = [];
   private acceptedUnknownHost = false;
   private passwordPromptBuffer = '';
@@ -159,6 +166,10 @@ export class TerminalWindow {
   private dragPanY = 0;
   private dragWidth = 0;
   private dragHeight = 0;
+  private nativeDragStartMouseX = 0;
+  private nativeDragStartMouseY = 0;
+  private nativeDragStartLeft = 0;
+  private nativeDragStartTop = 0;
 
   private isResizing = false;
   private resizeDirection = '';
@@ -189,8 +200,9 @@ export class TerminalWindow {
   private pendingCanvasViewRestore: number | null = null;
   private rectState: WindowRect;
   private unbindMouseInteractionPause: (() => void) | null = null;
+  private focusPulseFrame: number | null = null;
 
-  public onActivate: ((id: string) => void) | null = null;
+  public onActivate: ((id: string, options?: TerminalFocusOptions) => void) | null = null;
   public onCommandExecuted: ((command: string, cwd: string) => void | Promise<void>) | null = null;
   public onCwdChange: ((cwd: string) => void) | null = null;
   public onAddMappingFromSelection: ((text: string) => void) | null = null;
@@ -264,6 +276,7 @@ export class TerminalWindow {
     this.bindMouseInteractionPause(body);
     this.bindSelectionCopy(body);
     this.term.onRender(() => {
+      if (!this.shouldUseInteractiveOverlays()) return;
       if (!this.isFocusedWindow() || !this.currentLine.trim() || this.isInAltBuffer()) return;
       this.scheduleSyntaxHighlightRefresh();
     });
@@ -337,6 +350,7 @@ export class TerminalWindow {
     });
 
     this.term.onCursorMove(() => {
+      if (!this.shouldUseInteractiveOverlays()) return;
       if (this.frozen || !this.isFocusedWindow()) return;
       this.scheduleOverlayReposition();
     });
@@ -365,6 +379,7 @@ export class TerminalWindow {
     this.term.clearSelection();
 
     if (data === '\r') {
+      this.shellCompletionActive = false;
       const rawLine = this.currentLine;
       const trimmed = rawLine.trim();
       this.currentLine = '';
@@ -399,6 +414,7 @@ export class TerminalWindow {
     }
 
     if (this.hasLineSelection() && (this.isPrintableInput(data) || data === '\x7f' || data === '\b')) {
+      this.shellCompletionActive = false;
 
       this.lastOverlayPositionStale = false;
       if (data === '\x7f' || data === '\b') {
@@ -411,6 +427,7 @@ export class TerminalWindow {
     }
 
     if (data === '\x7f' || data === '\b') {
+      this.shellCompletionActive = false;
       // Backspace
       if (this.cursorPos > 0) {
   
@@ -419,6 +436,7 @@ export class TerminalWindow {
         this.cursorPos -= 1;
       }
     } else if (data === '\x03') {
+      this.shellCompletionActive = false;
       // Ctrl+C
       this.currentLine = '';
       this.cursorPos = 0;
@@ -429,6 +447,7 @@ export class TerminalWindow {
       this.hideSyntaxHighlight();
       this.hideGhostText();
     } else if (data === '\x15') {
+      this.shellCompletionActive = false;
       // Ctrl+U - clear line
       this.currentLine = '';
       this.cursorPos = 0;
@@ -439,17 +458,28 @@ export class TerminalWindow {
       this.hideSyntaxHighlight();
       this.hideGhostText();
     } else if (this.isPrintableInput(data)) {
+      this.shellCompletionActive = false;
       this.ensureLineStartCell();
 
       this.lastOverlayPositionStale = false;
       this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${data}${this.currentLine.slice(this.cursorPos)}`;
       this.cursorPos += data.length;
     } else if (data === '\t') {
+      this.shellCompletionActive = true;
       this.ensureLineStartCell();
+      this.commandSuggest.hide();
+      this.hideGhostText();
+      this.hideSyntaxHighlight();
       return false;
     }
 
-    void this.refreshSuggestions();
+    if (this.shouldUseInteractiveOverlays()) {
+      void this.refreshSuggestions();
+    } else {
+      this.commandSuggest.hide();
+      this.hideSyntaxHighlight();
+      this.hideGhostText();
+    }
     return false;
   }
 
@@ -474,6 +504,12 @@ export class TerminalWindow {
   }
 
   private async refreshSuggestions() {
+    if (!this.shouldUseInteractiveOverlays() || this.shellCompletionActive) {
+      this.commandSuggest.hide();
+      this.hideSyntaxHighlight();
+      this.hideGhostText();
+      return;
+    }
     if (!this.isFocusedWindow()) {
       this.hideSyntaxHighlight();
       this.hideGhostText();
@@ -696,8 +732,8 @@ export class TerminalWindow {
 
   private bindCommandSuggest() {
     // When user selects a command from suggestions
-    this.commandSuggest.onSelect = (item: SuggestionItem) => {
-      void this.replaceCurrentInput(this.resolveSuggestionReplacement(item), item.type === 'completion');
+    this.commandSuggest.onSelect = (item: SuggestionItem, options) => {
+      void this.applySuggestionSelection(item, options?.submit === true);
     };
     this.commandSuggest.onActiveChange = (item) => {
       this.updateGhostTextForItem(item);
@@ -705,6 +741,14 @@ export class TerminalWindow {
 
     this.container.addEventListener('keydown', (e: KeyboardEvent) => {
       if (this.handleClipboardShortcut(e)) {
+        return;
+      }
+
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        this.shellCompletionActive = true;
+        this.commandSuggest.hide();
+        this.hideGhostText();
+        this.hideSyntaxHighlight();
         return;
       }
 
@@ -734,6 +778,18 @@ export class TerminalWindow {
       case 'command':
       default:
         return item.usage || item.insertText || item.executeText;
+    }
+  }
+
+  private async applySuggestionSelection(item: SuggestionItem, submit = false) {
+    await this.replaceCurrentInput(this.resolveSuggestionReplacement(item), item.type === 'completion');
+    if (!submit || !this.id) {
+      return;
+    }
+
+    const handled = await this.handleTerminalInput('\r');
+    if (!handled) {
+      await invoke('write_pty', { sessionId: this.id, data: '\r' });
     }
   }
 
@@ -775,6 +831,7 @@ export class TerminalWindow {
 
   private async replaceCurrentInput(nextValue: string, preserveLeadingWhitespace = false) {
     if (!this.id) return;
+    this.shellCompletionActive = false;
     this.term.clearSelection();
     const leadingSpaces = this.currentLine.match(/^\s*/)?.[0] || '';
     const replacement = preserveLeadingWhitespace ? nextValue : `${leadingSpaces}${nextValue}`;
@@ -816,6 +873,12 @@ export class TerminalWindow {
     this.cancelOverlaySync();
     this.overlaySyncFrame = window.requestAnimationFrame(() => {
       this.overlaySyncFrame = null;
+      if (!this.shouldUseInteractiveOverlays() || this.shellCompletionActive) {
+        this.hideSyntaxHighlight();
+        this.hideGhostText();
+        this.commandSuggest.hide();
+        return;
+      }
       const inCanvasViewTransition = this.isCanvasViewTransitionActive();
       if (this.isInAltBuffer()) {
         this.overlayMismatchCount = 0;
@@ -873,6 +936,10 @@ export class TerminalWindow {
   }
 
   private scheduleSyntaxHighlightRefresh() {
+    if (!this.shouldUseInteractiveOverlays() || this.shellCompletionActive) {
+      this.hideSyntaxHighlight();
+      return;
+    }
     if (this.syntaxRefreshFrame !== null) {
       window.cancelAnimationFrame(this.syntaxRefreshFrame);
     }
@@ -931,6 +998,7 @@ export class TerminalWindow {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return;
+      this.shellCompletionActive = false;
       await invoke('write_pty', { sessionId: this.id, data: text });
 
       if (/[\r\n]/.test(text)) {
@@ -947,13 +1015,22 @@ export class TerminalWindow {
       this.ensureLineStartCell();
       this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${text}${this.currentLine.slice(this.cursorPos)}`;
       this.cursorPos += text.length;
-      void this.refreshSuggestions();
+      if (this.shouldUseInteractiveOverlays()) {
+        void this.refreshSuggestions();
+      } else {
+        this.commandSuggest.hide();
+        this.hideSyntaxHighlight();
+        this.hideGhostText();
+      }
     } catch (error) {
       console.error('clipboard read failed', error);
     }
   }
 
   private handleLineEditingShortcut(event: KeyboardEvent): boolean {
+    if (!this.shouldUseInteractiveOverlays() || this.shellCompletionActive) {
+      return false;
+    }
     if (this.isInAltBuffer() || this.lastOverlayPositionStale) {
       return false;
     }
@@ -1008,9 +1085,10 @@ export class TerminalWindow {
     if (!resolvedMetrics) return;
     const cursorCell = this.resolveOverlayCursorCell(resolvedMetrics);
     const cursorScreenX = resolvedMetrics.screenLeft + cursorCell.x * resolvedMetrics.screenColWidth;
-    const cursorScreenY = resolvedMetrics.screenTop + (cursorCell.y + 1) * resolvedMetrics.screenRowHeight;
+    const lineScreenTop = resolvedMetrics.screenTop + cursorCell.y * resolvedMetrics.screenRowHeight;
+    const lineScreenBottom = lineScreenTop + resolvedMetrics.screenRowHeight;
 
-    this.commandSuggest.positionAtScreen(cursorScreenX, cursorScreenY);
+    this.commandSuggest.positionAtScreen(cursorScreenX, lineScreenTop, lineScreenBottom);
   }
 
   private hasLineSelection(): boolean {
@@ -1376,6 +1454,10 @@ export class TerminalWindow {
 
   private enqueueTerminalOutput(data: string) {
     if (!data) return;
+    if (this.isSshTerminal()) {
+      this.term.write(data);
+      return;
+    }
     this.pendingOutput += data;
     if (this.pendingWriteFrame !== null) return;
     this.pendingWriteFrame = window.requestAnimationFrame(() => {
@@ -1480,9 +1562,13 @@ export class TerminalWindow {
   }
 
   private bindActivation() {
-    this.container.addEventListener('mousedown', () => {
+    this.container.addEventListener('mousedown', (event: MouseEvent) => {
       if (!this.id) return;
-      this.onActivate?.(this.id);
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('.window-controls')) return;
+      if (target.closest('.title-bar') || target.closest('.resize-handle')) return;
+      this.onActivate?.(this.id, { focusInput: true, pulse: true, syncContext: true });
     });
   }
 
@@ -1520,18 +1606,74 @@ export class TerminalWindow {
   private bindDrag() {
     const titleBar = this.container.querySelector('.title-bar') as HTMLDivElement;
     if (this.hostMode === 'native-window') {
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragStarted = false;
+
       titleBar.addEventListener('mousedown', (e) => {
         if ((e.target as HTMLElement).closest('.window-controls')) return;
         if (e.button !== 0) return;
         e.preventDefault();
         this.beginInteraction();
         if (this.id) {
-          this.onActivate?.(this.id);
+          this.onActivate?.(this.id, { focusInput: false, pulse: false, syncContext: false });
         }
-        void this.appWindow.startDragging().catch((error) => {
-          console.error('detached window drag failed', error);
-        });
+        this.container.classList.remove('focus-pulse');
+        dragStartX = e.screenX;
+        dragStartY = e.screenY;
+        this.nativeDragStartMouseX = e.screenX;
+        this.nativeDragStartMouseY = e.screenY;
+        dragStarted = false;
+        const nativeRect = this.canvasController.getNativeWindowRect?.() || {
+          x: 0,
+          y: 0,
+          w: window.innerWidth,
+          h: window.innerHeight,
+        };
+        this.nativeDragStartLeft = nativeRect.x;
+        this.nativeDragStartTop = nativeRect.y;
+        this.dragWidth = nativeRect.w;
+        this.dragHeight = nativeRect.h;
+        void this.canvasController.refreshSnapTargets?.(this.appWindow.label);
+        window.addEventListener('mousemove', this.boundDragMove);
+        window.addEventListener('mouseup', this.boundDragEnd);
       });
+      const origDragMove = this.boundDragMove;
+      this.boundDragMove = (e: MouseEvent) => {
+        if (!dragStarted) {
+          const dx = Math.abs(e.screenX - dragStartX);
+          const dy = Math.abs(e.screenY - dragStartY);
+          if (dx < 4 && dy < 4) return;
+          dragStarted = true;
+          this.isDragging = true;
+          this.freeze();
+          this.container.classList.add('dragging');
+        }
+        origDragMove.call(this, e);
+      };
+
+      const origDragEnd = this.boundDragEnd;
+      this.boundDragEnd = () => {
+        const shouldRestoreInputFocus = !dragStarted;
+        this.isDragging = false;
+        dragStarted = false;
+        this.thaw();
+        if (this.dragRaf !== null) {
+          cancelAnimationFrame(this.dragRaf);
+          this.dragRaf = null;
+        }
+        this.pendingDragEvent = null;
+        this.dragViewportRect = null;
+        this.container.classList.remove('dragging');
+        this.canvasController.clearGuides();
+        this.endInteraction();
+        window.removeEventListener('mousemove', this.boundDragMove);
+        window.removeEventListener('mouseup', this.boundDragEnd);
+        origDragEnd.call(this);
+        if (shouldRestoreInputFocus && this.id) {
+          this.onActivate?.(this.id, { focusInput: true, pulse: false, syncContext: true });
+        }
+      };
       return;
     }
 
@@ -1546,7 +1688,7 @@ export class TerminalWindow {
       e.preventDefault();
       this.beginInteraction();
       if (this.id) {
-        this.onActivate?.(this.id);
+        this.onActivate?.(this.id, { focusInput: false, pulse: false, syncContext: false });
       }
       this.container.classList.remove('focus-pulse');
       dragStartX = e.clientX;
@@ -1586,6 +1728,7 @@ export class TerminalWindow {
 
     const origDragEnd = this.boundDragEnd;
     this.boundDragEnd = () => {
+      const shouldRestoreInputFocus = !dragStarted;
       this.isDragging = false;
       dragStarted = false;
       this.thaw();
@@ -1601,6 +1744,9 @@ export class TerminalWindow {
       window.removeEventListener('mousemove', this.boundDragMove);
       window.removeEventListener('mouseup', this.boundDragEnd);
       origDragEnd.call(this);
+      if (shouldRestoreInputFocus && this.id) {
+        this.onActivate?.(this.id, { focusInput: true, pulse: false, syncContext: true });
+      }
     };
   }
 
@@ -1612,6 +1758,24 @@ export class TerminalWindow {
       this.dragRaf = null;
       const ev = this.pendingDragEvent;
       if (!ev) return;
+      if (this.hostMode === 'native-window') {
+        const canvasX = this.nativeDragStartLeft + (ev.screenX - this.nativeDragStartMouseX);
+        const canvasY = this.nativeDragStartTop + (ev.screenY - this.nativeDragStartMouseY);
+        const snapped = this.canvasController.snapRect({
+          x: canvasX,
+          y: canvasY,
+          w: this.dragWidth,
+          h: this.dragHeight,
+        }, {
+          sourceId: this.id || this.appWindow.label,
+          mode: 'drag',
+        });
+        this.canvasController.updateNativeWindowRect?.(snapped);
+        void this.appWindow.setPosition(new LogicalPosition(snapped.x, snapped.y)).catch((error) => {
+          console.error('detached window move failed', error);
+        });
+        return;
+      }
       const viewportRect = this.dragViewportRect || this.container.closest('#app-viewport')!.getBoundingClientRect();
       const pointerCanvasX = (ev.clientX - viewportRect.left - this.dragPanX) / this.dragZoom;
       const pointerCanvasY = (ev.clientY - viewportRect.top - this.dragPanY) / this.dragZoom;
@@ -1647,31 +1811,39 @@ export class TerminalWindow {
   private bindResize() {
     const handles = this.container.querySelectorAll<HTMLElement>('.resize-handle');
     if (this.hostMode === 'native-window') {
-      const directionMap: Record<string, Parameters<typeof this.appWindow.startResizeDragging>[0]> = {
-        n: 'North',
-        s: 'South',
-        e: 'East',
-        w: 'West',
-        ne: 'NorthEast',
-        nw: 'NorthWest',
-        se: 'SouthEast',
-        sw: 'SouthWest',
-      };
       handles.forEach((handle) => {
         handle.addEventListener('mousedown', (e: MouseEvent) => {
+          if (this.isMaximized) return;
           e.preventDefault();
           e.stopPropagation();
           this.beginInteraction();
           if (this.id) {
-            this.onActivate?.(this.id);
+            this.onActivate?.(this.id, { focusInput: false, pulse: false, syncContext: false });
           }
           const dir = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].find((d) =>
             handle.classList.contains(`resize-${d}`)
           );
           if (!dir) return;
-          void this.appWindow.startResizeDragging(directionMap[dir]).catch((error) => {
-            console.error('detached window resize drag failed', error);
-          });
+          const nativeRect = this.canvasController.getNativeWindowRect?.() || {
+            x: 0,
+            y: 0,
+            w: window.innerWidth,
+            h: window.innerHeight,
+          };
+          this.isResizing = true;
+          this.freeze();
+          this.container.classList.add('resizing');
+          this.resizeZoom = 1;
+          this.resizeDirection = dir;
+          this.resizeStartX = e.screenX;
+          this.resizeStartY = e.screenY;
+          this.resizeStartW = nativeRect.w;
+          this.resizeStartH = nativeRect.h;
+          this.resizeStartLeft = nativeRect.x;
+          this.resizeStartTop = nativeRect.y;
+          void this.canvasController.refreshSnapTargets?.(this.appWindow.label);
+          window.addEventListener('mousemove', this.boundResizeMove);
+          window.addEventListener('mouseup', this.boundResizeEnd);
         });
       });
       return;
@@ -1684,7 +1856,7 @@ export class TerminalWindow {
         e.stopPropagation();
         this.beginInteraction();
         if (this.id) {
-          this.onActivate?.(this.id);
+          this.onActivate?.(this.id, { focusInput: false, pulse: false, syncContext: false });
         }
         const dir = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'].find((d) =>
           handle.classList.contains(`resize-${d}`)
@@ -1769,27 +1941,33 @@ export class TerminalWindow {
       this.resizeRaf = null;
       const ev = this.pendingResizeEvent;
       if (!ev) return;
-      const dx = (ev.clientX - this.resizeStartX) / this.resizeZoom;
-      const dy = (ev.clientY - this.resizeStartY) / this.resizeZoom;
+      const dx = this.hostMode === 'native-window'
+        ? ev.screenX - this.resizeStartX
+        : (ev.clientX - this.resizeStartX) / this.resizeZoom;
+      const dy = this.hostMode === 'native-window'
+        ? ev.screenY - this.resizeStartY
+        : (ev.clientY - this.resizeStartY) / this.resizeZoom;
       const dir = this.resizeDirection;
+      const minW = this.hostMode === 'native-window' ? 320 : 200;
+      const minH = this.hostMode === 'native-window' ? 220 : 100;
 
       let newLeft = this.resizeStartLeft;
       let newTop = this.resizeStartTop;
       let newW = this.resizeStartW;
       let newH = this.resizeStartH;
 
-      if (dir.includes('e')) newW = Math.max(200, this.resizeStartW + dx);
-      if (dir.includes('s')) newH = Math.max(100, this.resizeStartH + dy);
+      if (dir.includes('e')) newW = Math.max(minW, this.resizeStartW + dx);
+      if (dir.includes('s')) newH = Math.max(minH, this.resizeStartH + dy);
       if (dir.includes('w')) {
         const proposedW = this.resizeStartW - dx;
-        if (proposedW >= 200) {
+        if (proposedW >= minW) {
           newW = proposedW;
           newLeft = this.resizeStartLeft + dx;
         }
       }
       if (dir.includes('n')) {
         const proposedH = this.resizeStartH - dy;
-        if (proposedH >= 100) {
+        if (proposedH >= minH) {
           newH = proposedH;
           newTop = this.resizeStartTop + dy;
         }
@@ -1805,6 +1983,17 @@ export class TerminalWindow {
         mode: 'resize',
         direction: dir,
       });
+
+      if (this.hostMode === 'native-window') {
+        this.canvasController.updateNativeWindowRect?.(snapped);
+        void Promise.all([
+          this.appWindow.setPosition(new LogicalPosition(snapped.x, snapped.y)),
+          this.appWindow.setSize(new LogicalSize(snapped.w, snapped.h)),
+        ]).catch((error) => {
+          console.error('detached window resize failed', error);
+        });
+        return;
+      }
 
       this.applyRect({ x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
     });
@@ -1894,6 +2083,10 @@ export class TerminalWindow {
       cancelAnimationFrame(this.dragRaf);
       this.dragRaf = null;
     }
+    if (this.focusPulseFrame !== null) {
+      cancelAnimationFrame(this.focusPulseFrame);
+      this.focusPulseFrame = null;
+    }
     if (this.resizeRaf !== null) {
       cancelAnimationFrame(this.resizeRaf);
       this.resizeRaf = null;
@@ -1932,22 +2125,26 @@ export class TerminalWindow {
     return this.id;
   }
 
-  focus() {
-    this.term.focus();
+  focus(options: TerminalFocusOptions = {}) {
+    const { focusInput = true, pulse = true } = options;
+    if (focusInput) {
+      this.term.focus();
+    }
     const wasFocused = this.container.classList.contains('focused');
     this.container.classList.add('focused');
-    if (!wasFocused) {
-      this.container.classList.remove('focus-pulse');
-      void this.container.offsetWidth;
-      requestAnimationFrame(() => {
-        this.container.classList.add('focus-pulse');
-      });
+    if (!wasFocused && pulse) {
+      this.restartFocusPulse();
     }
   }
 
   blur() {
     this.hideTransientUi();
+    if (this.focusPulseFrame !== null) {
+      cancelAnimationFrame(this.focusPulseFrame);
+      this.focusPulseFrame = null;
+    }
     this.term.blur();
+    this.container.classList.remove('focus-pulse');
     this.container.classList.remove('focused');
   }
 
@@ -1959,6 +2156,7 @@ export class TerminalWindow {
   }
 
   handleCanvasViewChange() {
+    if (!this.shouldUseInteractiveOverlays()) return;
     if (this.hostMode !== 'canvas' || !this.isFocusedWindow()) return;
     if (this.frozen || this.isDragging || this.isResizing) return;
     this.lastCanvasViewChangeAt = Date.now();
@@ -1987,6 +2185,14 @@ export class TerminalWindow {
 
   private isFocusedWindow(): boolean {
     return this.container.classList.contains('focused');
+  }
+
+  private isSshTerminal(): boolean {
+    return this.launchOptions.mode === 'ssh';
+  }
+
+  private shouldUseInteractiveOverlays(): boolean {
+    return !this.isSshTerminal();
   }
 
   private isCanvasViewTransitionActive(): boolean {
@@ -2316,6 +2522,18 @@ export class TerminalWindow {
     if (this.id) {
       this.onInteractionEnd?.(this.id);
     }
+  }
+
+  private restartFocusPulse() {
+    if (this.focusPulseFrame !== null) {
+      cancelAnimationFrame(this.focusPulseFrame);
+      this.focusPulseFrame = null;
+    }
+    this.container.classList.remove('focus-pulse');
+    this.focusPulseFrame = window.requestAnimationFrame(() => {
+      this.focusPulseFrame = null;
+      this.container.classList.add('focus-pulse');
+    });
   }
 
 }

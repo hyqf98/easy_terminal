@@ -164,6 +164,12 @@ body {
 html.mode-desktop-draw,
 body.mode-desktop-draw {
   background: transparent;
+  cursor: crosshair !important;
+}
+
+html.mode-desktop-draw *,
+body.mode-desktop-draw * {
+  cursor: crosshair !important;
 }
 
 html.mode-detached-terminal,
@@ -174,7 +180,7 @@ body.mode-detached-terminal {
 #desktop-draw-root {
   position: fixed;
   inset: 0;
-  cursor: crosshair;
+  cursor: crosshair !important;
   overflow: hidden;
 }
 
@@ -1818,17 +1824,28 @@ body.mode-detached-terminal {
   background: color-mix(in srgb, var(--bg-mantle) 92%, rgba(10, 14, 24, 0.18));
   border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
   border-radius: 16px;
+  overflow-x: hidden;
   overflow-y: auto;
   box-shadow: 0 18px 44px color-mix(in srgb, var(--shadow) 72%, transparent), 0 0 0 1px color-mix(in srgb, var(--bg-surface0) 36%, transparent);
   z-index: 99999;
   padding: 6px;
   animation: suggestAppear 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   backdrop-filter: blur(18px) saturate(1.18);
+  transform-origin: left top;
+  scrollbar-gutter: stable;
 }
 
 .cmd-suggest-popup.simple {
   padding: 5px;
   border-radius: 12px;
+}
+
+.cmd-suggest-popup[data-placement="above"] {
+  transform-origin: left bottom;
+}
+
+.cmd-suggest-popup[data-placement="below"] {
+  transform-origin: left top;
 }
 
 .cmd-suggest-helper {
@@ -1863,7 +1880,7 @@ body.mode-detached-terminal {
 }
 
 .cmd-suggest-item.simple {
-  padding: 9px 11px;
+  padding: 9px 11px 10px;
   gap: 0;
   flex-direction: column;
   align-items: flex-start;
@@ -1901,12 +1918,15 @@ body.mode-detached-terminal {
   align-items: baseline;
   gap: 6px;
   min-width: 0;
+  width: 100%;
+  flex-wrap: nowrap;
 }
 
 .cmd-suggest-title {
   color: var(--text);
   font-size: 12px;
   font-weight: 600;
+  min-width: 0;
 }
 
 .cmd-suggest-inline-note {
@@ -1974,16 +1994,18 @@ body.mode-detached-terminal {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 16px;
-  min-width: 220px;
-  max-width: 340px;
+  min-width: 0;
+  max-width: none;
+  overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 0 12px 40px var(--shadow);
   z-index: 100000;
   animation: suggestAppear 0.12s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .cmd-detail-popup.simple {
-  min-width: 260px;
-  max-width: 360px;
+  min-width: 0;
+  max-width: none;
 }
 
 .cmd-detail-title {
@@ -2314,6 +2336,12 @@ body.mode-detached-terminal .terminal-window-native-host {
 
 .terminal-window.dragging,
 .terminal-window.resizing {
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
+}
+
+.terminal-window.focused.dragging,
+.terminal-window.focused.resizing {
+  border-color: var(--border);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
 }
 

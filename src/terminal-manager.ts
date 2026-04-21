@@ -62,7 +62,7 @@ export class TerminalManager {
       this.shortcutManager
     );
     await tw.initPty(launchOptions);
-    tw.onActivate = (id) => this.focusTerminal(id);
+    tw.onActivate = (id, options) => this.focusTerminal(id, options);
     tw.onCloseRequested = (id) => this.closeTerminal(id);
     tw.onCommandExecuted = (command, currentCwd) => this.onCommandExecuted?.(command, currentCwd);
     tw.onCwdChange = (cwd) => {
@@ -143,7 +143,8 @@ export class TerminalManager {
     }
   }
 
-  focusTerminal(id: string) {
+  focusTerminal(id: string, options?: { focusInput?: boolean; pulse?: boolean; syncContext?: boolean }) {
+    const shouldSyncContext = options?.syncContext ?? true;
     // Blur previous
     if (this.activeId && this.activeId !== id) {
       const prev = this.terminals.get(this.activeId);
@@ -153,14 +154,16 @@ export class TerminalManager {
     const tw = this.terminals.get(id);
     if (tw) {
       tw.setZIndex(++this.zCounter);
-      tw.focus();
-      if (tw.getLaunchOptions().mode !== 'ssh') {
-        this.onActiveTerminalCwdChange?.(tw.getCwd());
+      tw.focus(options);
+      if (shouldSyncContext) {
+        if (tw.getLaunchOptions().mode !== 'ssh') {
+          this.onActiveTerminalCwdChange?.(tw.getCwd());
+        }
+        this.onActiveTerminalChange?.({
+          cwd: tw.getCwd(),
+          launchOptions: tw.getLaunchOptions(),
+        });
       }
-      this.onActiveTerminalChange?.({
-        cwd: tw.getCwd(),
-        launchOptions: tw.getLaunchOptions(),
-      });
     }
   }
 
