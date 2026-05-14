@@ -16,6 +16,7 @@ import { initDesktopDrawMode } from './desktop-draw';
 import { initDetachedTerminalMode } from './detached-terminal';
 import { setupDesktopDrawShortcut } from './global-shortcut';
 import { t, onLangChange } from './i18n';
+import { Perf } from './perf';
 import { defaultWindowIcon } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
@@ -39,6 +40,8 @@ function showToast(message: string) {
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  Perf.autoInit();
+  Perf.mark('app.startup');
   const mode = new URLSearchParams(window.location.search).get('mode');
   if (mode === 'desktop-draw') {
     await initDesktopDrawMode();
@@ -79,15 +82,20 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   const intelligence = new CommandIntelligence();
   const commandSuggest = new CommandSuggest(intelligence);
+  Perf.mark('app.commandSuggestInit');
   await commandSuggest.init();
+  Perf.end('app.commandSuggestInit');
   const updater = new AppUpdater();
+  Perf.mark('app.shortcutManagerInit');
   const shortcutManager = new ShortcutManager();
   await shortcutManager.init();
+  Perf.end('app.shortcutManagerInit');
   setupDesktopDrawShortcut(shortcutManager);
   let announcedUpdateVersion = '';
 
   // Canvas
   const canvas = new Canvas(viewport, canvasEl, selectionRect);
+  Perf.mark('app.canvasCreated');
 
   // Terminal Manager
   const terminalManager = new TerminalManager(canvasEl, canvas, commandSuggest, shortcutManager, async (command, cwd) => {
@@ -261,10 +269,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     terminalManager.createTerminal(x, y, w, h);
   };
 
+  Perf.mark('app.sshPanelReady');
   await sshPanel.ready;
+  Perf.end('app.sshPanelReady');
 
   // Restore workspace from previous session
   if (settings.getRestoreSession()) {
+    Perf.mark('app.restoreSession');
     try {
       const saved = await invoke<WorkspaceState>('load_workspace_state');
       canvas.setState(saved.canvas);
@@ -283,6 +294,7 @@ window.addEventListener('DOMContentLoaded', async () => {
           terminalManager.restoreTerminalSession(session);
         }
       }
+      Perf.end('app.restoreSession');
     } catch (e) {
       // No saved state or error - ignore
     }
@@ -427,4 +439,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (shortcutManager.matches('sidebar.shortcuts', e)) { e.preventDefault(); sidebar.openTab('shortcuts'); return; }
     if (shortcutManager.matches('sidebar.settings', e)) { e.preventDefault(); sidebar.openTab('settings'); return; }
   }, true); // capture phase to intercept before xterm
+  Perf.end('app.startup');
+  Perf.printReport();
 });

@@ -1,4 +1,5 @@
 import type { CanvasController, CanvasState, Rect, SnapOptions, SnapPoint, SnapTarget } from './types';
+import { Perf } from './perf';
 
 export class Canvas implements CanvasController {
   private viewport: HTMLDivElement;
@@ -167,25 +168,25 @@ export class Canvas implements CanvasController {
   }
 
   private onWheel(e: WheelEvent) {
+    Perf.mark('canvas.onWheel');
     const target = e.target as HTMLElement | null;
     if (!target) return;
     if (target.closest('.json-editor-overlay')) return;
 
     const isOverTerminal = !!target.closest('.terminal-window');
 
-    // Ctrl+wheel: always zoom canvas centered on mouse cursor
     if (e.ctrlKey) {
       e.preventDefault();
       this.handleZoomAtMouse(e);
+      Perf.end('canvas.onWheel');
       return;
     }
 
-    // If over a terminal and a terminal is focused, let terminal handle its own scroll
     if (isOverTerminal && document.querySelector('.terminal-window.focused')) {
+      Perf.end('canvas.onWheel');
       return;
     }
 
-    // Otherwise: pan canvas
     e.preventDefault();
     if (e.shiftKey) {
       const horizontalDelta = Math.abs(e.deltaX) > 0 ? e.deltaX : e.deltaY;
@@ -195,20 +196,22 @@ export class Canvas implements CanvasController {
       this.panY -= e.deltaY;
     }
     this.applyTransform();
+    Perf.end('canvas.onWheel');
   }
 
   private handleZoomAtMouse(e: WheelEvent) {
+    Perf.mark('canvas.handleZoomAtMouse');
     const rect = this.viewport.getBoundingClientRect();
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
     const oldZoom = this.zoom;
     this.zoom = Math.max(0.2, Math.min(3.0, this.zoom + delta));
-    // Keep the point under the mouse cursor fixed
     const ratio = this.zoom / oldZoom;
     this.panX = mouseX - (mouseX - this.panX) * ratio;
     this.panY = mouseY - (mouseY - this.panY) * ratio;
     this.applyTransform();
+    Perf.end('canvas.handleZoomAtMouse');
   }
 
   private onMouseDown(e: MouseEvent) {
@@ -227,6 +230,7 @@ export class Canvas implements CanvasController {
 
   private onMouseMove(e: MouseEvent) {
     if (!this.isDragging) return;
+    Perf.frameStart('canvas.onMouseMove');
     const rect = this.viewport.getBoundingClientRect();
     const currentX = (e.clientX - rect.left - this.panX) / this.zoom;
     const currentY = (e.clientY - rect.top - this.panY) / this.zoom;
@@ -238,6 +242,7 @@ export class Canvas implements CanvasController {
     const h = Math.abs(snapped.y - this.dragStartY);
 
     this.updateSelectionRect(x, y, w, h);
+    Perf.frameEnd('canvas.onMouseMove');
   }
 
   private onMouseUp(e: MouseEvent) {
@@ -269,8 +274,10 @@ export class Canvas implements CanvasController {
   }
 
   private applyTransform() {
+    Perf.mark('canvas.applyTransform');
     this.canvasEl.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0) scale(${this.zoom})`;
     this.onViewChange?.(this.getState());
+    Perf.end('canvas.applyTransform');
   }
 
   private collectCandidates(excludeId?: string): { vertical: number[]; horizontal: number[] } {
@@ -278,6 +285,7 @@ export class Canvas implements CanvasController {
       return { vertical: this.snapCache.vertical, horizontal: this.snapCache.horizontal };
     }
 
+    Perf.mark('canvas.collectCandidates');
     const targets = this.getSnapTargets ? this.getSnapTargets(excludeId) : [];
     const vertical = new Set<number>([0]);
     const horizontal = new Set<number>([0]);
@@ -292,11 +300,12 @@ export class Canvas implements CanvasController {
     }
 
     const result = {
-      vertical: [...vertical],
-      horizontal: [...horizontal],
+      vertical: [...vertical].sort((a, b) => a - b),
+      horizontal: [...horizontal].sort((a, b) => a - b),
     };
 
     this.snapCache = { excludeId, targets, ...result };
+    Perf.end('canvas.collectCandidates');
     return result;
   }
 
@@ -305,11 +314,15 @@ export class Canvas implements CanvasController {
     let bestGuide: number | null = null;
     let bestDelta = threshold + 1;
 
-    for (const candidate of candidates) {
-      const delta = candidate - value;
+    const idx = binarySearch(candidates, value);
+    const start = Math.max(0, idx - 2);
+    const end = Math.min(candidates.length - 1, idx + 2);
+
+    for (let i = start; i <= end; i++) {
+      const delta = candidates[i] - value;
       if (Math.abs(delta) < Math.abs(bestDelta) && Math.abs(delta) <= threshold) {
         bestDelta = delta;
-        bestGuide = candidate;
+        bestGuide = candidates[i];
       }
     }
 
@@ -414,4 +427,15 @@ export class Canvas implements CanvasController {
     }, 0);
     menu.addEventListener('remove', cleanup);
   }
+}
+
+function binarySearch(sorted: number[], target: number): number {
+  let lo = 0;
+  let hi = sorted.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (sorted[mid] < target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return lo;
 }

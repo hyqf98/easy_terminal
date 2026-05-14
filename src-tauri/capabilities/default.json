@@ -21,6 +21,7 @@
     "core:window:allow-set-icon",
     "core:window:allow-toggle-maximize",
     "core:window:allow-unmaximize",
+    "core:window:allow-set-always-on-top",
     "opener:default",
     "dialog:default",
     "global-shortcut:allow-register",

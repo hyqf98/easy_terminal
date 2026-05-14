@@ -1,0 +1,265 @@
+{
+  "id": "ai-ml",
+  "label": "AI/ML",
+  "kind": "custom",
+  "language": "AI",
+  "commands": [
+    {
+      "name": "llamafactory-cli train",
+      "name_cn": "LLaMA Factory 训练",
+      "description": "使用 LLaMA Factory 进行模型微调训练",
+      "usage": "llamafactory-cli train [%s:配置文件.yaml]",
+      "category": "LLaMAFactory",
+      "examples": [
+        "llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml",
+        "llamafactory-cli train examples/train_full/llama3_full_sft.yaml"
+      ]
+    },
+    {
+      "name": "llamafactory-cli export",
+      "name_cn": "LLaMA Factory 导出",
+      "description": "导出合并后的 LoRA 模型",
+      "usage": "llamafactory-cli export [%s:配置文件.yaml]",
+      "category": "LLaMAFactory",
+      "examples": [
+        "llamafactory-cli export examples/export/llama3_export.yaml"
+      ]
+    },
+    {
+      "name": "llamafactory-cli chat",
+      "name_cn": "LLaMA Factory 对话",
+      "description": "启动交互式对话测试微调模型",
+      "usage": "llamafactory-cli chat --model_name_or_path [%s:模型路径]",
+      "category": "LLaMAFactory",
+      "examples": [
+        "llamafactory-cli chat --model_name_or_path ./saves/qwen2-lora"
+      ]
+    },
+    {
+      "name": "vllm serve",
+      "name_cn": "vLLM 启动服务",
+      "description": "启动 vLLM OpenAI 兼容推理服务",
+      "usage": "vllm serve [%s:模型名] --port [%s:端口]",
+      "category": "vLLM",
+      "examples": [
+        "vllm serve Qwen/Qwen2.5-7B-Instruct --port 8000",
+        "vllm serve [%s:模型名] --tensor-parallel-size 2 --gpu-memory-utilization 0.9",
+        "vllm serve [%s:模型名] --served-model-name my-model --host 0.0.0.0"
+      ]
+    },
+    {
+      "name": "vllm bench latency",
+      "name_cn": "vLLM 延迟测试",
+      "description": "测试 vLLM 推理延迟",
+      "usage": "vllm bench latency --model [%s:模型名]",
+      "category": "vLLM"
+    },
+    {
+      "name": "vllm bench throughput",
+      "name_cn": "vLLM 吞吐测试",
+      "description": "测试 vLLM 推理吞吐量",
+      "usage": "vllm bench throughput --model [%s:模型名]",
+      "category": "vLLM"
+    },
+    {
+      "name": "yolo train",
+      "name_cn": "YOLO 训练",
+      "description": "使用 Ultralytics YOLO 进行目标检测模型训练",
+      "usage": "yolo train model=[%s:模型] data=[%s:数据集.yaml] epochs=[%s:轮数]",
+      "category": "YOLO",
+      "examples": [
+        "yolo train model=yolov8n.pt data=coco128.yaml epochs=100",
+        "yolo train model=yolov11s.pt data=[%s:数据集.yaml] imgsz=640 batch=16",
+        "yolo train model=yolov8m-seg.pt data=[%s:数据集.yaml] task=segment"
+      ]
+    },
+    {
+      "name": "yolo predict",
+      "name_cn": "YOLO 推理",
+      "description": "使用训练好的 YOLO 模型进行推理",
+      "usage": "yolo predict model=[%s:模型] source=[%s:输入路径]",
+      "category": "YOLO",
+      "examples": [
+        "yolo predict model=yolov8n.pt source=image.jpg",
+        "yolo predict model=[%s:best.pt] source=[%s:图片目录] conf=0.5"
+      ]
+    },
+    {
+      "name": "yolo val",
+      "name_cn": "YOLO 验证",
+      "description": "验证 YOLO 模型精度",
+      "usage": "yolo val model=[%s:模型] data=[%s:数据集.yaml]",
+      "category": "YOLO"
+    },
+    {
+      "name": "yolo export",
+      "name_cn": "YOLO 导出",
+      "description": "导出 YOLO 模型为 ONNX/TensorRT 等格式",
+      "usage": "yolo export model=[%s:模型] format=[%s:格式]",
+      "category": "YOLO",
+      "examples": [
+        "yolo export model=yolov8n.pt format=onnx",
+        "yolo export model=[%s:best.pt] format=engine"
+      ]
+    },
+    {
+      "name": "ollama run",
+      "name_cn": "Ollama 运行模型",
+      "description": "运行本地大语言模型",
+      "usage": "ollama run [%s:模型名]",
+      "category": "Ollama",
+      "examples": [
+        "ollama run qwen2.5:7b",
+        "ollama run llama3.1:8b"
+      ]
+    },
+    {
+      "name": "ollama pull",
+      "name_cn": "Ollama 拉取模型",
+      "description": "从仓库下载模型到本地",
+      "usage": "ollama pull [%s:模型名]",
+      "category": "Ollama",
+      "examples": [
+        "ollama pull qwen2.5:7b",
+        "ollama pull llama3.1:8b"
+      ]
+    },
+    {
+      "name": "ollama list",
+      "name_cn": "Ollama 模型列表",
+      "description": "列出本地已下载的所有模型",
+      "usage": "ollama list",
+      "category": "Ollama"
+    },
+    {
+      "name": "ollama serve",
+      "name_cn": "Ollama 启动服务",
+      "description": "启动 Ollama API 服务",
+      "usage": "ollama serve",
+      "category": "Ollama"
+    },
+    {
+      "name": "ollama create",
+      "name_cn": "Ollama 创建模型",
+      "description": "从 Modelfile 创建自定义模型",
+      "usage": "ollama create [%s:模型名] -f [%s:Modelfile]",
+      "category": "Ollama"
+    },
+    {
+      "name": "huggingface-cli download",
+      "name_cn": "HF 下载模型",
+      "description": "从 HuggingFace Hub 下载模型或数据集",
+      "usage": "huggingface-cli download [%s:仓库ID]",
+      "category": "HuggingFace",
+      "examples": [
+        "huggingface-cli download Qwen/Qwen2.5-7B-Instruct",
+        "huggingface-cli download [%s:仓库ID] --local-dir [%s:本地目录]"
+      ]
+    },
+    {
+      "name": "huggingface-cli upload",
+      "name_cn": "HF 上传模型",
+      "description": "上传模型或文件到 HuggingFace Hub",
+      "usage": "huggingface-cli upload [%s:仓库ID] [%s:本地路径]",
+      "category": "HuggingFace"
+    },
+    {
+      "name": "huggingface-cli login",
+      "name_cn": "HF 登录",
+      "description": "登录 HuggingFace Hub",
+      "usage": "huggingface-cli login",
+      "category": "HuggingFace"
+    },
+    {
+      "name": "torchrun",
+      "name_cn": "PyTorch 分布式训练",
+      "description": "启动 PyTorch 多 GPU 分布式训练",
+      "usage": "torchrun --nproc_per_node=[%s:GPU数量] [%s:训练脚本.py]",
+      "category": "PyTorch",
+      "examples": [
+        "torchrun --nproc_per_node=4 train.py",
+        "torchrun --nproc_per_node=[%s:GPU数量] --master_port=[%s:端口] [%s:脚本.py]"
+      ]
+    },
+    {
+      "name": "torchserve --start",
+      "name_cn": "TorchServe 启动",
+      "description": "启动 TorchServe 模型推理服务",
+      "usage": "torchserve --start --model-store [%s:模型目录]",
+      "category": "PyTorch"
+    },
+    {
+      "name": "mlflow ui",
+      "name_cn": "MLflow 启动UI",
+      "description": "启动 MLflow 实验追踪 Web UI",
+      "usage": "mlflow ui --port [%s:端口]",
+      "category": "MLflow",
+      "examples": [
+        "mlflow ui --port 5000",
+        "mlflow ui --host 0.0.0.0 --port [%s:端口]"
+      ]
+    },
+    {
+      "name": "mlflow run",
+      "name_cn": "MLflow 运行项目",
+      "description": "运行 MLflow 项目",
+      "usage": "mlflow run [%s:项目路径] -P [%s:参数=值]",
+      "category": "MLflow"
+    },
+    {
+      "name": "mlflow models serve",
+      "name_cn": "MLflow 模型服务",
+      "description": "部署 MLflow 模型为推理服务",
+      "usage": "mlflow models serve -m [%s:模型URI] --port [%s:端口]",
+      "category": "MLflow"
+    },
+    {
+      "name": "tensorboard",
+      "name_cn": "TensorBoard",
+      "description": "启动 TensorBoard 训练可视化",
+      "usage": "tensorboard --logdir=[%s:日志目录] --port [%s:端口]",
+      "category": "TensorBoard",
+      "examples": [
+        "tensorboard --logdir=./runs --port 6006",
+        "tensorboard --logdir=[%s:日志目录] --bind_all"
+      ]
+    },
+    {
+      "name": "deepspeed",
+      "name_cn": "DeepSpeed 训练",
+      "description": "使用 DeepSpeed 加速大模型训练",
+      "usage": "deepspeed --num_gpus=[%s:GPU数量] [%s:脚本.py] --deepspeed [%s:ds_config.json]",
+      "category": "DeepSpeed",
+      "examples": [
+        "deepspeed --num_gpus=4 train.py --deepspeed ds_config.json",
+        "deepspeed --num_gpus=[%s:GPU数量] [%s:脚本.py]"
+      ]
+    },
+    {
+      "name": "accelerate launch",
+      "name_cn": "Accelerate 启动",
+      "description": "使用 HuggingFace Accelerate 启动分布式训练",
+      "usage": "accelerate launch [%s:脚本.py]",
+      "category": "Accelerate",
+      "examples": [
+        "accelerate launch train.py",
+        "accelerate launch --num_processes 4 [%s:脚本.py]",
+        "accelerate launch --mixed_precision bf16 [%s:脚本.py]"
+      ]
+    },
+    {
+      "name": "wandb init",
+      "name_cn": "W&B 初始化",
+      "description": "初始化 Weights & Biases 实验追踪",
+      "usage": "wandb init --project [%s:项目名]",
+      "category": "W&B"
+    },
+    {
+      "name": "wandb sweep",
+      "name_cn": "W&B 超参搜索",
+      "description": "启动 W&B 超参数搜索",
+      "usage": "wandb sweep [%s:配置.yaml]",
+      "category": "W&B"
+    }
+  ]
+}

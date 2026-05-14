@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { getAllWindows, getCurrentWindow, type Window } from '@tauri-apps/api/window';
 import { t } from './i18n';
 import { applyStoredAppearance } from './mode-bootstrap';
+import { Perf } from './perf';
 
 interface Bounds {
   x: number;
@@ -29,6 +30,7 @@ class DesktopDrawSnapController {
   }
 
   async refreshTargets() {
+    Perf.mark('desktopDraw.refreshTargets');
     await this.syncHostOrigin();
     const windows = await getAllWindows();
     const targets = await Promise.all(
@@ -37,6 +39,7 @@ class DesktopDrawSnapController {
         .map(async (item) => this.readWindowRect(item))
     );
     this.targets = targets.filter((item): item is Bounds => Boolean(item));
+    Perf.end('desktopDraw.refreshTargets');
   }
 
   snapLocalRect(rect: Bounds): Bounds {

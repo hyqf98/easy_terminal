@@ -13,6 +13,8 @@ import type {
 import { getLang, t } from './i18n';
 import { buildSshStartupCommand, resolveSshKeyPath } from './command-intercept';
 import { parseCommandLine } from './shell-parse';
+import { parsePlaceholders, hasPlaceholder } from './placeholder';
+import { Perf } from './perf';
 
 type Listener = () => void;
 
@@ -68,6 +70,7 @@ export class CommandIntelligence {
     this.history = history.sort((left, right) => right.timestamp - left.timestamp);
     this.sshProfiles = sshProfiles;
     this.detailCache.clear();
+    this.invalidateLocalCache();
     this.emitChange();
   }
 
@@ -79,12 +82,14 @@ export class CommandIntelligence {
 
   async reloadMappings() {
     this.mappings = await invoke<CommandMapping[]>('load_command_mappings');
+    this.cachedMappingItems = null;
     this.emitChange();
   }
 
   async reloadHistory() {
     this.history = await invoke<CommandHistoryEntry[]>('load_command_history');
     this.history.sort((left, right) => right.timestamp - left.timestamp);
+    this.cachedHistoryItems = null;
     this.emitChange();
   }
 
@@ -118,12 +123,14 @@ export class CommandIntelligence {
   async saveMappings(entries: CommandMapping[]) {
     await invoke('save_command_mappings', { entries });
     this.mappings = entries;
+    this.cachedMappingItems = null;
     this.emitChange();
   }
 
   async saveHistory(entries: CommandHistoryEntry[]) {
     await invoke('save_command_history', { entries });
     this.history = entries.sort((left, right) => right.timestamp - left.timestamp);
+    this.cachedHistoryItems = null;
     this.emitChange();
   }
 
@@ -142,10 +149,12 @@ export class CommandIntelligence {
     };
     this.history = await invoke<CommandHistoryEntry[]>('record_command_history', { entry });
     this.history.sort((left, right) => right.timestamp - left.timestamp);
+    this.cachedHistoryItems = null;
     this.emitChange();
   }
 
   async searchSuggestions(query: string): Promise<SuggestionItem[]> {
+    Perf.mark('intelligence.searchSuggestions');
     const normalizedQuery = normalize(query);
     if (!normalizedQuery) return [];
 
@@ -162,6 +171,7 @@ export class CommandIntelligence {
         || left.title.localeCompare(right.title, 'zh-CN'))
       .slice(0, 12);
 
+    Perf.end('intelligence.searchSuggestions');
     return dedupeSuggestions([...sshItems, ...ranked]).slice(0, 12);
   }
 
@@ -239,6 +249,7 @@ export class CommandIntelligence {
   }
 
   private async searchRemoteCommands(query: string): Promise<SuggestionItem[]> {
+    Perf.mark('intelligence.searchRemoteCommands');
     const results = await invoke<CommandSummary[]>('search_command_summaries', {
       params: {
         keyword: query,
@@ -246,12 +257,14 @@ export class CommandIntelligence {
         enabledOnly: true,
       },
     });
+    Perf.end('intelligence.searchRemoteCommands');
     return results.map((item, index) => commandSummaryToSuggestionItem(item, index));
   }
 
   private searchLocalItems(query: string): SuggestionItem[] {
+    Perf.mark('intelligence.searchLocalItems');
     const items = [...this.mappingItems(), ...this.historyItems()];
-    return items
+    const result = items
       .map((item) => ({ item, score: this.scoreItem(item, query) }))
       .filter((entry) => entry.score > 0)
       .sort((left, right) =>
@@ -259,6 +272,8 @@ export class CommandIntelligence {
         || right.score - left.score
         || left.item.title.localeCompare(right.item.title, 'zh-CN'))
       .map((entry) => ({ ...entry.item, score: entry.score }));
+    Perf.end('intelligence.searchLocalItems');
+    return result;
   }
 
   private findExactMapping(input: string): CommandMapping | null {
@@ -416,24 +431,38 @@ export class CommandIntelligence {
     ];
   }
 
-  private mappingItems(): SuggestionItem[] {
-    return this.mappings
-      .filter((mapping) => mapping.enabled)
-      .map((mapping) => mappingToSuggestionItem(mapping));
+  private cachedMappingItems: SuggestionItem[] | null = null;
+  private cachedHistoryItems: SuggestionItem[] | null = null;
+
+  private invalidateLocalCache() {
+    this.cachedMappingItems = null;
+    this.cachedHistoryItems = null;
   }
 
+  private mappingItems(): SuggestionItem[] {
+    if (this.cachedMappingItems) return this.cachedMappingItems;
+    this.cachedMappingItems = this.mappings
+      .filter((mapping) => mapping.enabled)
+      .map((mapping) => mappingToSuggestionItem(mapping));
+    return this.cachedMappingItems;
+  }
+
+  private static historyDateFormatter = new Intl.DateTimeFormat(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   private historyItems(): SuggestionItem[] {
-    return this.history.map((entry) => ({
+    if (this.cachedHistoryItems) return this.cachedHistoryItems;
+    const fmt = CommandIntelligence.historyDateFormatter;
+    this.cachedHistoryItems = this.history.map((entry) => ({
       id: entry.id,
       type: 'history',
       title: entry.command,
       subtitle: entry.cwd || '-',
-      description: `${new Intl.DateTimeFormat(undefined, {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(new Date(entry.timestamp))} · ${entry.count}x · ${Math.max(entry.variants.length, 1)} ctx`,
+      description: `${fmt.format(new Date(entry.timestamp))} · ${entry.count}x · ${Math.max(entry.variants.length, 1)} ctx`,
       insertText: entry.command,
       executeText: entry.command,
       usage: entry.command,
@@ -445,6 +474,7 @@ export class CommandIntelligence {
       sourceLabel: t('history.sourceLabel'),
       score: Math.min(entry.count * 3, 30),
     }));
+    return this.cachedHistoryItems;
   }
 
   private async searchSshProfileCompletions(rawQuery: string, normalizedQuery: string): Promise<SuggestionItem[]> {
@@ -478,6 +508,9 @@ function commandSummaryToSuggestionItem(item: CommandSummary, index: number): Su
       ? t('cmd.sourceBuiltin')
       : t('cmd.sourceUser');
 
+  const usageOrCommand = item.usage || item.command || item.name;
+  const placeholders = hasPlaceholder(usageOrCommand) ? parsePlaceholders(usageOrCommand) : undefined;
+
   return {
     id: `${item.libraryId}:${item.commandKey}:${item.id}`,
     commandId: item.id,
@@ -485,10 +518,10 @@ function commandSummaryToSuggestionItem(item: CommandSummary, index: number): Su
     title: item.name,
     subtitle: item.name_cn,
     description: item.description,
-    insertText: item.command || item.name,
-    executeText: item.command || item.name,
-    usage: item.usage,
-    hint: item.hint || item.firstExample || item.usage,
+    insertText: placeholders?.insertText || item.command || item.name,
+    executeText: placeholders?.insertText || item.command || item.name,
+    usage: usageOrCommand,
+    hint: item.hint || item.firstExample || usageOrCommand,
     examples: item.firstExample ? [item.firstExample] : [],
     aliases: [...item.alias, ...item.triggers],
     tags: [...item.tags, ...item.keywords],
@@ -499,6 +532,7 @@ function commandSummaryToSuggestionItem(item: CommandSummary, index: number): Su
     libraryId: item.libraryId,
     exampleCount: item.exampleCount,
     firstExample: item.firstExample || undefined,
+    placeholders,
   };
 }
 

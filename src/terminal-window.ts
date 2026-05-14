@@ -6,12 +6,14 @@ import { LogicalPosition, LogicalSize } from '@tauri-apps/api/dpi';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import type { CanvasController, PtyOutputEvent, SSHProfile, SuggestionItem, TerminalLaunchOptions } from './types';
+import type { CanvasController, PlaceholderInfo, PtyOutputEvent, SSHProfile, SuggestionItem, TerminalLaunchOptions } from './types';
 import { CommandSuggest } from './command-suggest';
 import { resolvePreviewPath, resolveSshPreviewPath } from './command-intercept';
 import { openLocalFileEditor, openRemoteFileEditor } from './file-editor';
 import type { ShortcutManager } from './shortcut-manager';
 import { onLangChange, t } from './i18n';
+import { parsePlaceholders, hasPlaceholder } from './placeholder';
+import { Perf } from './perf';
 
 const DARK_THEME = {
   background: '#1a1b2e',
@@ -147,6 +149,12 @@ export class TerminalWindow {
   private acceptedUnknownHost = false;
   private passwordPromptBuffer = '';
   private sshHandshakeDone = false;
+
+  // Placeholder jump mode
+  private placeholderMode = false;
+  private placeholderAnchors: PlaceholderInfo[] = [];
+  private placeholderIndex = -1;
+  private placeholderOverlays: HTMLDivElement[] = [];
 
   // Freeze state: pause terminal writes during drag/resize
   private frozen = false;
@@ -292,17 +300,21 @@ export class TerminalWindow {
   }
 
   async initPty(options: TerminalLaunchOptions = {}) {
+    Perf.mark('terminal.initPty');
     this.launchOptions = { mode: 'local', ...options };
     this.passwordQueue = [...(this.launchOptions.passwordSequence || [])];
     this.acceptedUnknownHost = false;
     this.passwordPromptBuffer = '';
+    Perf.mark('terminal.fitAddon.fit');
     this.fitAddon.fit();
+    Perf.end('terminal.fitAddon.fit');
     const cols = this.term.cols;
     const rows = this.term.rows;
 
     const nameEl = this.container.querySelector('.terminal-name') as HTMLSpanElement;
 
     let sessionId = '';
+    Perf.mark('terminal.listenPtyOutput');
     this.unlisten = await listen<PtyOutputEvent>('pty-output', (event) => {
       if (event.payload.session_id === sessionId) {
         const data = event.payload.data;
@@ -315,8 +327,11 @@ export class TerminalWindow {
         this.enqueueTerminalOutput(data);
       }
     });
+    Perf.end('terminal.listenPtyOutput');
 
+    Perf.mark('terminal.createPty');
     sessionId = await invoke<string>('create_pty', { cols, rows, cwd: this.launchOptions.cwd || null });
+    Perf.end('terminal.createPty');
     this.id = sessionId;
     this.container.dataset.sessionId = sessionId;
 
@@ -357,6 +372,7 @@ export class TerminalWindow {
 
     // Bind command suggestion to this terminal
     this.bindCommandSuggest();
+    Perf.end('terminal.initPty');
 
     if (this.launchOptions.startupCommand) {
       this.cwdPath = this.launchOptions.profileName || this.cwdPath;
@@ -371,6 +387,7 @@ export class TerminalWindow {
 
   /** Track what the user is typing to drive suggestions */
   private async handleTerminalInput(data: string): Promise<boolean> {
+    Perf.mark('terminal.handleTerminalInput');
     // In TUI mode (alternate screen buffer), don't track line input or show suggestions
     if (this.isInAltBuffer()) {
       return false;
@@ -380,6 +397,7 @@ export class TerminalWindow {
 
     if (data === '\r') {
       this.shellCompletionActive = false;
+      this.exitPlaceholderMode();
       const rawLine = this.currentLine;
       const trimmed = rawLine.trim();
       this.currentLine = '';
@@ -437,6 +455,7 @@ export class TerminalWindow {
       }
     } else if (data === '\x03') {
       this.shellCompletionActive = false;
+      this.exitPlaceholderMode();
       // Ctrl+C
       this.currentLine = '';
       this.cursorPos = 0;
@@ -448,6 +467,7 @@ export class TerminalWindow {
       this.hideGhostText();
     } else if (data === '\x15') {
       this.shellCompletionActive = false;
+      this.exitPlaceholderMode();
       // Ctrl+U - clear line
       this.currentLine = '';
       this.cursorPos = 0;
@@ -465,6 +485,15 @@ export class TerminalWindow {
       this.currentLine = `${this.currentLine.slice(0, this.cursorPos)}${data}${this.currentLine.slice(this.cursorPos)}`;
       this.cursorPos += data.length;
     } else if (data === '\t') {
+      if (this.placeholderMode) {
+        this.placeholderIndex += 1;
+        if (this.placeholderIndex >= this.placeholderAnchors.length) {
+          this.exitPlaceholderMode();
+        } else {
+          await this.jumpToPlaceholder(this.placeholderIndex);
+        }
+        return true;
+      }
       this.shellCompletionActive = true;
       this.ensureLineStartCell();
       this.commandSuggest.hide();
@@ -480,6 +509,7 @@ export class TerminalWindow {
       this.hideSyntaxHighlight();
       this.hideGhostText();
     }
+    Perf.end('terminal.handleTerminalInput');
     return false;
   }
 
@@ -504,6 +534,7 @@ export class TerminalWindow {
   }
 
   private async refreshSuggestions() {
+    Perf.mark('terminal.refreshSuggestions');
     if (!this.shouldUseInteractiveOverlays() || this.shellCompletionActive) {
       this.commandSuggest.hide();
       this.hideSyntaxHighlight();
@@ -563,6 +594,7 @@ export class TerminalWindow {
     this.commandSuggest.hide();
     this.hideSyntaxHighlight();
     this.hideGhostText();
+    Perf.end('terminal.refreshSuggestions');
   }
 
   private updateGhostText(metrics: OverlayMetrics | null = null) {
@@ -745,10 +777,28 @@ export class TerminalWindow {
       }
 
       if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (this.placeholderMode) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.placeholderIndex += 1;
+          if (this.placeholderIndex >= this.placeholderAnchors.length) {
+            this.exitPlaceholderMode();
+          } else {
+            void this.jumpToPlaceholder(this.placeholderIndex);
+          }
+          return;
+        }
         this.shellCompletionActive = true;
         this.commandSuggest.hide();
         this.hideGhostText();
         this.hideSyntaxHighlight();
+        return;
+      }
+
+      if (e.key === 'Escape' && this.placeholderMode) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.exitPlaceholderMode();
         return;
       }
 
@@ -782,7 +832,18 @@ export class TerminalWindow {
   }
 
   private async applySuggestionSelection(item: SuggestionItem, submit = false) {
-    await this.replaceCurrentInput(this.resolveSuggestionReplacement(item), item.type === 'completion');
+    const replacement = this.resolveSuggestionReplacement(item);
+    if (hasPlaceholder(replacement)) {
+      const parsed = parsePlaceholders(replacement);
+      if (parsed.hasPlaceholders) {
+        this.exitPlaceholderMode();
+        await this.replaceCurrentInput(parsed.insertText, item.type === 'completion');
+        this.enterPlaceholderMode(parsed.placeholders);
+        return;
+      }
+    }
+    this.exitPlaceholderMode();
+    await this.replaceCurrentInput(replacement, item.type === 'completion');
     if (!submit || !this.id) {
       return;
     }
@@ -1088,7 +1149,16 @@ export class TerminalWindow {
     const lineScreenTop = resolvedMetrics.screenTop + cursorCell.y * resolvedMetrics.screenRowHeight;
     const lineScreenBottom = lineScreenTop + resolvedMetrics.screenRowHeight;
 
-    this.commandSuggest.positionAtScreen(cursorScreenX, lineScreenTop, lineScreenBottom);
+    if (this.hostMode === 'native-window') {
+      this.commandSuggest.positionAtScreen(cursorScreenX, lineScreenTop, lineScreenBottom, {
+        windowX: window.screenX,
+        windowY: window.screenY,
+        screenW: screen.availWidth,
+        screenH: screen.availHeight,
+      });
+    } else {
+      this.commandSuggest.positionAtScreen(cursorScreenX, lineScreenTop, lineScreenBottom);
+    }
   }
 
   private hasLineSelection(): boolean {
@@ -1153,6 +1223,98 @@ export class TerminalWindow {
     this.overlayMismatchCount = 0;
     this.updateLineSelectionOverlay();
     this.scheduleOverlayReposition();
+  }
+
+  private enterPlaceholderMode(anchors: PlaceholderInfo[]) {
+    if (anchors.length === 0) return;
+    this.placeholderMode = true;
+    this.placeholderAnchors = anchors;
+    this.placeholderIndex = 0;
+    void this.jumpToPlaceholder(0);
+  }
+
+  private exitPlaceholderMode() {
+    if (!this.placeholderMode) return;
+    this.placeholderMode = false;
+    this.placeholderAnchors = [];
+    this.placeholderIndex = -1;
+    this.clearPlaceholderOverlays();
+  }
+
+  private clearPlaceholderOverlays() {
+    for (const overlay of this.placeholderOverlays) {
+      overlay.remove();
+    }
+    this.placeholderOverlays = [];
+  }
+
+  private async jumpToPlaceholder(index: number) {
+    if (!this.id || index < 0 || index >= this.placeholderAnchors.length) {
+      this.exitPlaceholderMode();
+      return;
+    }
+    const anchor = this.placeholderAnchors[index];
+    this.placeholderIndex = index;
+    this.clearPlaceholderOverlays();
+    await this.moveCursorTo(anchor.position);
+    void this.updatePlaceholderOverlays();
+  }
+
+  private updatePlaceholderOverlays() {
+    this.clearPlaceholderOverlays();
+    if (!this.placeholderMode || this.placeholderAnchors.length === 0) return;
+
+    const metrics = this.getOverlayMetrics();
+    if (!metrics) return;
+
+    for (let i = 0; i < this.placeholderAnchors.length; i++) {
+      const anchor = this.placeholderAnchors[i];
+      const isCurrent = i === this.placeholderIndex;
+
+      let endPos = anchor.position + 1;
+      if (i + 1 < this.placeholderAnchors.length) {
+        endPos = this.placeholderAnchors[i + 1].position;
+      } else {
+        endPos = Math.min(anchor.position + 1, this.currentLine.length);
+      }
+
+      if (anchor.position >= this.currentLine.length) continue;
+      if (endPos <= anchor.position) endPos = anchor.position + 1;
+
+      const startCol = anchor.position % metrics.cols;
+      const startRow = Math.floor(anchor.position / metrics.cols);
+      const endCol = (endPos - 1) % metrics.cols;
+      const endRow = Math.floor((endPos - 1) / metrics.cols);
+
+      for (let row = startRow; row <= endRow; row++) {
+        const rowEl = metrics.terminalBody.querySelectorAll<HTMLDivElement>('.xterm-rows > div')[row];
+        if (!rowEl) continue;
+
+        const rowRect = rowEl.getBoundingClientRect();
+        const bodyRect = metrics.terminalBody.getBoundingClientRect();
+
+        let left: number, width: number;
+        if (row === startRow && row === endRow) {
+          left = startCol * metrics.screenColWidth;
+          width = (endCol - startCol + 1) * metrics.screenColWidth;
+        } else if (row === startRow) {
+          left = startCol * metrics.screenColWidth;
+          width = (metrics.cols - startCol) * metrics.screenColWidth;
+        } else if (row === endRow) {
+          left = 0;
+          width = (endCol + 1) * metrics.screenColWidth;
+        } else {
+          left = 0;
+          width = metrics.cols * metrics.screenColWidth;
+        }
+
+        const overlay = document.createElement('div');
+        overlay.className = `terminal-placeholder-overlay${isCurrent ? ' active' : ''}`;
+        overlay.style.cssText = `position:absolute;left:${left + (rowRect.left - bodyRect.left)}px;top:${rowRect.top - bodyRect.top}px;width:${width}px;height:${rowRect.height}px;pointer-events:none;z-index:2;`;
+        metrics.terminalBody.appendChild(overlay);
+        this.placeholderOverlays.push(overlay);
+      }
+    }
   }
 
   private async replaceLineSelection(text: string) {
@@ -1265,11 +1427,15 @@ export class TerminalWindow {
     el.style.top = `${this.rectState.y}px`;
     el.style.width = `${this.rectState.w}px`;
     el.style.height = `${this.rectState.h}px`;
+    const pinButton = this.hostMode === 'native-window'
+      ? '<button class="btn-pin" title="Always on top"></button>'
+      : '';
     el.innerHTML = `
       <div class="title-bar">
         <div class="title-spacer"></div>
         <span class="terminal-name">${escapeHtml(t('terminal.unnamed'))}</span>
         <div class="window-controls">
+          ${pinButton}
           <button class="btn-minimize" title="Minimize"></button>
           <button class="btn-maximize" title="Maximize"></button>
           <button class="btn-close" title="Close"></button>
@@ -1308,6 +1474,11 @@ export class TerminalWindow {
 
   private bindLineSelection() {
     const terminalBody = this.container.querySelector('.terminal-body') as HTMLDivElement;
+    terminalBody.addEventListener('mousedown', () => {
+      if (this.placeholderMode) {
+        this.exitPlaceholderMode();
+      }
+    });
     terminalBody.addEventListener('dblclick', (event) => {
       const range = this.resolveWordRangeFromPoint(event.clientX, event.clientY);
       if (!range) return;
@@ -1455,17 +1626,21 @@ export class TerminalWindow {
   private enqueueTerminalOutput(data: string) {
     if (!data) return;
     if (this.isSshTerminal()) {
+      Perf.mark('terminal.writeSsh');
       this.term.write(data);
+      Perf.end('terminal.writeSsh');
       return;
     }
     this.pendingOutput += data;
     if (this.pendingWriteFrame !== null) return;
     this.pendingWriteFrame = window.requestAnimationFrame(() => {
+      Perf.frameStart('terminal.writeBatch');
       this.pendingWriteFrame = null;
       const batch = this.pendingOutput;
       this.pendingOutput = '';
       if (!batch) return;
       this.term.write(batch, () => {
+        Perf.frameEnd('terminal.writeBatch');
         this.scheduleOverlayReposition();
       });
     });
@@ -1601,6 +1776,18 @@ export class TerminalWindow {
       e.stopPropagation();
       this.toggleMaximize();
     });
+    const pinBtn = this.container.querySelector('.btn-pin');
+    if (pinBtn && this.hostMode === 'native-window') {
+      let pinned = false;
+      pinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pinned = !pinned;
+        pinBtn.classList.toggle('active', pinned);
+        void this.appWindow.setAlwaysOnTop(pinned).catch((error) => {
+          console.error('set always on top failed', error);
+        });
+      });
+    }
   }
 
   private bindDrag() {
@@ -1755,6 +1942,7 @@ export class TerminalWindow {
     this.pendingDragEvent = e;
     if (this.dragRaf !== null) return;
     this.dragRaf = requestAnimationFrame(() => {
+      Perf.frameStart('terminal.dragMove');
       this.dragRaf = null;
       const ev = this.pendingDragEvent;
       if (!ev) return;
@@ -1791,6 +1979,7 @@ export class TerminalWindow {
         mode: 'drag',
       });
       this.applyRect({ x: snapped.x, y: snapped.y, w: this.dragWidth, h: this.dragHeight }, ['x', 'y']);
+      Perf.frameEnd('terminal.dragMove');
     });
   }
 
@@ -1938,6 +2127,7 @@ export class TerminalWindow {
     this.pendingResizeEvent = e;
     if (this.resizeRaf !== null) return;
     this.resizeRaf = requestAnimationFrame(() => {
+      Perf.frameStart('terminal.resizeMove');
       this.resizeRaf = null;
       const ev = this.pendingResizeEvent;
       if (!ev) return;
@@ -1996,6 +2186,7 @@ export class TerminalWindow {
       }
 
       this.applyRect({ x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
+      Perf.frameEnd('terminal.resizeMove');
     });
   }
 

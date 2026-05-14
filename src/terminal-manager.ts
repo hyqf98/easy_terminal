@@ -2,6 +2,7 @@ import { TerminalWindow } from './terminal-window';
 import { CommandSuggest } from './command-suggest';
 import { buildSshPasswordSequence, buildSshStartupCommand, resolveSshKeyPath } from './command-intercept';
 import type { ShortcutManager } from './shortcut-manager';
+import { Perf } from './perf';
 import type {
   CanvasController,
   Rect,
@@ -50,7 +51,9 @@ export class TerminalManager {
   }
 
   async createTerminal(x: number, y: number, w: number, h: number, options: TerminalLaunchOptions = {}) {
+    Perf.mark('manager.createTerminal');
     const launchOptions = await this.resolveLaunchOptionsAsync(options);
+    Perf.mark('manager.createTerminal.initPty');
     const tw = new TerminalWindow(
       this.canvasEl,
       x,
@@ -62,6 +65,7 @@ export class TerminalManager {
       this.shortcutManager
     );
     await tw.initPty(launchOptions);
+    Perf.end('manager.createTerminal.initPty');
     tw.onActivate = (id, options) => this.focusTerminal(id, options);
     tw.onCloseRequested = (id) => this.closeTerminal(id);
     tw.onCommandExecuted = (command, currentCwd) => this.onCommandExecuted?.(command, currentCwd);
@@ -83,6 +87,7 @@ export class TerminalManager {
 
     this.terminals.set(tw.getId(), tw);
     this.focusTerminal(tw.getId());
+    Perf.end('manager.createTerminal');
   }
 
   async createTerminalAt(x: number, y: number, w: number, h: number, dirPath: string) {

@@ -347,6 +347,18 @@ fn bundled_seeds() -> Vec<(&'static str, &'static str, &'static str, &'static st
             "builtin",
             include_str!("../commands/custom/rust.json"),
         ),
+        (
+            "ai-ml",
+            "custom",
+            "builtin",
+            include_str!("../commands/custom/ai-ml.json"),
+        ),
+        (
+            "devops",
+            "custom",
+            "builtin",
+            include_str!("../commands/custom/devops.json"),
+        ),
     ]
 }
 
@@ -425,6 +437,34 @@ impl Db {
              DROP TABLE IF EXISTS commands_fts;",
         )
         .map_err(|e| format!("legacy search cleanup failed: {e}"))?;
+
+        tx.execute_batch(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS commands_fts USING fts5(
+                name, command, command_key, name_cn, description, category,
+                usage, alias, tags, triggers, keywords, examples,
+                content='commands', content_rowid='id'
+            );
+            CREATE TRIGGER IF NOT EXISTS commands_ai AFTER INSERT ON commands BEGIN
+                INSERT INTO commands_fts(rowid, name, command, command_key, name_cn, description, category, usage, alias, tags, triggers, keywords, examples)
+                VALUES (new.id, new.name, new.command, new.command_key, new.name_cn, new.description, new.category, new.usage, new.alias, new.tags, new.triggers, new.keywords, new.examples);
+            END;
+            CREATE TRIGGER IF NOT EXISTS commands_ad AFTER DELETE ON commands BEGIN
+                INSERT INTO commands_fts(commands_fts, rowid, name, command, command_key, name_cn, description, category, usage, alias, tags, triggers, keywords, examples)
+                VALUES('delete', old.id, old.name, old.command, old.command_key, old.name_cn, old.description, old.category, old.usage, old.alias, old.tags, old.triggers, old.keywords, old.examples);
+            END;
+            CREATE TRIGGER IF NOT EXISTS commands_au AFTER UPDATE ON commands BEGIN
+                INSERT INTO commands_fts(commands_fts, rowid, name, command, command_key, name_cn, description, category, usage, alias, tags, triggers, keywords, examples)
+                VALUES('delete', old.id, old.name, old.command, old.command_key, old.name_cn, old.description, old.category, old.usage, old.alias, old.tags, old.triggers, old.keywords, old.examples);
+                INSERT INTO commands_fts(rowid, name, command, command_key, name_cn, description, category, usage, alias, tags, triggers, keywords, examples)
+                VALUES (new.id, new.name, new.command, new.command_key, new.name_cn, new.description, new.category, new.usage, new.alias, new.tags, new.triggers, new.keywords, new.examples);
+            END;",
+        )
+        .map_err(|e| format!("FTS5 setup failed: {e}"))?;
+
+        tx.execute_batch(
+            "INSERT INTO commands_fts(commands_fts) VALUES('rebuild');",
+        )
+        .map_err(|e| format!("FTS5 rebuild failed: {e}"))?;
 
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
@@ -1015,12 +1055,6 @@ impl Db {
         let contains = format!("%{}%", escape_like(keyword));
         let mut values: Vec<Box<dyn ToSql>> =
             vec![Box::new(exact), Box::new(prefix), Box::new(contains)];
-        let token_patterns = split_search_terms(keyword)
-            .into_iter()
-            .filter(|token| token != keyword)
-            .map(|token| format!("%{}%", escape_like(&token)))
-            .collect::<Vec<_>>();
-        let searchable_blob = "lower(coalesce(c.name, '') || ' ' || coalesce(c.command, '') || ' ' || coalesce(c.command_key, '') || ' ' || coalesce(c.name_cn, '') || ' ' || coalesce(c.description, '') || ' ' || coalesce(c.category, '') || ' ' || coalesce(c.usage, '') || ' ' || coalesce(c.alias, '') || ' ' || coalesce(c.tags, '') || ' ' || coalesce(c.triggers, '') || ' ' || coalesce(c.keywords, '') || ' ' || coalesce(c.examples, ''))";
 
         if enabled_only {
             where_sql.push("c.enabled = 1".to_string());
@@ -1065,27 +1099,21 @@ impl Db {
         } else {
             format!(" AND {}", where_sql.join(" AND "))
         };
-        let token_clause = if token_patterns.is_empty() {
-            String::new()
-        } else {
-            let mut clauses = Vec::new();
-            for pattern in token_patterns {
-                let placeholder = format!("?{}", values.len() + 1);
-                values.push(Box::new(pattern));
-                clauses.push(format!(
-                    "{searchable_blob} LIKE lower({placeholder}) ESCAPE '\\'"
-                ));
-            }
-            format!(" OR ({})", clauses.join(" AND "))
-        };
+
+        let fts_query = split_search_terms(keyword)
+            .into_iter()
+            .map(|token| format!("\"{}\"*", token.replace('"', "")))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let fts_placeholder = format!("?{}", values.len() + 1);
+        values.push(Box::new(fts_query));
 
         let sql = format!(
             "SELECT c.id, c.library_id, c.command_key, c.name, c.alias, c.name_cn, c.description, c.usage, c.category, c.command, c.tags, c.examples, c.hint, c.language, c.triggers, c.keywords, c.weight, c.enabled, l.kind, l.source_type, l.label
              FROM commands c
              JOIN command_libraries l ON l.id = c.library_id
-             WHERE (
-                 {searchable_blob} LIKE lower(?3) ESCAPE '\\'{token_clause}
-             ){filter_clause}
+             JOIN commands_fts fts ON fts.rowid = c.id
+             WHERE commands_fts MATCH {fts_placeholder}{filter_clause}
              ORDER BY (
                  CASE
                      WHEN lower(c.name) = lower(?1) THEN 500

@@ -1,6 +1,7 @@
 import { t } from './i18n';
 import { CommandIntelligence, type ExecutionResolution, type GhostSuggestion } from './command-intelligence';
 import type { SuggestionItem } from './types';
+import { Perf } from './perf';
 
 const VIEWPORT_EDGE = 8;
 const POPUP_GAP = 8;
@@ -8,6 +9,13 @@ const LIST_MIN_WIDTH = 220;
 const LIST_MAX_WIDTH = 520;
 const DETAIL_MIN_WIDTH = 260;
 const DETAIL_MAX_WIDTH = 420;
+
+export interface ScreenContext {
+  windowX: number;
+  windowY: number;
+  screenW: number;
+  screenH: number;
+}
 
 interface SuggestionSelectOptions {
   submit?: boolean;
@@ -29,6 +37,7 @@ export class CommandSuggest {
   private anchorScreenTop = VIEWPORT_EDGE;
   private anchorScreenBottom = VIEWPORT_EDGE;
   private popupPlacement: PopupPlacement = 'below';
+  private screenCtx: ScreenContext | null = null;
 
   public onSelect?: (item: SuggestionItem, options?: SuggestionSelectOptions) => void;
   public onActiveChange?: (item: SuggestionItem | null) => void;
@@ -81,6 +90,7 @@ export class CommandSuggest {
   }
 
   async update(input: string): Promise<boolean> {
+    Perf.mark('suggest.update');
     const trimmed = input.trimStart();
     const requestId = ++this.requestSeq;
     if (!trimmed) {
@@ -102,6 +112,7 @@ export class CommandSuggest {
     this.activeIndex = null;
     this.enterSelectionArmed = false;
     this.show();
+    Perf.end('suggest.update');
     return true;
   }
 
@@ -138,6 +149,7 @@ export class CommandSuggest {
     this.enterSelectionArmed = false;
     this.visible = false;
     this.popupPlacement = 'below';
+    this.screenCtx = null;
     if (notifyActiveChange) {
       this.emitActiveChange();
     }
@@ -157,13 +169,16 @@ export class CommandSuggest {
     this.layoutPopups();
   }
 
-  positionAtScreen(screenX: number, screenTop: number, screenBottom = screenTop) {
+  positionAtScreen(screenX: number, screenTop: number, screenBottom = screenTop, screenCtx?: ScreenContext) {
     if (!this.popup) return;
     this.anchorScreenX = screenX;
     this.anchorScreenTop = screenTop;
     this.anchorScreenBottom = screenBottom;
+    this.screenCtx = screenCtx || null;
     this.layoutPopups();
   }
+
+  private lastItemCount = 0;
 
   private applyPopupPosition(cursorScreenX: number, anchorScreenTop: number, anchorScreenBottom: number) {
     const popup = this.popup!;
@@ -171,24 +186,71 @@ export class CommandSuggest {
     const layout = this.computePopupLayout(detailVisible);
     const popupWidth = layout.listWidth;
     const totalWidth = layout.totalWidth;
-    const naturalHeight = Math.max(popup.scrollHeight, 56);
+    const naturalHeight = this.filteredItems.length !== this.lastItemCount
+      ? Math.max(popup.scrollHeight, 56)
+      : Math.max(this.filteredItems.length * 40, 56);
+    this.lastItemCount = this.filteredItems.length;
     const desiredHeight = Math.min(320, naturalHeight);
-    const spaceBelow = Math.max(window.innerHeight - anchorScreenBottom - POPUP_GAP - VIEWPORT_EDGE, 0);
-    const spaceAbove = Math.max(anchorScreenTop - POPUP_GAP - VIEWPORT_EDGE, 0);
 
-    let placeBelow = spaceBelow >= desiredHeight;
-    if (!placeBelow && spaceAbove <= 0 && spaceBelow > 0) {
-      placeBelow = true;
+    let placeBelow: boolean;
+    let maxH: number;
+
+    if (this.screenCtx) {
+      const sc = this.screenCtx;
+      const absCursorBottom = sc.windowY + anchorScreenBottom;
+      const absCursorTop = sc.windowY + anchorScreenTop;
+
+      const screenSpaceBelow = Math.max(sc.screenH - absCursorBottom - POPUP_GAP - VIEWPORT_EDGE, 0);
+      const screenSpaceAbove = Math.max(absCursorTop - POPUP_GAP - VIEWPORT_EDGE, 0);
+
+      const vpSpaceBelow = Math.max(window.innerHeight - anchorScreenBottom - POPUP_GAP - VIEWPORT_EDGE, 0);
+      const vpSpaceAbove = Math.max(anchorScreenTop - POPUP_GAP - VIEWPORT_EDGE, 0);
+
+      if (screenSpaceBelow >= desiredHeight) {
+        placeBelow = true;
+      } else if (screenSpaceAbove >= desiredHeight) {
+        placeBelow = false;
+      } else {
+        placeBelow = screenSpaceBelow >= screenSpaceAbove;
+      }
+
+      const vpAvailable = placeBelow ? vpSpaceBelow : vpSpaceAbove;
+      maxH = Math.max(Math.min(desiredHeight, vpAvailable), 0);
+
+      if (maxH < 80) {
+        const otherVpAvailable = placeBelow ? vpSpaceAbove : vpSpaceBelow;
+        const otherMaxH = Math.max(Math.min(desiredHeight, otherVpAvailable), 0);
+        if (otherMaxH > maxH) {
+          placeBelow = !placeBelow;
+          maxH = otherMaxH;
+        }
+      }
+    } else {
+      const spaceBelow = Math.max(window.innerHeight - anchorScreenBottom - POPUP_GAP - VIEWPORT_EDGE, 0);
+      const spaceAbove = Math.max(anchorScreenTop - POPUP_GAP - VIEWPORT_EDGE, 0);
+
+      placeBelow = spaceBelow >= desiredHeight;
+      if (!placeBelow && spaceAbove <= 0 && spaceBelow > 0) {
+        placeBelow = true;
+      }
+
+      const availableHeight = Math.max(placeBelow ? spaceBelow : spaceAbove, 0);
+      maxH = Math.max(Math.min(desiredHeight, availableHeight), 0);
     }
 
-    const availableHeight = Math.max(placeBelow ? spaceBelow : spaceAbove, 0);
-    const maxH = Math.max(Math.min(desiredHeight, availableHeight), 0);
     const top = placeBelow
       ? anchorScreenBottom + POPUP_GAP
       : Math.max(VIEWPORT_EDGE, anchorScreenTop - POPUP_GAP - maxH);
     this.popupPlacement = placeBelow ? 'below' : 'above';
 
     let left = cursorScreenX;
+    if (this.screenCtx) {
+      const sc = this.screenCtx;
+      const absRight = sc.windowX + left + totalWidth;
+      if (absRight > sc.screenW - VIEWPORT_EDGE) {
+        left = Math.max(VIEWPORT_EDGE, sc.screenW - totalWidth - VIEWPORT_EDGE - sc.windowX);
+      }
+    }
     if (left + totalWidth > window.innerWidth - VIEWPORT_EDGE) {
       left = Math.max(VIEWPORT_EDGE, window.innerWidth - totalWidth - VIEWPORT_EDGE);
     }
@@ -197,16 +259,22 @@ export class CommandSuggest {
     popup.dataset.placement = this.popupPlacement;
     popup.style.minWidth = `${popupWidth}px`;
     popup.style.width = `${popupWidth}px`;
-    popup.style.maxWidth = `${Math.min(popupWidth, window.innerWidth - VIEWPORT_EDGE * 2)}px`;
+    if (this.screenCtx) {
+      popup.style.maxWidth = `${Math.min(popupWidth, this.screenCtx.screenW - VIEWPORT_EDGE * 2)}px`;
+    } else {
+      popup.style.maxWidth = `${Math.min(popupWidth, window.innerWidth - VIEWPORT_EDGE * 2)}px`;
+    }
     popup.style.maxHeight = `${maxH}px`;
     popup.style.left = `${left}px`;
     popup.style.top = `${top}px`;
   }
 
   private layoutPopups() {
+    Perf.mark('suggest.layoutPopups');
     if (!this.popup) return;
     this.applyPopupPosition(this.anchorScreenX, this.anchorScreenTop, this.anchorScreenBottom);
     this.positionDetailPopup();
+    Perf.end('suggest.layoutPopups');
   }
 
   handleKey(e: KeyboardEvent): boolean {
@@ -267,9 +335,13 @@ export class CommandSuggest {
     }
     this.visible = true;
     this.render();
+    requestAnimationFrame(() => {
+      if (this.popup) this.popup.classList.add('visible');
+    });
   }
 
   private render() {
+    Perf.mark('suggest.render');
     if (!this.popup) return;
 
     this.popup.innerHTML = `
@@ -314,6 +386,7 @@ export class CommandSuggest {
     });
 
     void this.showDetail(this.activeIndex === null ? null : this.filteredItems[this.activeIndex]);
+    Perf.end('suggest.render');
   }
 
   private selectItem(item: SuggestionItem, options?: SuggestionSelectOptions) {
@@ -358,6 +431,7 @@ export class CommandSuggest {
   }
 
   private async showDetail(item: SuggestionItem | null) {
+    Perf.mark('suggest.showDetail');
     this.hideDetail();
     if (!item || !this.popup) return;
     if (item.type === 'completion') return;
@@ -371,6 +445,9 @@ export class CommandSuggest {
     this.detailPopup = popup;
     this.bindExampleClicks(popup, item);
     this.layoutPopups();
+    requestAnimationFrame(() => {
+      if (this.detailPopup) this.detailPopup.classList.add('visible');
+    });
 
     const enriched = await this.intelligence.hydrateSuggestionItem(item);
     if (requestId !== this.detailSeq || !this.detailPopup || this.detailPopup.dataset.itemId !== item.id) {
@@ -382,6 +459,7 @@ export class CommandSuggest {
     this.detailPopup.innerHTML = this.buildDetailHtml(enriched);
     this.bindExampleClicks(this.detailPopup, enriched);
     this.layoutPopups();
+    Perf.end('suggest.showDetail');
   }
 
   private buildDetailHtml(item: SuggestionItem): string {
@@ -471,6 +549,22 @@ export class CommandSuggest {
     let left = popupRect.right + POPUP_GAP;
     let top = popupRect.top;
 
+    if (this.screenCtx) {
+      const sc = this.screenCtx;
+      const absRight = sc.windowX + left + detailWidth;
+      if (absRight > sc.screenW - VIEWPORT_EDGE) {
+        left = popupRect.left - POPUP_GAP - detailWidth;
+        if (left < VIEWPORT_EDGE) {
+          this.hideDetail();
+          return;
+        }
+      }
+    } else {
+      if (left + detailWidth > window.innerWidth - VIEWPORT_EDGE) {
+        left = Math.max(VIEWPORT_EDGE, popupRect.left - POPUP_GAP - detailWidth);
+      }
+    }
+
     if (top + this.detailPopup.offsetHeight > window.innerHeight - VIEWPORT_EDGE) {
       top = Math.max(VIEWPORT_EDGE, window.innerHeight - this.detailPopup.offsetHeight - VIEWPORT_EDGE);
     }
@@ -495,19 +589,22 @@ export class CommandSuggest {
   }
 
   private computePopupLayout(detailVisible: boolean): { listWidth: number; detailWidth: number; totalWidth: number } {
-    const availableWidth = Math.max(window.innerWidth - VIEWPORT_EDGE * 2, 220);
+    const refWidth = this.screenCtx
+      ? Math.max(this.screenCtx.screenW - VIEWPORT_EDGE * 2, 220)
+      : Math.max(window.innerWidth - VIEWPORT_EDGE * 2, 220);
+    const widthBasis = this.screenCtx ? this.screenCtx.screenW : window.innerWidth;
     if (!detailVisible) {
-      const listWidth = Math.min(LIST_MAX_WIDTH, Math.max(320, window.innerWidth * 0.26, LIST_MIN_WIDTH));
+      const listWidth = Math.min(LIST_MAX_WIDTH, Math.max(320, widthBasis * 0.26, LIST_MIN_WIDTH));
       return {
-        listWidth: Math.min(listWidth, availableWidth),
+        listWidth: Math.min(listWidth, refWidth),
         detailWidth: 0,
-        totalWidth: Math.min(listWidth, availableWidth),
+        totalWidth: Math.min(listWidth, refWidth),
       };
     }
 
-    const contentWidth = Math.max(availableWidth - POPUP_GAP, 220);
-    let detailWidth = Math.min(DETAIL_MAX_WIDTH, Math.max(DETAIL_MIN_WIDTH, window.innerWidth * 0.24));
-    let listWidth = Math.min(LIST_MAX_WIDTH, Math.max(280, window.innerWidth * 0.24));
+    const contentWidth = Math.max(refWidth - POPUP_GAP, 220);
+    let detailWidth = Math.min(DETAIL_MAX_WIDTH, Math.max(DETAIL_MIN_WIDTH, widthBasis * 0.24));
+    let listWidth = Math.min(LIST_MAX_WIDTH, Math.max(280, widthBasis * 0.24));
 
     if (listWidth + detailWidth > contentWidth) {
       listWidth = Math.min(listWidth, Math.max(180, contentWidth - detailWidth));

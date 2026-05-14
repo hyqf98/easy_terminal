@@ -260,6 +260,20 @@ export interface ShortcutBinding {
 
 export type SuggestionSourceType = 'command' | 'mapping' | 'history' | 'completion';
 
+export interface PlaceholderInfo {
+  index: number;
+  position: number;
+  originalLength: number;
+  label: string;
+}
+
+export interface ParsedPlaceholders {
+  insertText: string;
+  displayParts: Array<{ text: string; isPlaceholder: boolean; label: string }>;
+  placeholders: PlaceholderInfo[];
+  hasPlaceholders: boolean;
+}
+
 export interface SuggestionItem {
   id: string;
   type: SuggestionSourceType;
@@ -282,6 +296,7 @@ export interface SuggestionItem {
   libraryId?: string;
   exampleCount?: number;
   firstExample?: string;
+  placeholders?: ParsedPlaceholders;
 }
 
 export interface TerminalInstance {

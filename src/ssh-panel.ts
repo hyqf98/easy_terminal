@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { onLangChange, t } from './i18n';
 import type { SSHProfile } from './types';
+import { Perf } from './perf';
 
 type OverlayState = { index: number | null } | null;
 
@@ -283,6 +284,7 @@ export class SSHPanel {
   }
 
   private async testConnection(root: HTMLElement) {
+    Perf.mark('ssh.testConnection');
     const host = (root.querySelector('#ssh-host') as HTMLInputElement | null)?.value.trim() || '';
     const port = Number((root.querySelector('#ssh-port') as HTMLInputElement | null)?.value || 22) || 22;
     const user = (root.querySelector('#ssh-user') as HTMLInputElement | null)?.value.trim() || '';
@@ -315,6 +317,7 @@ export class SSHPanel {
         testBtn.disabled = false;
         testBtn.textContent = t('ssh.testConnection');
       }
+      Perf.end('ssh.testConnection');
     }
   }
 
