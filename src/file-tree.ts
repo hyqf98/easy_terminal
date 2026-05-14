@@ -30,7 +30,7 @@ interface TransferProgressPayload {
   progressPercent: number;
 }
 
-const INTERNAL_DRAG_MIME = 'application/x-easy-terminal-paths';
+const INTERNAL_DRAG_MIME = 'application/x-easy_terminal-paths';
 
 type FileTreeSource =
   | { kind: 'local' }

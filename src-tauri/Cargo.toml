@@ -1,5 +1,5 @@
 [package]
-name = "easy-terminal"
+name = "easy_terminal"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
@@ -32,3 +32,16 @@ tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 ssh2 = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
+
+[profile.dev]
+# Keep local debugging usable, but avoid huge symbol files in repeated tauri dev rebuilds.
+debug = 1
+
+[profile.dev.package."*"]
+# Dependency debug info dominates target/debug size and is rarely needed in day-to-day UI work.
+debug = 0
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "debuginfo"
