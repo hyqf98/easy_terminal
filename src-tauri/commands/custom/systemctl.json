@@ -8,73 +8,121 @@
     {
       "name": "systemctl status",
       "name_cn": "查看服务状态",
-      "description": "查看 systemd 服务状态",
+      "description": "查看 systemd 服务当前状态、PID、内存占用和最近日志",
       "usage": "systemctl status <service>",
       "category": "ops",
+      "hint": "显示: Active 状态(running/failed/inactive), PID, 内存, 最近日志行。--no-pager 禁用分页",
       "examples": [
-        "systemctl status nginx # 查看 nginx 状态",
-        "systemctl status docker --no-pager # 无分页查看服务状态",
-        "systemctl status sshd -l # 查看更详细的状态输出"
+        "systemctl status nginx # 查看 nginx 运行状态",
+        "systemctl status docker --no-pager # 无分页查看(脚本友好)",
+        "systemctl status sshd -l # 查看更多日志行",
+        "systemctl is-active nginx # 仅输出 active/inactive(脚本判断用)"
       ]
     },
     {
       "name": "systemctl start",
       "name_cn": "启动服务",
-      "description": "启动指定 systemd 服务",
-      "usage": "systemctl start <service>",
+      "description": "启动指定的 systemd 服务(通常需要 sudo)",
+      "usage": "sudo systemctl start <service>",
       "category": "ops",
+      "hint": "服务名通常是软件包名(如 nginx, docker, mysql)。启动后建议用 status 确认",
       "examples": [
         "sudo systemctl start nginx # 启动 nginx",
-        "sudo systemctl start docker # 启动 docker 服务",
-        "sudo systemctl start redis # 启动 redis"
+        "sudo systemctl start docker # 启动 Docker 守护进程",
+        "sudo systemctl start mysql # 启动 MySQL"
       ]
     },
     {
       "name": "systemctl stop",
       "name_cn": "停止服务",
-      "description": "停止指定 systemd 服务",
-      "usage": "systemctl stop <service>",
+      "description": "停止正在运行的 systemd 服务",
+      "usage": "sudo systemctl stop <service>",
       "category": "ops",
+      "hint": "停止后服务不再监听端口。kill 强制终止(不推荐，优先用 stop)",
       "examples": [
         "sudo systemctl stop nginx # 停止 nginx",
-        "sudo systemctl stop docker # 停止 docker 服务",
-        "sudo systemctl stop redis # 停止 redis"
+        "sudo systemctl stop docker # 停止 Docker(所有容器也会停止)",
+        "sudo systemctl stop mysql # 停止 MySQL"
       ]
     },
     {
       "name": "systemctl restart",
       "name_cn": "重启服务",
-      "description": "重启指定 systemd 服务",
-      "usage": "systemctl restart <service>",
+      "description": "重启 systemd 服务(先 stop 再 start，用于应用配置变更)",
+      "usage": "sudo systemctl restart <service>",
       "category": "ops",
+      "hint": "修改配置文件后通常需要 restart 生效。比 stop+start 更安全",
       "examples": [
-        "sudo systemctl restart nginx # 重启 nginx",
-        "sudo systemctl restart docker # 重启 docker",
-        "sudo systemctl restart sshd # 重启 ssh 服务"
+        "sudo systemctl restart nginx # 修改 nginx.conf 后重启",
+        "sudo systemctl restart docker # 重启 Docker",
+        "sudo systemctl restart sshd # 重启 SSH(注意不要断开自己的连接)"
+      ]
+    },
+    {
+      "name": "systemctl reload",
+      "name_cn": "重载配置",
+      "description": "重新加载服务配置而不重启(零停机，服务需支持)",
+      "usage": "sudo systemctl reload <service>",
+      "category": "ops",
+      "hint": "reload 不中断服务(平滑重载), restart 会短暂中断。nginx/apache 支持 reload",
+      "examples": [
+        "sudo systemctl reload nginx # 平滑重载 nginx 配置(不断开连接)",
+        "sudo systemctl reload haproxy # 平滑重载 HAProxy"
       ]
     },
     {
       "name": "systemctl enable",
       "name_cn": "设置开机启动",
-      "description": "将服务加入开机自启",
-      "usage": "systemctl enable <service>",
+      "description": "设置服务开机自动启动",
+      "usage": "sudo systemctl enable <service>",
       "category": "ops",
+      "hint": "--now 立即启动并设置开机自启(一步到位), disable 取消开机自启",
       "examples": [
-        "sudo systemctl enable nginx # 设置 nginx 开机启动",
-        "sudo systemctl enable docker # 设置 docker 开机启动",
-        "sudo systemctl enable --now redis # 立即启动并设置开机自启"
+        "sudo systemctl enable nginx # 设置 nginx 开机自启",
+        "sudo systemctl enable --now docker # 立即启动并设置开机自启",
+        "sudo systemctl enable --now redis # 一步启动并自启"
+      ]
+    },
+    {
+      "name": "systemctl disable",
+      "name_cn": "取消开机启动",
+      "description": "取消服务开机自动启动",
+      "usage": "sudo systemctl disable <service>",
+      "category": "ops",
+      "hint": "不会停止当前运行的服务，只是取消开机自启。--now 同时停止",
+      "examples": [
+        "sudo systemctl disable nginx # 取消开机自启",
+        "sudo systemctl disable --now nginx # 取消自启并立即停止"
+      ]
+    },
+    {
+      "name": "systemctl list-units",
+      "name_cn": "列出服务",
+      "description": "列出 systemd 管理的所有单元(服务、挂载、socket 等)",
+      "usage": "systemctl list-units [options]",
+      "category": "ops",
+      "hint": "--type=service 仅服务, --state=running/failed 过滤状态, --all 包含 inactive 的",
+      "examples": [
+        "systemctl list-units --type=service # 列出所有服务单元",
+        "systemctl list-units --type=service --state=running # 仅运行中的服务",
+        "systemctl list-units --type=service --state=failed # 查看失败的服务",
+        "systemctl list-units --all # 所有单元(含 inactive)"
       ]
     },
     {
       "name": "journalctl",
       "name_cn": "查看 systemd 日志",
-      "description": "查看 systemd 管理的系统或服务日志",
-      "usage": "journalctl <options>",
+      "description": "查看 systemd 管理的系统和服务的集中日志",
+      "usage": "journalctl [options]",
       "category": "ops",
+      "hint": "-u 指定服务, -f 实时跟踪, -n N 最近 N 行, --since 时间过滤, -p 优先级过滤(err/warning/info)",
       "examples": [
         "journalctl -u nginx -n 100 --no-pager # 查看 nginx 最近 100 条日志",
-        "journalctl -xeu docker # 查看 docker 错误日志",
-        "journalctl -f # 实时跟踪系统日志"
+        "journalctl -xeu docker # 查看 docker 错误日志(带解释)",
+        "journalctl -f # 实时跟踪所有系统日志",
+        "journalctl --since '1 hour ago' # 最近 1 小时的所有日志",
+        "journalctl -u nginx --since '2024-01-01 08:00' --until '2024-01-01 18:00' # 时间范围",
+        "journalctl -p err -b # 本次启动以来的错误日志"
       ]
     }
   ]

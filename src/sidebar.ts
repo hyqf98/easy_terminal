@@ -14,6 +14,7 @@ export class Sidebar {
 
     this.addTab('files', folderIcon(), t('sidebar.files'));
     this.addTab('commands', commandIcon(), t('sidebar.commands'));
+    this.addTab('market', marketIcon(), t('sidebar.market'));
     this.addTab('history', historyIcon(), t('sidebar.history'));
     this.addTab('mappings', mappingIcon(), t('sidebar.mappings'));
     this.addTab('ssh', sshIcon(), t('sidebar.ssh'));
@@ -31,6 +32,7 @@ export class Sidebar {
       const titleMap: Record<string, string> = {
         files: t('sidebar.files'),
         commands: t('sidebar.commands'),
+        market: t('sidebar.market'),
         history: t('sidebar.history'),
         mappings: t('sidebar.mappings'),
         ssh: t('sidebar.ssh'),
@@ -128,4 +130,8 @@ function sshIcon(): string {
 
 function shortcutIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 8h10"></path><path d="M4 8h2"></path><path d="M4 16h16"></path><path d="M8 12h8"></path></svg>`;
+}
+
+function marketIcon(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
 }

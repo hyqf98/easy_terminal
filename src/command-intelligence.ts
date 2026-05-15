@@ -542,14 +542,15 @@ function mappingToSuggestionItem(mapping: CommandMapping): SuggestionItem {
     ? t('mapping.sourceBuiltin')
     : t('mapping.sourceLabel');
   const localizedTrigger = pickLocalizedValue([mapping.trigger, ...mapping.examples], preferredLang) || mapping.trigger;
+  const placeholders = hasPlaceholder(mapping.command) ? parsePlaceholders(mapping.command) : undefined;
   return {
     id: mapping.id,
     type: 'mapping',
     title: localizedTrigger,
     subtitle: mapping.platforms && mapping.platforms.length > 0 ? mapping.platforms.join(', ') : t('mapping.sourceLabel'),
     description: mapping.description,
-    insertText: localizedTrigger,
-    executeText: mapping.command,
+    insertText: placeholders?.insertText || mapping.command,
+    executeText: placeholders?.insertText || mapping.command,
     usage: mapping.command,
     hint: mapping.hint || mapping.command,
     examples: mapping.examples,
@@ -559,6 +560,7 @@ function mappingToSuggestionItem(mapping: CommandMapping): SuggestionItem {
     sourceLabel,
     score: 0,
     language: 'mapping',
+    placeholders,
   };
 }
 

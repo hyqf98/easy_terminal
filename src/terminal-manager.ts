@@ -361,7 +361,16 @@ export class TerminalManager {
     if (!this.activeId) return false;
     const tw = this.terminals.get(this.activeId);
     if (!tw) return false;
-    await tw.sendText(command);
+    await tw.sendText(command + '\r');
+    return true;
+  }
+
+  async injectCommandToActiveTerminal(command: string): Promise<boolean> {
+    if (!this.activeId) return false;
+    const tw = this.terminals.get(this.activeId);
+    if (!tw) return false;
+    await tw.injectCommandWithPlaceholders(command);
+    tw.focus();
     return true;
   }
 

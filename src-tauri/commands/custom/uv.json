@@ -8,109 +8,141 @@
     {
       "name": "uv",
       "name_cn": "uv 主命令",
-      "description": "Python 极速包管理与虚拟环境工具入口",
+      "description": "Astral 出品的极速 Python 包管理与项目管理工具(Rust 编写)，替代 pip/pip-tools/virtualenv/poetry",
       "usage": "uv <command>",
       "category": "uv",
+      "hint": "统一替代 pip, pip-tools, virtualenv, poetry, pyenv 等工具。速度比 pip 快 10-100 倍",
       "examples": [
         "uv --version # 查看 uv 版本",
-        "uv sync # 同步当前项目依赖",
-        "uv run python main.py # 在项目环境中运行脚本"
+        "uv sync # 同步当前项目依赖(核心命令)",
+        "uv run python main.py # 在项目环境中运行脚本",
+        "uv self update # 更新 uv 自身"
       ]
     },
     {
       "name": "uv init",
       "name_cn": "初始化项目",
-      "description": "初始化新的 uv Python 项目",
-      "usage": "uv init <project>",
+      "description": "初始化新的 Python 项目(创建 pyproject.toml 和 .python-version)",
+      "usage": "uv init [options] <name>",
       "category": "uv",
+      "hint": "--package 初始化为可发布包(含 src/ 结构), --python 指定 Python 版本, --lib 初始化为库",
       "examples": [
-        "uv init demo-app # 初始化项目",
-        "uv init --package demo-lib # 初始化库项目",
-        "uv init --python 3.12 demo-api # 指定 Python 版本"
+        "uv init demo-app # 初始化应用项目",
+        "uv init --package demo-lib # 初始化库项目(含 [project.scripts])",
+        "uv init --python 3.12 demo-api # 指定 Python 版本",
+        "uv init --lib my-utils # 初始化为库结构"
       ]
     },
     {
       "name": "uv venv",
       "name_cn": "创建虚拟环境",
-      "description": "创建项目虚拟环境",
-      "usage": "uv venv",
+      "description": "创建 Python 虚拟环境(极快，毫秒级)",
+      "usage": "uv venv [options] [path]",
       "category": "uv",
+      "hint": "默认创建 .venv，--python 指定版本，--seed 安装 pip 等基础工具",
       "examples": [
-        "uv venv # 创建默认虚拟环境",
-        "uv venv .venv312 --python 3.12 # 指定虚拟环境目录和 Python 版本",
-        "uv venv --seed # 初始化 pip 等基础工具"
+        "uv venv # 在当前目录创建 .venv",
+        "uv venv .venv312 --python 3.12 # 指定目录和 Python 版本",
+        "uv venv --seed # 创建并安装 pip/setuptools",
+        "uv venv --python pypy3.10 # 使用 PyPy"
       ]
     },
     {
       "name": "uv sync",
       "name_cn": "同步依赖",
-      "description": "按 pyproject.toml / lock 文件同步依赖",
-      "usage": "uv sync",
+      "description": "根据 pyproject.toml 和 uv.lock 同步项目依赖到虚拟环境",
+      "usage": "uv sync [options]",
       "category": "uv",
+      "hint": "核心命令，自动解析依赖、创建环境、安装包。--dev 含开发依赖, --frozen 严格按锁文件, --no-dev 排除开发依赖",
       "examples": [
-        "uv sync # 同步项目依赖",
-        "uv sync --dev # 同步开发依赖",
-        "uv sync --frozen # 严格按锁文件同步"
+        "uv sync # 同步所有依赖(含 dev)",
+        "uv sync --no-dev # 仅同步生产依赖",
+        "uv sync --frozen # 严格按锁文件(不更新，CI 推荐)",
+        "uv sync --all-extras # 安装所有可选依赖组"
       ]
     },
     {
       "name": "uv add",
       "name_cn": "添加依赖",
-      "description": "添加 Python 依赖",
-      "usage": "uv add <package>",
+      "description": "添加依赖到 pyproject.toml 并自动安装",
+      "usage": "uv add [options] <package>",
       "category": "uv",
+      "hint": "默认添加到 dependencies, --dev 添加到 dev-dependencies, 支持 Extras 如 'httpx[http2]'",
       "examples": [
-        "uv add fastapi # 添加依赖",
+        "uv add fastapi # 添加运行时依赖",
         "uv add --dev pytest # 添加开发依赖",
-        "uv add 'httpx[http2]' # 添加带 extras 的包"
+        "uv add 'httpx[http2]' # 添加带 extras 的包",
+        "uv add 'flask>=3.0' # 指定版本约束",
+        "uv add --optional ml scikit-learn # 添加到可选依赖组"
       ]
     },
     {
       "name": "uv remove",
       "name_cn": "移除依赖",
-      "description": "移除 Python 依赖",
-      "usage": "uv remove <package>",
+      "description": "从 pyproject.toml 移除依赖并更新环境",
+      "usage": "uv remove [options] <package>",
       "category": "uv",
+      "hint": "--dev 从开发依赖移除",
       "examples": [
-        "uv remove fastapi # 移除依赖",
+        "uv remove fastapi # 移除运行时依赖",
         "uv remove --dev pytest # 移除开发依赖",
-        "uv remove ruff black # 批量移除依赖"
+        "uv remove ruff black # 批量移除"
       ]
     },
     {
       "name": "uv run",
       "name_cn": "运行命令",
-      "description": "在 uv 环境中运行命令或脚本",
+      "description": "在项目虚拟环境中运行命令或脚本(自动同步环境)",
       "usage": "uv run <command>",
       "category": "uv",
+      "hint": "自动确保环境同步后再运行。替代 source .venv/bin/activate && ...",
       "examples": [
-        "uv run python main.py # 使用项目环境运行 Python 脚本",
-        "uv run pytest -q # 使用项目环境运行测试",
-        "uv run ruff check . # 运行代码检查"
+        "uv run python main.py # 在项目环境中运行脚本",
+        "uv run pytest -v # 运行测试",
+        "uv run ruff check . # 代码检查",
+        "uv run --with ipython ipython # 临时安装并运行 ipython"
       ]
     },
     {
       "name": "uv pip install",
       "name_cn": "兼容 pip 安装",
-      "description": "使用 uv 的 pip 兼容接口安装依赖",
+      "description": "使用 uv 的 pip 兼容接口安装包(不需要 pyproject.toml)",
       "usage": "uv pip install <package>",
       "category": "uv",
+      "hint": "适合快速安装或迁移 pip 工作流。速度比 pip 快得多",
       "examples": [
-        "uv pip install fastapi # 安装依赖",
-        "uv pip install -r requirements.txt # 安装 requirements 依赖",
-        "uv pip install -e . # 安装当前项目为可编辑模式"
+        "uv pip install fastapi # 安装包",
+        "uv pip install -r requirements.txt # 从文件安装",
+        "uv pip install -e . # 可编辑模式安装当前项目",
+        "uv pip install --system flask # 安装到系统 Python(非虚拟环境)"
       ]
     },
     {
       "name": "uv python install",
       "name_cn": "安装 Python",
-      "description": "使用 uv 安装指定版本的 Python",
+      "description": "使用 uv 下载安装指定版本的 Python(无需 pyenv)",
       "usage": "uv python install <version>",
       "category": "uv",
+      "hint": "uv python list 查看可用版本, uv python pin 固定项目版本",
       "examples": [
-        "uv python install 3.12 # 安装指定 Python 版本",
+        "uv python install 3.12 # 安装 Python 3.12",
         "uv python install 3.11 3.12 # 批量安装多个版本",
-        "uv python pin 3.12 # 固定当前项目 Python 版本"
+        "uv python pin 3.12 # 固定当前项目使用的 Python 版本",
+        "uv python list # 列出可用/已安装的 Python 版本"
+      ]
+    },
+    {
+      "name": "uv lock",
+      "name_cn": "锁定依赖",
+      "description": "解析依赖并生成 uv.lock 锁文件(不安装)",
+      "usage": "uv lock [options]",
+      "category": "uv",
+      "hint": "--check 检查锁文件是否最新(CI 用), -U 升级所有依赖",
+      "examples": [
+        "uv lock # 解析并生成锁文件",
+        "uv lock --check # 检查锁文件是否与 pyproject.toml 一致",
+        "uv lock -U # 升级所有依赖到最新兼容版本",
+        "uv lock --upgrade-package fastapi # 仅升级指定包"
       ]
     }
   ]

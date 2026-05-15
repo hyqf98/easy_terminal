@@ -7,159 +7,230 @@
       "name": "docker",
       "alias": [],
       "name_cn": "Docker容器",
-      "description": "容器管理工具",
-      "usage": "docker <command>",
+      "description": "Docker 容器管理入口命令，用于管理容器的完整生命周期",
+      "usage": "docker <command> [options]",
       "category": "Docker",
+      "hint": "常用子命令: run(运行), ps(列表), build(构建), pull(拉取), exec(执行), logs(日志), stop(停止), rm(删除容器), rmi(删除镜像)",
       "examples": [
         "docker --version # 查看Docker版本",
-        "docker info # 查看Docker系统信息",
-        "docker system df # 查看磁盘使用情况",
-        "docker system prune # 清理未使用的资源"
+        "docker info # 查看Docker系统信息(存储驱动、运行时、容器数等)",
+        "docker system df # 查看镜像/容器/数据卷的磁盘使用情况",
+        "docker system prune # 清理所有未使用的资源(悬空镜像、已停止容器、未使用网络)",
+        "docker system prune -a --volumes # 深度清理(含所有未使用镜像和数据卷)"
       ]
     },
     {
       "name": "docker-compose",
       "alias": ["docker compose"],
       "name_cn": "Docker编排",
-      "description": "Docker 容器编排",
-      "usage": "docker-compose <command>",
+      "description": "Docker Compose 多容器编排工具，通过 docker-compose.yml 定义和运行多服务应用",
+      "usage": "docker-compose <command> [options]",
       "category": "Docker",
+      "hint": "默认读取当前目录 docker-compose.yml，-f 可指定其他配置文件。常用: up(启动), down(停止), ps(状态), logs(日志), build(构建)",
       "examples": [
-        "docker-compose up -d # 后台启动所有服务",
-        "docker-compose down # 停止并删除所有容器",
-        "docker-compose ps # 查看服务状态",
-        "docker-compose logs -f # 实时查看日志",
-        "docker-compose build # 重新构建服务镜像"
-      ]
-    },
-    {
-      "name": "kubectl",
-      "alias": ["k8s"],
-      "name_cn": "Kubernetes",
-      "description": "Kubernetes 命令行工具",
-      "usage": "kubectl <command>",
-      "category": "Docker",
-      "examples": [
-        "kubectl get pods # 查看所有Pod",
-        "kubectl get svc # 查看所有Service",
-        "kubectl describe pod <pod-name> # 查看Pod详情",
-        "kubectl logs -f <pod-name> # 实时查看Pod日志",
-        "kubectl apply -f deployment.yaml # 应用配置文件"
-      ]
-    },
-    {
-      "name": "helm",
-      "alias": [],
-      "name_cn": "Helm",
-      "description": "Kubernetes 包管理器",
-      "usage": "helm <command>",
-      "category": "Docker",
-      "examples": [
-        "helm install my-release nginx-stable/nginx # 安装Chart",
-        "helm list # 查看已安装的Release",
-        "helm upgrade my-release nginx-stable/nginx # 升级Release",
-        "helm uninstall my-release # 卸载Release",
-        "helm repo add bitnami https://charts.bitnami.com/bitnami # 添加仓库"
-      ]
-    },
-    {
-      "name": "podman",
-      "alias": [],
-      "name_cn": "Podman",
-      "description": "无守护进程容器工具",
-      "usage": "podman <command>",
-      "category": "Docker",
-      "examples": [
-        "podman run -d nginx # 后台运行容器",
-        "podman ps -a # 查看所有容器",
-        "podman images # 列出本地镜像",
-        "podman build -t myapp . # 构建镜像"
+        "docker-compose up -d # 后台启动所有服务(-d 即 detach)",
+        "docker-compose down # 停止并删除容器、网络(保留数据卷)",
+        "docker-compose down -v # 停止并删除容器、网络、数据卷",
+        "docker-compose ps # 查看所有服务运行状态",
+        "docker-compose logs -f api # 实时跟踪 api 服务日志(Ctrl+C 退出)",
+        "docker-compose build --no-cache # 不使用缓存重新构建所有镜像",
+        "docker-compose up -d --build # 重新构建并启动",
+        "docker-compose exec web sh # 进入 web 服务的容器 shell"
       ]
     },
     {
       "name": "docker build",
       "alias": [],
       "name_cn": "构建镜像",
-      "description": "构建Docker镜像",
-      "usage": "docker build -t <name> .",
+      "description": "根据 Dockerfile 构建自定义 Docker 镜像",
+      "usage": "docker build -t <name>:<tag> <context>",
       "category": "Docker",
+      "hint": "-t 指定镜像名和标签(如 myapp:v1.0)，-f 指定 Dockerfile 路径，--build-arg 传递构建参数，--no-cache 不使用缓存，末尾的 . 表示构建上下文目录",
       "examples": [
-        "docker build -t myapp:latest . # 构建并命名为myapp",
-        "docker build -t myapp:v1.0 -f Dockerfile.prod . # 指定Dockerfile构建",
-        "docker build --no-cache -t myapp . # 不使用缓存构建",
-        "docker build --build-arg NODE_ENV=production -t myapp . # 传递构建参数"
+        "docker build -t myapp:latest . # 使用当前目录 Dockerfile 构建并命名",
+        "docker build -t myapp:v1.0 -f Dockerfile.prod . # 指定非默认 Dockerfile",
+        "docker build --no-cache -t myapp . # 完全不使用缓存构建(排查构建问题)",
+        "docker build --build-arg NODE_ENV=production -t myapp . # 传递构建时变量",
+        "docker build --target builder -t myapp-builder . # 多阶段构建中指定目标阶段",
+        "docker build --platform linux/amd64,linux/arm64 -t myapp . # 多平台构建"
       ]
     },
     {
       "name": "docker run",
       "alias": [],
       "name_cn": "运行容器",
-      "description": "运行Docker容器",
-      "usage": "docker run <image>",
+      "description": "创建并启动一个新的 Docker 容器，是最常用的 Docker 命令",
+      "usage": "docker run [options] <image> [command]",
       "category": "Docker",
+      "hint": "关键选项: -d(后台运行), -p 主机端口:容器端口(端口映射), -v 主机路径:容器路径(挂载卷), -e KEY=VAL(环境变量), --name(容器名), --rm(退出后自动删除), --restart(重启策略)",
       "examples": [
-        "docker run -d -p 8080:80 nginx # 后台运行并映射端口",
-        "docker run -it ubuntu bash # 交互式运行容器",
-        "docker run --name myapp -e DB_HOST=localhost myapp:latest # 指定名称和环境变量",
-        "docker run -v /host/data:/app/data myapp # 挂载数据卷",
-        "docker run --rm alpine echo hello # 运行后自动删除容器"
+        "docker run -d -p 8080:80 --name web nginx:latest # 后台运行 nginx 并映射 8080→80",
+        "docker run -it --rm ubuntu:22.04 bash # 交互式进入 Ubuntu 容器(退出即删除)",
+        "docker run -d --name app -e DB_HOST=mysql -e DB_PORT=3306 myapp:latest # 传递环境变量",
+        "docker run -d -v /host/data:/app/data myapp # 挂载主机目录到容器",
+        "docker run -d --restart=always --name redis -p 6379:6379 redis:7 # 设置始终重启",
+        "docker run --rm -v $(pwd):/app -w /app node:20 npm test # 在容器中执行 npm test",
+        "docker run -d --gpus all nvidia/cuda:12.0-base nvidia-smi # 使用 GPU 运行容器"
       ]
     },
     {
       "name": "docker ps",
       "alias": [],
       "name_cn": "容器列表",
-      "description": "列出运行中的容器",
-      "usage": "docker ps [-a]",
+      "description": "列出 Docker 容器，默认仅显示运行中的容器",
+      "usage": "docker ps [options]",
       "category": "Docker",
+      "hint": "-a 显示所有容器(含已停止的), -q 仅输出容器ID(常配合 xargs 使用), --format 自定义输出格式, -n N 显示最近 N 个容器",
       "examples": [
-        "docker ps # 查看运行中的容器",
-        "docker ps -a # 查看所有容器包括已停止的",
-        "docker ps -q # 仅显示容器ID",
-        "docker ps --format '{{.Names}} {{.Status}}' # 自定义输出格式"
+        "docker ps # 仅显示运行中的容器",
+        "docker ps -a # 显示所有容器(含已停止和已退出)",
+        "docker ps -q # 仅输出容器ID(脚本友好)",
+        "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' # 自定义表格输出",
+        "docker ps -n 5 # 显示最近创建的 5 个容器",
+        "docker ps -f status=exited # 筛选已退出的容器",
+        "docker rm $(docker ps -aq -f status=exited) # 删除所有已退出的容器"
       ]
     },
     {
       "name": "docker images",
       "alias": [],
       "name_cn": "镜像列表",
-      "description": "列出Docker镜像",
-      "usage": "docker images",
+      "description": "列出本地所有 Docker 镜像",
+      "usage": "docker images [options] [repository]",
       "category": "Docker",
+      "hint": "-a 含中间镜像层, -q 仅ID, --filter 过滤(如 dangling=true 显示悬空镜像), -f 参考",
       "examples": [
-        "docker images # 列出所有本地镜像",
-        "docker images nginx # 过滤指定名称的镜像",
-        "docker images -q # 仅显示镜像ID",
-        "docker images --format '{{.Repository}}:{{.Tag}}' # 自定义输出格式"
+        "docker images # 列出所有顶层镜像",
+        "docker images nginx # 仅显示 nginx 相关镜像",
+        "docker images -q # 仅输出镜像ID",
+        "docker images --filter dangling=true # 查看悬空镜像(<none>:<none>)",
+        "docker images --format '{{.Repository}}:{{.Tag}}\t{{.Size}}' # 自定义输出",
+        "docker rmi $(docker images -q -f dangling=true) # 清理所有悬空镜像"
       ]
     },
     {
       "name": "docker pull",
       "alias": [],
       "name_cn": "拉取镜像",
-      "description": "拉取远程镜像",
-      "usage": "docker pull <image>",
+      "description": "从 Docker Registry 拉取镜像到本地",
+      "usage": "docker pull <image>:<tag>",
       "category": "Docker",
+      "hint": "不指定 tag 默认拉取 latest。常用 Registry: Docker Hub(默认)、ghcr.io(GitHub)、registry.cn-hangzhou.aliyuncs.com(阿里云)",
       "examples": [
-        "docker pull nginx # 拉取最新版nginx镜像",
-        "docker pull nginx:1.25 # 拉取指定版本",
-        "docker pull python:3.12-slim # 拉取精简版Python镜像",
-        "docker pull --all-tags nginx # 拉取所有标签"
+        "docker pull nginx # 拉取 nginx 最新版(latest 标签)",
+        "docker pull nginx:1.25-alpine # 拉取指定标签(alpine 版更小)",
+        "docker pull python:3.12-slim # 拉取精简版 Python 镜像(约 120MB)",
+        "docker pull --all-tags nginx # 拉取该镜像的所有标签",
+        "docker pull ghcr.io/owner/repo:latest # 从 GitHub Container Registry 拉取"
       ]
     },
     {
       "name": "docker exec",
       "alias": [],
       "name_cn": "执行命令",
-      "description": "在容器中执行命令",
-      "usage": "docker exec -it <container> <cmd>",
+      "description": "在正在运行的容器中执行命令，常用于调试和运维",
+      "usage": "docker exec [options] <container> <command>",
       "category": "Docker",
+      "hint": "-i 保持 STDIN 打开, -t 分配伪终端(通常 -it 一起用), -e 传递环境变量, -u 指定用户, -w 指定工作目录",
       "examples": [
-        "docker exec -it myapp bash # 进入容器交互终端",
-        "docker exec -it myapp sh # 使用sh进入容器",
-        "docker exec myapp ls /app # 在容器中执行ls命令",
-        "docker exec -e DEBUG=1 myapp python main.py # 传递环境变量执行命令",
-        "docker exec -u root myapp apt-get update # 以root用户执行命令"
+        "docker exec -it myapp bash # 交互式进入容器的 bash shell",
+        "docker exec -it myapp sh # alpine 镜像没有 bash，用 sh",
+        "docker exec myapp ls -la /app # 在容器中执行 ls 命令(非交互)",
+        "docker exec -e DEBUG=1 myapp python -c 'import os; print(os.environ)' # 传递环境变量",
+        "docker exec -u root myapp apt-get update # 以 root 身份执行命令",
+        "docker exec -w /tmp myapp pwd # 指定工作目录执行命令"
+      ]
+    },
+    {
+      "name": "docker logs",
+      "alias": [],
+      "name_cn": "容器日志",
+      "description": "查看容器运行日志(stdout/stderr 输出)",
+      "usage": "docker logs [options] <container>",
+      "category": "Docker",
+      "hint": "-f 实时跟踪(类似 tail -f), --tail N 显示最后 N 行, --since 时间过滤(如 30m), -t 显示时间戳",
+      "examples": [
+        "docker logs myapp # 查看容器全部日志",
+        "docker logs -f myapp # 实时跟踪日志输出",
+        "docker logs --tail 100 myapp # 仅查看最近 100 行",
+        "docker logs --since 30m myapp # 查看最近 30 分钟的日志",
+        "docker logs -f --tail 50 myapp # 实时跟踪，初始显示 50 行",
+        "docker logs -t myapp 2>&1 | grep ERROR # 带时间戳搜索错误日志"
+      ]
+    },
+    {
+      "name": "docker stop",
+      "alias": [],
+      "name_cn": "停止容器",
+      "description": "优雅停止运行中的容器(发送 SIGTERM，超时后 SIGKILL)",
+      "usage": "docker stop [options] <container>",
+      "category": "Docker",
+      "hint": "默认 10 秒超时，-t 可自定义。docker kill 直接发送 SIGKILL(不优雅)",
+      "examples": [
+        "docker stop myapp # 优雅停止容器",
+        "docker stop -t 30 myapp # 给 30 秒时间优雅退出",
+        "docker stop $(docker ps -q) # 停止所有运行中的容器"
+      ]
+    },
+    {
+      "name": "docker rm",
+      "alias": [],
+      "name_cn": "删除容器",
+      "description": "删除一个或多个已停止的容器",
+      "usage": "docker rm [options] <container>",
+      "category": "Docker",
+      "hint": "-f 强制删除运行中的容器(先 stop 再 rm), -v 同时删除关联的匿名数据卷",
+      "examples": [
+        "docker rm myapp # 删除已停止的容器",
+        "docker rm -f myapp # 强制删除(即使正在运行)",
+        "docker rm $(docker ps -aq -f status=exited) # 批量删除所有已退出容器",
+        "docker rm -v myapp # 删除容器并清理关联的匿名卷"
+      ]
+    },
+    {
+      "name": "docker rmi",
+      "alias": [],
+      "name_cn": "删除镜像",
+      "description": "删除一个或多个本地 Docker 镜像",
+      "usage": "docker rmi [options] <image>",
+      "category": "Docker",
+      "hint": "-f 强制删除(即使有容器在使用)，可同时删多个。删除前需先删除关联的容器",
+      "examples": [
+        "docker rmi nginx:1.25 # 删除指定镜像",
+        "docker rmi $(docker images -q -f dangling=true) # 删除所有悬空镜像",
+        "docker rmi -f nginx:latest # 强制删除"
+      ]
+    },
+    {
+      "name": "docker volume",
+      "alias": [],
+      "name_cn": "数据卷管理",
+      "description": "管理 Docker 数据卷(持久化存储)",
+      "usage": "docker volume <command>",
+      "category": "Docker",
+      "hint": "数据卷是容器持久化数据的首选方式，独立于容器生命周期。ls(列表), create(创建), rm(删除), prune(清理未使用)",
+      "examples": [
+        "docker volume ls # 列出所有数据卷",
+        "docker volume create mydata # 创建命名数据卷",
+        "docker volume rm mydata # 删除数据卷",
+        "docker volume prune # 清理所有未使用的数据卷",
+        "docker run -d -v mydata:/app/data myapp # 使用命名数据卷"
+      ]
+    },
+    {
+      "name": "docker network",
+      "alias": [],
+      "name_cn": "网络管理",
+      "description": "管理 Docker 网络(容器间通信)",
+      "usage": "docker network <command>",
+      "category": "Docker",
+      "hint": "默认有 bridge/none/host 三种网络。自定义网络中容器可通过名称互相访问。ls(列表), create(创建), connect(连接), prune(清理)",
+      "examples": [
+        "docker network ls # 列出所有网络",
+        "docker network create mynet # 创建自定义 bridge 网络",
+        "docker network connect mynet myapp # 将运行中的容器加入网络",
+        "docker run -d --network mynet --name api myapp # 启动时指定网络",
+        "docker network prune # 清理未使用的网络"
       ]
     }
   ]

@@ -8,110 +8,95 @@
     {
       "name": "yarn",
       "name_cn": "yarn 主命令",
-      "description": "Yarn 包管理入口命令",
+      "description": "Yarn 包管理器入口(推荐 Yarn 2+/Berry)，快速、可靠、安全",
       "usage": "yarn <command>",
       "category": "yarn",
+      "hint": "Yarn 1 (Classic) 和 Yarn 2+ (Berry) 命令略有不同。常用: install, add, remove, run, workspaces",
       "examples": [
         "yarn --version # 查看 yarn 版本",
         "yarn config current # 查看当前配置",
-        "yarn help # 查看帮助信息"
+        "yarn help # 查看帮助信息",
+        "yarn set version berry # 升级到 Yarn Berry"
       ]
     },
     {
       "name": "yarn install",
       "alias": ["yarn"],
       "name_cn": "安装依赖",
-      "description": "安装当前项目依赖",
-      "usage": "yarn install",
+      "description": "安装项目依赖(仅 yarn 或 yarn install 均可)",
+      "usage": "yarn install [options]",
       "category": "yarn",
+      "hint": "--immutable 严格按锁文件(CI推荐), --mode=skip-build 跳过 postinstall 脚本",
       "examples": [
-        "yarn install # 安装依赖",
-        "yarn install --immutable # 严格按锁文件安装",
-        "yarn install --mode=skip-build # 跳过 postinstall 构建"
+        "yarn # 安装依赖(等价于 yarn install)",
+        "yarn install --immutable # 严格按锁文件安装(CI 环境)",
+        "yarn install --mode=skip-build # 跳过构建脚本加速安装"
       ]
     },
     {
       "name": "yarn add",
       "name_cn": "添加依赖",
-      "description": "为项目添加依赖包",
+      "description": "为项目添加新的依赖包",
       "usage": "yarn add <package>",
       "category": "yarn",
+      "hint": "默认 dependencies, -D 添加到 devDependencies, -E 精确版本, -O 可选依赖",
       "examples": [
         "yarn add axios # 添加运行时依赖",
         "yarn add -D vite # 添加开发依赖",
-        "yarn add react@latest # 安装指定版本"
+        "yarn add react@latest # 安装最新版本",
+        "yarn add -E lodash # 精确安装(不使用 ^ 前缀)"
       ]
     },
     {
       "name": "yarn remove",
       "name_cn": "移除依赖",
-      "description": "移除项目中的依赖包",
+      "description": "从项目中移除依赖包",
       "usage": "yarn remove <package>",
       "category": "yarn",
+      "hint": "可同时移除多个包",
       "examples": [
-        "yarn remove axios # 移除依赖",
-        "yarn remove eslint prettier # 批量移除依赖",
-        "yarn remove react-dom # 删除指定包"
+        "yarn remove axios # 移除指定依赖",
+        "yarn remove eslint prettier # 批量移除"
       ]
     },
     {
-      "name": "yarn dev",
-      "name_cn": "启动开发服务",
-      "description": "运行开发脚本",
-      "usage": "yarn dev",
+      "name": "yarn run",
+      "name_cn": "运行脚本",
+      "description": "运行 package.json 中定义的脚本",
+      "usage": "yarn run <script> [-- <args>]",
       "category": "yarn",
+      "hint": "可省略 run 直接 yarn <script>, -- 传递参数",
       "examples": [
-        "yarn dev # 启动开发环境",
-        "yarn dev --host # 对外开放访问",
-        "yarn dev --port 3001 # 指定端口"
-      ]
-    },
-    {
-      "name": "yarn build",
-      "name_cn": "构建项目",
-      "description": "执行构建脚本",
-      "usage": "yarn build",
-      "category": "yarn",
-      "examples": [
-        "yarn build # 执行构建",
-        "yarn build:prod # 运行生产构建脚本",
-        "yarn workspaces foreach -pt run build # 工作区批量构建"
-      ]
-    },
-    {
-      "name": "yarn test",
-      "name_cn": "执行测试",
-      "description": "运行项目测试脚本",
-      "usage": "yarn test",
-      "category": "yarn",
-      "examples": [
-        "yarn test # 执行测试",
-        "yarn test --watch # 监听模式",
-        "yarn test --coverage # 生成覆盖率报告"
+        "yarn run dev # 运行开发脚本(等价于 yarn dev)",
+        "yarn run build # 运行构建脚本",
+        "yarn run test -- --watch # 传递参数给测试"
       ]
     },
     {
       "name": "yarn dlx",
       "name_cn": "临时执行包",
-      "description": "临时执行 npm 包中的 CLI",
-      "usage": "yarn dlx <package>",
+      "description": "无需安装即可临时运行 npm 包中的 CLI(类似 npx/pnpm dlx)",
+      "usage": "yarn dlx <package> [args]",
       "category": "yarn",
+      "hint": "适合运行脚手架和一次性 CLI 工具",
       "examples": [
-        "yarn dlx create-next-app@latest demo # 运行脚手架",
+        "yarn dlx create-next-app@latest demo # 运行 Next.js 脚手架",
         "yarn dlx eslint . # 临时执行 eslint",
-        "yarn dlx serve dist # 临时启动静态服务"
+        "yarn dlx serve dist # 临时启动静态文件服务器"
       ]
     },
     {
       "name": "yarn workspaces",
       "name_cn": "工作区管理",
-      "description": "管理 Yarn workspaces",
+      "description": "管理 Yarn workspaces (monorepo 支持)",
       "usage": "yarn workspaces <command>",
       "category": "yarn",
+      "hint": "list 列出工作区, foreach 批量执行, workspace 指定单个工作区执行",
       "examples": [
-        "yarn workspaces list # 查看所有工作区",
-        "yarn workspaces foreach -pt run lint # 批量执行脚本",
-        "yarn workspace web dev # 在指定工作区执行脚本"
+        "yarn workspaces list # 查看所有工作区包",
+        "yarn workspaces foreach -pt run build # 并行拓扑排序批量构建",
+        "yarn workspace web dev # 在指定工作区运行脚本",
+        "yarn workspaces foreach --from @core/utils run test # 仅运行依赖指定包的测试"
       ]
     }
   ]

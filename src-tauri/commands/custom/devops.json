@@ -16,7 +16,8 @@
         "ss -s # 显示套接字统计摘要",
         "ss -tn state established # 查看已建立的TCP连接",
         "ss -ulnp # 查看UDP监听端口"
-      ]
+      ],
+      "hint": "常用: -t TCP, -u UDP, -l 监听, -n 数字地址, -p 显示进程。比 netstat 更快更详细"
     },
     {
       "name": "lsof",
@@ -30,7 +31,8 @@
         "lsof -i -P -n | grep LISTEN # 查看所有监听端口",
         "lsof -p 1234 # 查看PID为1234的进程打开的文件",
         "lsof +D /var/log # 查看目录下被打开的文件"
-      ]
+      ],
+      "hint": "-i :端口 查端口占用, -p PID 查进程文件, +D 目录查目录下打开的文件, -i -P -n 所有网络连接"
     },
     {
       "name": "netstat",
@@ -43,11 +45,15 @@
         "netstat -tlnp # 查看TCP监听端口",
         "netstat -an | grep ESTABLISHED # 查看已建立的连接",
         "netstat -rn # 显示路由表"
-      ]
+      ],
+      "hint": "被 ss 替代但仍常用: -t TCP, -u UDP, -l 监听, -n 数字, -p 进程, -r 路由表"
     },
     {
       "name": "nc",
-      "alias": ["netcat", "ncat"],
+      "alias": [
+        "netcat",
+        "ncat"
+      ],
       "name_cn": "端口测试",
       "description": "网络工具，测试端口连通性",
       "usage": "nc [%s:选项] [%s:主机] [%s:端口]",
@@ -56,7 +62,8 @@
         "nc -zv 192.168.1.1 80 # 测试端口连通性",
         "nc -l 9999 # 监听9999端口",
         "nc -zv host.example.com 22 80 443 # 批量测试端口"
-      ]
+      ],
+      "hint": "-zv 测试连通性, -l 监听端口, -w 超时秒数。简单端口扫描: nc -zv host startPort-endPort"
     },
     {
       "name": "jps",
@@ -69,7 +76,8 @@
         "jps -l # 显示Java进程全类名",
         "jps -v # 显示JVM参数",
         "jps -lm # 显示主类全名和参数"
-      ]
+      ],
+      "hint": "JDK 自带工具, -l 显示全类名, -v 显示 JVM 参数, -m 显示 main 方法参数"
     },
     {
       "name": "jstat",
@@ -83,7 +91,8 @@
         "jstat -gcutil 1234 # 查看GC各区域使用率",
         "jstat -class 1234 # 查看类加载统计",
         "jstat -gccause 1234 # 查看GC原因"
-      ]
+      ],
+      "hint": "-gc 查看 GC 各区大小, -gcutil 百分比, -class 类加载。可指定采样间隔如 jstat -gc PID 1000"
     },
     {
       "name": "jstack",
@@ -96,7 +105,8 @@
         "jstack 1234 # 打印线程堆栈",
         "jstack -l 1234 # 打印锁信息",
         "jstack 1234 > thread_dump.txt # 导出线程dump"
-      ]
+      ],
+      "hint": "排查线程死锁和 CPU 飙高: jstack PID > dump.txt, 然后搜索 BLOCKED 或 RUNNABLE"
     },
     {
       "name": "jmap",
@@ -110,7 +120,8 @@
         "jmap -histo 1234 # 查看对象统计",
         "jmap -histo:live 1234 # 触发Full GC后查看对象统计",
         "jmap -dump:format=b,file=heap.hprof 1234 # 导出堆dump"
-      ]
+      ],
+      "hint": "-heap 堆概览, -histo 对象统计, -dump 导出堆转储(用 MAT/VisualVM 分析 OOM)"
     },
     {
       "name": "jcmd",
@@ -125,7 +136,8 @@
         "jcmd 1234 GC.heap_info # 查看堆信息",
         "jcmd 1234 VM.flags # 查看JVM参数",
         "jcmd 1234 JFR.start # 启动飞行记录"
-      ]
+      ],
+      "hint": "JDK 7+ 推荐的统一诊断工具, 替代 jstack/jmap 部分 功能。jcmd PID help 查看可用命令"
     },
     {
       "name": "jinfo",
@@ -138,7 +150,8 @@
         "jinfo -flags 1234 # 查看所有JVM参数",
         "jinfo -sysprops 1234 # 查看系统属性",
         "jinfo -flag +PrintGCDetails 1234 # 动态开启GC日志"
-      ]
+      ],
+      "hint": "查看和动态修改 JVM 参数(无需重启)。-flags 查看所有, -sysprops 系统属性, -flag 动态修改"
     },
     {
       "name": "ps",
@@ -153,7 +166,8 @@
         "ps -ef # 全格式显示所有进程",
         "ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head # 按内存排序",
         "ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%cpu | head # 按CPU排序"
-      ]
+      ],
+      "hint": "aux BSD 风格(常用), -ef SystemV 风格。配合 grep 搜索进程, --sort 排序"
     },
     {
       "name": "top",
@@ -167,7 +181,8 @@
         "top -p 1234 # 监控指定PID",
         "top -H -p 1234 # 显示进程的线程",
         "top -bn1 | head -20 # 非交互模式取快照"
-      ]
+      ],
+      "hint": "交互命令: M 按内存排序, P 按 CPU 排序, c 显示完整命令, H 显示线程, q 退出"
     },
     {
       "name": "htop",
@@ -180,7 +195,8 @@
         "htop # 启动htop",
         "htop -p 1234,5678 # 监控指定PID",
         "htop --sort-key=PERCENT_MEM # 按内存排序"
-      ]
+      ],
+      "hint": "增强版 top, 支持鼠标和 F 功能键操作。需安装: apt install htop / yum install htop"
     },
     {
       "name": "kill",
@@ -194,7 +210,8 @@
         "kill -9 1234 # 强制终止进程",
         "kill -HUP 1234 # 重新加载配置",
         "kill -USR1 $(cat nginx.pid) # 重新打开日志文件"
-      ]
+      ],
+      "hint": "-15/SIGTERM 优雅终止(默认), -9/SIGKILL 强制终止(不推荐), -HUP 重载配置, -USR1/USR2 自定义信号"
     },
     {
       "name": "pkill",
@@ -207,7 +224,8 @@
         "pkill -f \"spring-boot\" # 终止匹配的进程",
         "pkill -u www-data nginx # 终止指定用户的进程",
         "pkill -9 -f \"python train.py\" # 强制终止训练进程"
-      ]
+      ],
+      "hint": "-f 按完整命令行匹配, -u 指定用户, -9 强制。比 kill 方便(不需要 PID)"
     },
     {
       "name": "nohup",
@@ -219,7 +237,8 @@
       "examples": [
         "nohup java -jar app.jar & # 后台运行Java应用",
         "nohup ./start.sh > output.log 2>&1 & # 重定向输出到日志文件"
-      ]
+      ],
+      "hint": "不挂断运行(退出终端不中断), & 放后台。输出默认写到 nohup.out, 建议重定向: > log 2>&1"
     },
     {
       "name": "strace",
@@ -233,7 +252,8 @@
         "strace -e trace=network curl example.com # 只追踪网络调用",
         "strace -c ls # 统计系统调用",
         "strace -f -p 1234 # 追踪子进程"
-      ]
+      ],
+      "hint": "追踪系统调用(排查 IO/网络/文件问题)。-p PID 追踪进程, -e 过滤类型, -c 统计, -f 追踪子进程"
     },
     {
       "name": "ltrace",
@@ -245,7 +265,8 @@
       "examples": [
         "ltrace ls # 追踪ls的库调用",
         "ltrace -p 1234 # 追踪正在运行的进程"
-      ]
+      ],
+      "hint": "追踪库函数调用(如 malloc/free/open/read)。比 strace 更高层。较少使用"
     },
     {
       "name": "perf",
@@ -259,7 +280,8 @@
         "perf record -g -- sleep 10 # 录制10秒性能数据",
         "perf report # 查看性能报告",
         "perf stat ls # 统计命令的性能事件"
-      ]
+      ],
+      "hint": "Linux 性能分析神器: perf top 实时热点, perf record 录制, perf report 分析"
     },
     {
       "name": "tcpdump",
@@ -273,7 +295,8 @@
         "tcpdump -i any -nn -X port 443 # 抓取HTTPS数据包并显示内容",
         "tcpdump -i eth0 host 192.168.1.1 -w capture.pcap # 保存到文件",
         "tcpdump -i eth0 'tcp[tcpflags] & (tcp-syn) != 0' # 只抓SYN包"
-      ]
+      ],
+      "hint": "-i 指定网卡, port 过滤端口, host 过滤主机, -w 保存文件(.pcap 用 Wireshark 分析), -nn 不解析"
     },
     {
       "name": "curl",
@@ -288,7 +311,8 @@
         "curl -o output.tar.gz [%s:下载URL] # 下载文件",
         "curl -w \"HTTP %{http_code} Time %{time_total}s\\n\" -o /dev/null -s [%s:URL] # 检查响应状态码和耗时",
         "curl -s https://api.example.com/health | jq . # 检查健康检查接口"
-      ]
+      ],
+      "hint": "-X 方法, -H 头部, -d 数据, -o 保存, -v 详细, -s 静默, -w 格式化输出, -k 忽略证书"
     },
     {
       "name": "wget",
@@ -302,7 +326,8 @@
         "wget -c [%s:URL] # 断点续传",
         "wget -q -O- [%s:URL] # 静默下载输出到stdout",
         "wget -r -np -nd -A.pdf [%s:URL] # 递归下载PDF文件"
-      ]
+      ],
+      "hint": "-c 断点续传, -q 静默, -O 文件名, -r 递归, --limit-rate 限速, -b 后台下载"
     },
     {
       "name": "dig",
@@ -317,7 +342,8 @@
         "dig example.com MX # 查询MX记录",
         "dig +short example.com # 只显示IP地址",
         "dig @8.8.8.8 example.com # 指定DNS服务器"
-      ]
+      ],
+      "hint": "DNS 查询: A(IPv4), AAAA(IPv6), CNAME, MX(邮件), NS, TXT。+short 精简输出, @server 指定 DNS"
     },
     {
       "name": "nslookup",
@@ -329,7 +355,8 @@
       "examples": [
         "nslookup example.com # 查询域名解析",
         "nslookup example.com 8.8.8.8 # 指定DNS服务器"
-      ]
+      ],
+      "hint": "简单 DNS 查询(比 dig 简单但功能少)。交互模式: 直接输入 nslookup"
     },
     {
       "name": "ping",
@@ -341,11 +368,14 @@
       "examples": [
         "ping -c 4 google.com # 发送4个包",
         "ping -i 0.5 192.168.1.1 # 设置间隔0.5秒"
-      ]
+      ],
+      "hint": "-c 发送次数(Linux 默认无限), -i 间隔秒, -s 包大小, -W 超时。排查网络连通性第一步"
     },
     {
       "name": "traceroute",
-      "alias": ["tracepath"],
+      "alias": [
+        "tracepath"
+      ],
       "name_cn": "路由追踪",
       "description": "追踪到目标的网络路径",
       "usage": "traceroute [%s:主机]",
@@ -353,7 +383,8 @@
       "examples": [
         "traceroute google.com # 追踪路由",
         "traceroute -n google.com # 不解析主机名"
-      ]
+      ],
+      "hint": "追踪到目标的路由路径(每跳延迟)。-n 不解析主机名(更快)"
     },
     {
       "name": "ip",
@@ -367,7 +398,8 @@
         "ip route show # 查看路由表",
         "ip link set eth0 up # 启用网络接口",
         "ip addr add 192.168.1.100/24 dev eth0 # 添加IP地址"
-      ]
+      ],
+      "hint": "替代 ifconfig: addr 地址, link 链路, route 路由, neigh ARP。ip a = ip addr show"
     },
     {
       "name": "iptables",
@@ -381,7 +413,8 @@
         "iptables -A INPUT -p tcp --dport 80 -j ACCEPT # 开放80端口",
         "iptables -A INPUT -s 192.168.1.0/24 -j DROP # 封禁IP段",
         "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 8080 # 端口转发"
-      ]
+      ],
+      "hint": "防火墙规则: -L 列出, -A 添加, -D 删除, -I 插入, -F 清空。-j ACCEPT/DROP/REJECT"
     },
     {
       "name": "tail",
@@ -395,7 +428,8 @@
         "tail -f app.log | grep ERROR # 过滤错误日志",
         "tail -n 100 app.log # 查看最后100行",
         "tail -f access.log | grep '500' # 过滤500错误"
-      ]
+      ],
+      "hint": "-f 实时跟踪(最常用), -n 行数, -F 等同 --follow=name --retry(文件轮转时跟踪新文件)"
     },
     {
       "name": "grep",
@@ -410,7 +444,8 @@
         "grep -c 'ERROR' app.log # 统计匹配行数",
         "grep -E 'ERROR|WARN' app.log # 正则搜索多个模式",
         "grep -v 'DEBUG' app.log # 排除DEBUG行"
-      ]
+      ],
+      "hint": "-r 递归, -n 行号, -i 忽略大小写, -E 正则, -v 排除, -c 计数, -A/-B/-C 上下文行数"
     },
     {
       "name": "awk",
@@ -424,7 +459,8 @@
         "awk '$9 >= 500 {print $0}' access.log # 过滤HTTP 500",
         "awk -F',' '{sum += $3} END {print sum}' data.csv # 求和",
         "awk '{print $7}' access.log | sort | uniq -c | sort -rn | head -10 # 最热门URL"
-      ]
+      ],
+      "hint": "文本处理: NR 行号, NF 字段数,  第一列, BEGIN/END 块。单引号包裹脚本"
     },
     {
       "name": "sed",
@@ -437,7 +473,8 @@
         "sed -i 's/old/new/g' config.yaml # 全局替换文本",
         "sed -n '10,20p' file.txt # 打印第10-20行",
         "sed '/^$/d' file.txt # 删除空行"
-      ]
+      ],
+      "hint": "-i 原地修改, s/old/new/g 全局替换, -n 仅输出匹配行, d 删除行, p 打印行"
     },
     {
       "name": "find",
@@ -451,7 +488,8 @@
         "find / -name 'nginx.conf' 2>/dev/null # 查找nginx配置文件",
         "find . -type f -size +100M # 查找大于100MB的文件",
         "find /tmp -type f -mtime +3 -delete # 删除3天前的临时文件"
-      ]
+      ],
+      "hint": "-name 按名, -type f/d 文件/目录, -mtime 修改时间, -size 大小, -exec 执行命令, -delete 删除"
     },
     {
       "name": "du",
@@ -464,7 +502,8 @@
         "du -sh * | sort -rh | head -10 # 查看当前目录最大的10个目录",
         "du -sh /var/log/* # 查看日志目录各文件大小",
         "du -d 1 -h / # 查看根目录一级子目录大小"
-      ]
+      ],
+      "hint": "-s 总大小, -h 人类可读, -d N 深度, --max-depth=N, sort -rh 排序。排查磁盘占满"
     },
     {
       "name": "df",
@@ -477,7 +516,8 @@
         "df -h # 人类可读格式显示磁盘使用",
         "df -i # 显示inode使用情况",
         "df -h / # 查看指定挂载点"
-      ]
+      ],
+      "hint": "-h 人类可读, -i inode 使用, -T 文件系统类型。排查磁盘空间不足"
     },
     {
       "name": "tar",
@@ -491,7 +531,8 @@
         "tar -xzf archive.tar.gz # 解压gz包",
         "tar -xjf archive.tar.bz2 # 解压bz2包",
         "tar -tf archive.tar.gz # 查看压缩包内容"
-      ]
+      ],
+      "hint": "-c 创建, -x 解压, -t 查看, -z gzip, -j bzip2, -J xz, -v 详细, -f 文件名"
     },
     {
       "name": "rsync",
@@ -504,7 +545,8 @@
         "rsync -avz --progress ./src/ user@host:/opt/app/ # 同步到远程",
         "rsync -avz --delete ./src/ user@host:/opt/app/ # 同步并删除多余文件",
         "rsync -avz --exclude 'node_modules' ./src/ user@host:/opt/app/ # 排除目录"
-      ]
+      ],
+      "hint": "-a 归档(保留权限), -v 详细, -z 压缩传输, --progress 进度, --delete 同步删除, --exclude 排除"
     },
     {
       "name": "scp",
@@ -517,7 +559,8 @@
         "scp file.tar.gz user@host:/tmp/ # 上传文件到远程",
         "scp user@host:/var/log/app.log ./ # 从远程下载文件",
         "scp -r ./dist/ user@host:/opt/app/ # 递归拷贝目录"
-      ]
+      ],
+      "hint": "-r 递归目录, -P 指定端口(大写), -C 压缩, -i 指定密钥。大文件建议用 rsync"
     },
     {
       "name": "crontab",
@@ -530,7 +573,8 @@
         "crontab -l # 查看当前用户的定时任务",
         "crontab -e # 编辑定时任务",
         "crontab -l -u www # 查看指定用户的任务"
-      ]
+      ],
+      "hint": "-e 编辑, -l 查看, -r 删除。格式: 分 时 日 月 周 命令。* 任意, */5 每5, 0-59 范围"
     },
     {
       "name": "at",
@@ -543,7 +587,8 @@
         "echo '/opt/backup.sh' | at 2:00 AM # 明天凌晨2点执行",
         "atq # 查看待执行任务",
         "atrm 1 # 删除任务1"
-      ]
+      ],
+      "hint": "一次性定时任务。atq 查看, atrm 删除。交互式输入命令后 Ctrl+D 结束"
     },
     {
       "name": "watch",
@@ -556,7 +601,8 @@
         "watch -n 2 'ss -tlnp | grep 8080' # 每2秒查看端口状态",
         "watch -d 'df -h' # 高亮变化监控磁盘空间",
         "watch -n 5 'kubectl get pods' # 每5秒查看Pod状态"
-      ]
+      ],
+      "hint": "定期执行命令并全屏显示: -n 间隔秒(默认2), -d 高亮变化。监控利器"
     },
     {
       "name": "jq",
@@ -571,7 +617,8 @@
         "jq -r '.[].name' data.json # 提取原始值",
         "jq '.dependencies | keys' package.json # 获取依赖列表",
         "jq -s '.' *.json # 合并多个JSON文件为数组"
-      ]
+      ],
+      "hint": "JSON 处理: . 顶层, .key 取字段, .[] 遍历, select() 过滤, -r 原始输出, -s 合并, keys 取键"
     },
     {
       "name": "yq",
@@ -584,7 +631,8 @@
         "yq '.spec.replicas' deployment.yaml # 提取YAML字段",
         "yq '.spec.replicas = 3' deployment.yaml # 修改YAML值",
         "yq e '.metadata.name' k8s-config.yaml # 评估表达式"
-      ]
+      ],
+      "hint": "YAML/JSON/XML 处理(类似 jq 但支持 YAML)。.key 取值, .key=val 赋值"
     },
     {
       "name": "xargs",
@@ -597,7 +645,8 @@
         "find . -name '*.tmp' | xargs rm # 删除所有tmp文件",
         "cat urls.txt | xargs -n1 -P4 curl -s # 并发下载",
         "find . -name '*.log' | xargs grep 'ERROR' # 在结果中搜索"
-      ]
+      ],
+      "hint": "将 stdin 转为命令参数: -n 每行参数数, -I{} 替换符, -P 并行数, -0 配合 find -print0"
     },
     {
       "name": "tee",
@@ -609,7 +658,8 @@
       "examples": [
         "make build 2>&1 | tee build.log # 构建并保存日志",
         "python train.py 2>&1 | tee train.log # 训练并保存日志"
-      ]
+      ],
+      "hint": "分流: 读取 stdin 写到 stdout 和文件。-a 追加。常配合管道使用: cmd | tee log.txt"
     },
     {
       "name": "envsubst",
@@ -621,7 +671,8 @@
       "examples": [
         "envsubst < config.template.yaml > config.yaml # 替换模板变量",
         "envsubst '${HOST}:${PORT}' < nginx.conf.template > nginx.conf # 指定替换变量"
-      ]
+      ],
+      "hint": "替换文件中的 $VAR 为环境变量值。常用于模板渲染: nginx 配置、k8s 配置"
     },
     {
       "name": "openssl",
@@ -637,7 +688,8 @@
         "openssl req -new -x509 -key private.key -out cert.pem -days 365 # 生成自签名证书",
         "openssl dgst -sha256 file.zip # 计算文件SHA256",
         "echo -n 'data' | openssl base64 # Base64编码"
-      ]
+      ],
+      "hint": "s_client 连接测试, x509 证书操作, genrsa 生成 RSA, req 生成 CSR, dgst 摘要, enc 加解密"
     },
     {
       "name": "ssh",
@@ -652,7 +704,8 @@
         "ssh -L 8080:localhost:80 user@host # 本地端口转发",
         "ssh -R 9090:localhost:8080 user@host # 远程端口转发",
         "ssh -J bastion user@internal-host # 通过跳板机连接"
-      ]
+      ],
+      "hint": "-i 指定密钥, -p 端口, -L 本地转发, -R 远程转发, -J 跳板机, -o 选项(如 StrictHostKeyChecking=no)"
     },
     {
       "name": "ssh-keygen",
@@ -665,7 +718,8 @@
         "ssh-keygen -t ed25519 -C 'user@host' # 生成Ed25519密钥",
         "ssh-keygen -t rsa -b 4096 -C 'deploy' # 生成RSA 4096密钥",
         "ssh-keygen -R 192.168.1.100 # 从known_hosts移除主机"
-      ]
+      ],
+      "hint": "-t 算法(ed25519推荐/rsa), -b 位数, -C 注释, -R 移除 known_hosts 条目"
     },
     {
       "name": "screen",
@@ -679,7 +733,8 @@
         "screen -ls # 列出所有会话",
         "screen -r dev # 恢复会话",
         "screen -d -m ./start.sh # 后台创建会话并运行命令"
-      ]
+      ],
+      "hint": "-S 创建命名会话, -ls 列出, -r 恢复, -d 远程分离, Ctrl+A 命令前缀"
     },
     {
       "name": "tmux",
@@ -694,7 +749,8 @@
         "tmux attach -t dev # 恢复会话",
         "tmux kill-session -t dev # 终止会话",
         "tmux split-window -h # 水平分屏"
-      ]
+      ],
+      "hint": "更强大的终端复用器: new -s 创建, ls 列出, attach -t 恢复, kill-session 终止。Ctrl+B 命令前缀"
     },
     {
       "name": "hostname",
@@ -707,7 +763,8 @@
         "hostname # 显示主机名",
         "hostname -I # 显示所有IP地址",
         "hostname -f # 显示FQDN"
-      ]
+      ],
+      "hint": "显示/设置主机名。-I 所有 IP, -f FQDN, -d 域名部分"
     },
     {
       "name": "uname",
@@ -720,7 +777,8 @@
         "uname -a # 显示所有系统信息",
         "uname -r # 显示内核版本",
         "uname -m # 显示系统架构"
-      ]
+      ],
+      "hint": "-a 全部信息, -r 内核版本, -m 架构(x86_64/aarch64), -s 内核名"
     },
     {
       "name": "free",
@@ -733,7 +791,8 @@
         "free -h # 人类可读格式显示内存",
         "free -m # 以MB为单位显示",
         "watch -n 1 free -h # 每秒刷新内存信息"
-      ]
+      ],
+      "hint": "-h 人类可读, -m MB, -g GB, --total 总计。看 available(可用)而非 free(空闲)"
     },
     {
       "name": "uptime",
@@ -744,7 +803,8 @@
       "category": "系统信息",
       "examples": [
         "uptime # 显示运行时间、用户数、负载"
-      ]
+      ],
+      "hint": "显示: 当前时间, 运行时长, 登录用户数, 1/5/15 分钟平均负载"
     },
     {
       "name": "sar",
@@ -758,7 +818,8 @@
         "sar -r 1 5 # 每秒采样内存共5次",
         "sar -n DEV 1 5 # 网络流量统计",
         "sar -d 1 5 # 磁盘IO统计"
-      ]
+      ],
+      "hint": "sysstat 包提供。-u CPU, -r 内存, -n DEV 网络, -d 磁盘 IO。需安装并启用"
     },
     {
       "name": "iostat",
@@ -770,7 +831,8 @@
       "examples": [
         "iostat -x 1 # 每秒显示扩展IO统计",
         "iostat -d sda 1 # 查看指定磁盘IO"
-      ]
+      ],
+      "hint": "sysstat 包提供。-x 扩展统计(含 await/svctm 等关键指标), -d 仅磁盘, -c 仅 CPU"
     },
     {
       "name": "vmstat",
@@ -782,7 +844,8 @@
       "examples": [
         "vmstat 1 10 # 每秒采样共10次",
         "vmstat -s # 显示事件计数器"
-      ]
+      ],
+      "hint": "虚拟内存统计: swap in/out, io bi/bo, system cs, cpu us/sy/id/wa"
     },
     {
       "name": "dmesg",
@@ -795,7 +858,8 @@
         "dmesg -T # 带时间戳查看内核日志",
         "dmesg -T | grep -i error # 过滤错误",
         "dmesg -T | grep -i 'out of memory' # 查看OOM信息"
-      ]
+      ],
+      "hint": "-T 带时间戳, -l 过滤级别, | grep 过滤关键词。排查硬件/驱动/OOM 问题"
     },
     {
       "name": "systemctl",
@@ -809,7 +873,8 @@
         "systemctl restart nginx # 重启服务",
         "systemctl enable nginx # 设置开机自启",
         "systemctl list-units --type=service --state=running # 查看运行中的服务"
-      ]
+      ],
+      "hint": "systemd 服务管理: status/start/stop/restart/reload/enable/disable"
     },
     {
       "name": "journalctl",
@@ -823,7 +888,8 @@
         "journalctl --since '1 hour ago' # 查看最近1小时日志",
         "journalctl -u app --since '2024-01-01' --until '2024-01-02' # 按日期范围",
         "journalctl -p err -b # 本次启动的错误日志"
-      ]
+      ],
+      "hint": "systemd 日志: -u 服务, -f 跟踪, --since 时间, -p 优先级, -b 本次启动"
     },
     {
       "name": "nginx",
@@ -836,7 +902,8 @@
         "nginx -t # 测试配置文件",
         "nginx -s reload # 重新加载配置",
         "nginx -T # 查看完整配置"
-      ]
+      ],
+      "hint": "-t 测试配置(必用!), -s reload 重载, -s stop 停止, -T 显示完整配置"
     }
   ]
 }

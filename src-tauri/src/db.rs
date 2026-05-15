@@ -243,7 +243,7 @@ fn archive_dir() -> Result<PathBuf, String> {
     Ok(home.join(".easy-terminal").join("commands-archive"))
 }
 
-fn bundled_seeds() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
+pub fn bundled_seeds() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
     vec![
         (
             "windows",

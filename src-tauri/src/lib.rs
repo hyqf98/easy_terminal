@@ -379,6 +379,32 @@ fn read_file_preview(path: String) -> Result<fs::FilePreviewData, String> {
     fs::read_file_preview(&path)
 }
 
+#[derive(serde::Serialize)]
+struct BundledLibraryInfo {
+    name: String,
+    directory: String,
+}
+
+#[tauri::command]
+fn list_bundled_command_libraries() -> Vec<BundledLibraryInfo> {
+    db::bundled_seeds()
+        .into_iter()
+        .map(|(name, directory, _, _)| BundledLibraryInfo {
+            name: name.to_string(),
+            directory: directory.to_string(),
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn read_bundled_command_file(name: String) -> Result<String, String> {
+    db::bundled_seeds()
+        .into_iter()
+        .find(|(n, _, _, _)| *n == name)
+        .map(|(_, _, _, json)| json.to_string())
+        .ok_or_else(|| format!("bundled library not found: {}", name))
+}
+
 // === Settings Commands ===
 
 #[tauri::command]
@@ -780,6 +806,8 @@ pub fn run() {
             import_command_library,
             export_command_library,
             reset_builtin_library,
+            list_bundled_command_libraries,
+            read_bundled_command_file,
             open_desktop_draw_window,
             sync_desktop_draw_shortcut,
             show_desktop_draw_window,

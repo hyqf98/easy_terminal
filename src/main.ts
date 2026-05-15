@@ -4,6 +4,7 @@ import { Sidebar } from './sidebar';
 import { FileTree } from './file-tree';
 import { Settings } from './settings';
 import { CommandConfigPanel } from './command-config';
+import { CommandMarketPanel } from './command-market';
 import { CommandSuggest } from './command-suggest';
 import { CommandIntelligence } from './command-intelligence';
 import { HistoryPanel } from './history-panel';
@@ -61,6 +62,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const panelFiles = document.getElementById('panel-files')! as HTMLDivElement;
   const panelSettings = document.getElementById('panel-settings')! as HTMLDivElement;
   const panelCommands = document.getElementById('panel-commands')! as HTMLDivElement;
+  const panelMarket = document.getElementById('panel-market')! as HTMLDivElement;
   const panelHistory = document.getElementById('panel-history')! as HTMLDivElement;
   const panelMappings = document.getElementById('panel-mappings')! as HTMLDivElement;
   const panelSsh = document.getElementById('panel-ssh')! as HTMLDivElement;
@@ -184,12 +186,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   await updater.init(settings.getAutoCheckUpdate());
 
   // Command Config Panel
-  new CommandConfigPanel(panelCommands, async (command: string) => {
-    const sent = await terminalManager.sendCommandToActiveTerminal(command);
-    return sent;
-  }, async () => {
+  new CommandConfigPanel(panelCommands, async () => {
     await intelligence.reloadCommands();
   });
+
+  const marketPanel = new CommandMarketPanel(panelMarket, async () => {
+    await intelligence.reloadCommands();
+  });
+
+  const origTabChange = sidebar.onTabChange;
+  let marketInitialized = false;
+  sidebar.onTabChange = (tab: string | null) => {
+    origTabChange?.call(sidebar, tab);
+    if (tab === 'market' && !marketInitialized) {
+      marketInitialized = true;
+      void marketPanel.init();
+    }
+  };
 
   new HistoryPanel(panelHistory, intelligence, async (command: string) => {
     const sent = await terminalManager.sendCommandToActiveTerminal(command);

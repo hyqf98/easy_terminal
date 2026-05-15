@@ -7,28 +7,30 @@
       "name": "conda",
       "alias": [],
       "name_cn": "Conda 主命令",
-      "description": "Conda 包与环境管理入口",
+      "description": "Conda 跨平台包管理与环境管理工具入口(Anaconda/Miniconda)",
       "usage": "conda <command>",
       "category": "Conda",
+      "hint": "核心子命令: create(创建环境), activate(激活), install(安装包), list(列表), env(环境管理), clean(清理缓存)",
       "examples": [
-        "conda --version # 查看Conda版本",
-        "conda info # 查看Conda信息",
-        "conda config --show # 查看配置",
-        "conda clean --all # 清理缓存"
+        "conda --version # 查看 Conda 版本",
+        "conda info # 查看 Conda 详细信息(环境列表、默认源等)",
+        "conda config --show # 查看所有配置",
+        "conda clean --all # 清理缓存和未使用的包(释放磁盘空间)"
       ]
     },
     {
       "name": "conda create",
       "alias": [],
       "name_cn": "创建环境",
-      "description": "创建新的 Conda 环境",
-      "usage": "conda create -n <env> python=<version>",
+      "description": "创建隔离的 Conda 虚拟环境",
+      "usage": "conda create -n <name> [packages]",
       "category": "Conda",
+      "hint": "-n 按名称创建, -p 按路径创建, python=X.X 指定 Python 版本, --clone 克隆已有环境",
       "examples": [
-        "conda create -n myenv python=3.12 # 创建Python 3.12环境",
-        "conda create -n data-env numpy pandas matplotlib # 创建并安装包",
-        "conda create -n py310 python=3.10 # 创建Python 3.10环境",
-        "conda create -n test-env --clone base # 克隆base环境",
+        "conda create -n myenv python=3.12 # 创建 Python 3.12 环境",
+        "conda create -n data-env python=3.11 numpy pandas matplotlib # 创建并安装包",
+        "conda create -n py310 python=3.10 # 创建 Python 3.10 环境",
+        "conda create -n test-env --clone base # 克隆 base 环境",
         "conda create -p ./envs/myenv python=3.11 # 在指定路径创建环境"
       ]
     },
@@ -36,38 +38,41 @@
       "name": "conda activate",
       "alias": [],
       "name_cn": "激活环境",
-      "description": "激活指定 Conda 环境",
+      "description": "激活指定的 Conda 环境(切换环境)",
       "usage": "conda activate <env>",
       "category": "Conda",
+      "hint": "激活后命令行前面会显示环境名，deactivate 退出当前环境",
       "examples": [
-        "conda activate myenv # 激活myenv环境",
-        "conda activate base # 激活base环境",
-        "conda activate /path/to/env # 激活指定路径的环境"
+        "conda activate myenv # 激活 myenv 环境",
+        "conda activate base # 回到 base 环境",
+        "conda activate /path/to/env # 按路径激活环境"
       ]
     },
     {
       "name": "conda deactivate",
       "alias": [],
       "name_cn": "退出环境",
-      "description": "退出当前 Conda 环境",
+      "description": "退出当前激活的 Conda 环境",
       "usage": "conda deactivate",
       "category": "Conda",
+      "hint": "连续调用可逐层退出嵌套环境，最终回到 base",
       "examples": [
-        "conda deactivate # 退出当前环境",
-        "conda deactivate && conda activate other # 切换到另一个环境"
+        "conda deactivate # 退出当前环境(回到上一层)",
+        "conda deactivate && conda activate other # 快速切换环境"
       ]
     },
     {
       "name": "conda install",
       "alias": [],
       "name_cn": "安装包",
-      "description": "在当前环境安装包",
-      "usage": "conda install <package>",
+      "description": "在当前环境安装包(自动解决依赖)",
+      "usage": "conda install [options] <package>",
       "category": "Conda",
+      "hint": "-c 指定频道(如 conda-forge), -n 指定环境, =version 指定版本, 可同时安装多个",
       "examples": [
-        "conda install numpy # 安装numpy",
+        "conda install numpy # 安装最新版 numpy",
         "conda install pandas=2.1 # 安装指定版本",
-        "conda install -c conda-forge scikit-learn # 从conda-forge频道安装",
+        "conda install -c conda-forge scikit-learn # 从 conda-forge 频道安装",
         "conda install numpy scipy matplotlib # 同时安装多个包",
         "conda install -n myenv requests # 在指定环境中安装"
       ]
@@ -75,29 +80,30 @@
     {
       "name": "conda remove",
       "alias": [],
-      "name_cn": "卸载包",
-      "description": "从当前环境移除包",
-      "usage": "conda remove <package>",
+      "name_cn": "卸载包/环境",
+      "description": "移除包或整个环境",
+      "usage": "conda remove <package> / conda remove --all -n <env>",
       "category": "Conda",
+      "hint": "移除包: conda remove <package>, 删除环境: conda remove --all -n <env>",
       "examples": [
-        "conda remove numpy # 移除numpy",
+        "conda remove numpy # 从当前环境移除 numpy",
         "conda remove --all -n oldenv # 删除整个环境",
-        "conda remove -n myenv pandas # 从指定环境移除包",
-        "conda remove numpy scipy # 同时移除多个包"
+        "conda remove -n myenv pandas # 从指定环境移除包"
       ]
     },
     {
       "name": "conda list",
       "alias": [],
       "name_cn": "包列表",
-      "description": "查看当前环境已安装的包",
-      "usage": "conda list",
+      "description": "查看当前环境已安装的所有包",
+      "usage": "conda list [options]",
       "category": "Conda",
+      "hint": "可指定包名过滤, -n 查看指定环境, --revisions 查看环境变更历史",
       "examples": [
         "conda list # 列出当前环境所有包",
-        "conda list numpy # 查看指定包信息",
-        "conda list -n myenv # 查看指定环境的包",
-        "conda list --revisions # 查看环境变更历史"
+        "conda list numpy # 查看 numpy 安装信息",
+        "conda list -n myenv # 查看指定环境的包列表",
+        "conda list --revisions # 查看环境变更历史(可回滚)"
       ]
     },
     {
@@ -107,37 +113,38 @@
       "description": "列出本机所有 Conda 环境",
       "usage": "conda env list",
       "category": "Conda",
+      "hint": "* 标记的是当前激活的环境。路径显示环境存储位置",
       "examples": [
-        "conda env list # 列出所有环境",
-        "conda info --envs # 同样列出所有环境",
-        "conda env list | grep myenv # 搜索指定环境"
+        "conda env list # 列出所有环境及路径",
+        "conda info --envs # 同上(别名)"
       ]
     },
     {
       "name": "conda env export",
       "alias": [],
       "name_cn": "导出环境",
-      "description": "导出当前环境依赖定义",
+      "description": "导出当前环境的完整依赖定义到 YAML 文件",
       "usage": "conda env export > environment.yml",
       "category": "Conda",
+      "hint": "--no-builds 不含构建版本号(跨平台兼容), -n 导出指定环境",
       "examples": [
-        "conda env export > environment.yml # 导出环境到文件",
+        "conda env export > environment.yml # 导出当前环境",
         "conda env export -n myenv > env.yml # 导出指定环境",
-        "conda env export --no-builds > env.yml # 导出时不包含构建版本号",
-        "conda env export -f environment.yml # 导出到指定文件"
+        "conda env export --no-builds > env.yml # 导出不带构建号的版本"
       ]
     },
     {
       "name": "conda env create",
       "alias": [],
       "name_cn": "从文件创建环境",
-      "description": "根据 environment.yml 创建环境",
+      "description": "根据 environment.yml 文件创建环境(复现环境)",
       "usage": "conda env create -f environment.yml",
       "category": "Conda",
+      "hint": "-f 指定文件, -n 指定环境名覆盖文件中的名称",
       "examples": [
         "conda env create -f environment.yml # 从文件创建环境",
         "conda env create -f env.yml -n newenv # 创建并指定环境名",
-        "conda env update -f environment.yml # 更新现有环境"
+        "conda env update -f environment.yml # 更新已有环境(不重建)"
       ]
     }
   ]

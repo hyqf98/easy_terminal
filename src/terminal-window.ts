@@ -2383,7 +2383,7 @@ export class TerminalWindow {
   }
 
   private shouldUseInteractiveOverlays(): boolean {
-    return !this.isSshTerminal();
+    return true;
   }
 
   private isCanvasViewTransitionActive(): boolean {
@@ -2540,6 +2540,18 @@ export class TerminalWindow {
     if (!this.id || !text) return;
     await invoke('write_pty', { sessionId: this.id, data: text });
     this.focus();
+  }
+
+  async injectCommandWithPlaceholders(command: string): Promise<boolean> {
+    if (!this.id) return false;
+    if (hasPlaceholder(command)) {
+      const parsed = parsePlaceholders(command);
+      await this.replaceCurrentInput(parsed.insertText, false);
+      this.enterPlaceholderMode(parsed.placeholders);
+      return true;
+    }
+    await this.replaceCurrentInput(command, false);
+    return false;
   }
 
   private calcFontSize(w: number, h: number): number {

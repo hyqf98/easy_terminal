@@ -7,173 +7,181 @@
       "name": "python",
       "alias": ["py", "python3"],
       "name_cn": "运行Python",
-      "description": "运行Python程序",
-      "usage": "python <file>",
+      "description": "Python 解释器，用于运行脚本、启动服务器、创建虚拟环境等",
+      "usage": "python [options] <file>",
       "category": "Python",
+      "hint": "-c 执行单行代码, -m 运行模块, -m venv 创建虚拟环境, -m http.server 启动简易HTTP服务器, --version 查看版本",
       "examples": [
-        "python main.py # 运行Python脚本",
-        "python -m http.server 8080 # 启动简易HTTP服务器",
-        "python -c \"print('hello')\" # 执行单行Python代码",
-        "python -m venv .venv # 创建虚拟环境",
-        "python --version # 查看Python版本"
+        "python main.py # 运行 Python 脚本",
+        "python -m http.server 8080 # 在 8080 端口启动简易 HTTP 服务器",
+        "python -c \"print('hello world')\" # 执行单行 Python 代码",
+        "python -m venv .venv # 在当前目录创建虚拟环境",
+        "python --version # 查看 Python 版本",
+        "python -m pdb main.py # 使用 pdb 调试器运行脚本",
+        "python -m json.tool data.json # 格式化 JSON 文件"
       ]
     },
     {
       "name": "pip",
       "alias": ["pip3"],
       "name_cn": "PIP包管理",
-      "description": "Python 包管理器",
-      "usage": "pip <command>",
+      "description": "Python 包安装器，从 PyPI 安装和管理第三方库",
+      "usage": "pip <command> [options] <package>",
       "category": "Python",
+      "hint": "install 安装, uninstall 卸载, list 列出, freeze 导出依赖, show 包详情, -i 指定镜像源",
       "examples": [
-        "pip install requests # 安装包",
-        "pip install -r requirements.txt # 从文件安装依赖",
-        "pip list # 列出已安装的包",
+        "pip install requests # 安装最新版 requests",
+        "pip install -r requirements.txt # 从依赖文件批量安装",
+        "pip install flask==2.3.0 # 安装指定版本",
+        "pip install -e . # 以可编辑模式安装当前项目",
+        "pip list # 列出已安装的所有包",
+        "pip freeze > requirements.txt # 导出依赖到文件",
         "pip uninstall flask # 卸载包",
-        "pip install flask==2.3.0 # 安装指定版本"
+        "pip install -i https://pypi.tuna.tsinghua.edu.cn/simple requests # 使用清华镜像源"
       ]
     },
     {
       "name": "pipenv",
       "alias": [],
       "name_cn": "Pipenv",
-      "description": "Python 虚拟环境管理",
+      "description": "集成了 pip 和 virtualenv 的 Python 包管理工具，自动维护 Pipfile",
       "usage": "pipenv <command>",
       "category": "Python",
+      "hint": "install 安装依赖(自动创建环境), shell 激活环境, run 在环境中执行命令, graph 查看依赖树",
       "examples": [
-        "pipenv install # 安装项目依赖",
-        "pipenv install requests # 安装包并更新Pipfile",
-        "pipenv shell # 激活虚拟环境",
-        "pipenv run python main.py # 在虚拟环境中运行脚本",
-        "pipenv graph # 查看依赖树"
+        "pipenv install # 安装 Pipfile 中的所有依赖",
+        "pipenv install requests # 安装包并更新 Pipfile",
+        "pipenv install --dev pytest # 安装为开发依赖",
+        "pipenv shell # 激活虚拟环境(进入子 shell)",
+        "pipenv run python main.py # 在虚拟环境中运行脚本(不进入 shell)",
+        "pipenv graph # 查看依赖树",
+        "pipenv --rm # 删除虚拟环境"
       ]
     },
     {
       "name": "poetry",
       "alias": [],
       "name_cn": "Poetry",
-      "description": "Python 依赖管理工具",
+      "description": "现代 Python 项目管理和依赖管理工具，管理 pyproject.toml",
       "usage": "poetry <command>",
       "category": "Python",
+      "hint": "init 初始化, add 添加依赖, install 安装依赖, run 在环境中执行, build 构建, publish 发布",
       "examples": [
-        "poetry init # 初始化新项目",
-        "poetry add requests # 添加依赖",
-        "poetry install # 安装所有依赖",
-        "poetry run python main.py # 在虚拟环境中运行",
-        "poetry build # 构建分发包"
-      ]
-    },
-    {
-      "name": "conda",
-      "alias": [],
-      "name_cn": "Conda",
-      "description": "Anaconda 包和环境管理",
-      "usage": "conda <command>",
-      "category": "Python",
-      "examples": [
-        "conda create -n myenv python=3.12 # 创建新环境",
-        "conda activate myenv # 激活环境",
-        "conda install numpy # 安装包",
-        "conda env list # 列出所有环境",
-        "conda deactivate # 退出当前环境"
+        "poetry init # 交互式初始化新项目",
+        "poetry add requests # 添加运行时依赖",
+        "poetry add --group dev pytest # 添加开发依赖",
+        "poetry install # 安装 pyproject.toml 中的所有依赖",
+        "poetry run python main.py # 在虚拟环境中运行脚本",
+        "poetry build # 构建分发包(tar.gz 和 wheel)",
+        "poetry publish # 发布到 PyPI",
+        "poetry show --tree # 查看依赖树"
       ]
     },
     {
       "name": "virtualenv",
       "alias": ["venv"],
       "name_cn": "虚拟环境",
-      "description": "创建Python虚拟环境",
-      "usage": "virtualenv <name>",
+      "description": "创建独立的 Python 虚拟环境，隔离项目依赖",
+      "usage": "virtualenv [options] <name>",
       "category": "Python",
+      "hint": "激活: source venv/bin/activate (macOS/Linux) 或 venv\\Scripts\\activate (Windows)。退出: deactivate",
       "examples": [
-        "virtualenv venv # 创建名为venv的虚拟环境",
-        "virtualenv -p python3.12 venv # 指定Python版本",
-        "source venv/bin/activate # 激活虚拟环境(Linux/Mac)",
-        "venv\\Scripts\\activate # 激活虚拟环境(Windows)"
+        "python -m venv .venv # 使用内置 venv 模块创建环境",
+        "virtualenv venv # 使用 virtualenv 包创建环境",
+        "virtualenv -p python3.12 venv # 指定 Python 版本",
+        "source .venv/bin/activate # 激活虚拟环境(macOS/Linux)",
+        "deactivate # 退出虚拟环境"
       ]
     },
     {
       "name": "pytest",
       "alias": [],
       "name_cn": "Pytest测试",
-      "description": "Python 测试框架",
-      "usage": "pytest [options]",
+      "description": "Python 测试框架，自动发现测试用例并提供丰富的断言和 fixture 支持",
+      "usage": "pytest [options] [path]",
       "category": "Python",
+      "hint": "-v 详细输出, -s 显示 print 输出, -k 按名称过滤, --cov 覆盖率, -x 遇到失败停止, -n 并行执行",
       "examples": [
-        "pytest # 运行所有测试",
+        "pytest # 自动发现并运行所有 test_*.py 中的测试",
         "pytest tests/test_user.py # 运行指定测试文件",
-        "pytest -v # 详细输出模式",
-        "pytest --cov=src # 生成覆盖率报告",
-        "pytest -k 'test_login' # 运行名称匹配的测试"
+        "pytest -v # 详细模式(显示每个测试名称和结果)",
+        "pytest -x # 遇到第一个失败即停止",
+        "pytest --cov=src # 生成代码覆盖率报告",
+        "pytest -k 'test_login' # 仅运行名称包含 test_login 的测试",
+        "pytest -n 4 # 使用 4 个进程并行执行测试"
       ]
     },
     {
       "name": "black",
       "alias": [],
       "name_cn": "代码格式化",
-      "description": "Python 代码格式化工具",
-      "usage": "black <file>",
+      "description": "不妥协的 Python 代码格式化工具(The Uncompromising Code Formatter)",
+      "usage": "black [options] <path>",
       "category": "Python",
+      "hint": "默认行长 88, -l 指定行长, --check 仅检查不修改, --diff 显示差异",
       "examples": [
-        "black main.py # 格式化单个文件",
         "black src/ # 格式化整个目录",
-        "black --check src/ # 仅检查不修改",
-        "black --diff main.py # 显示格式化差异",
-        "black -l 120 src/ # 设置每行最大字符数"
+        "black main.py # 格式化单个文件",
+        "black --check src/ # 仅检查是否有格式问题(不修改文件)",
+        "black --diff main.py # 显示将要进行的格式化差异",
+        "black -l 120 src/ # 设置每行最大 120 字符"
       ]
     },
     {
-      "name": "flake8",
+      "name": "ruff",
       "alias": [],
-      "name_cn": "代码检查",
-      "description": "Python 代码检查工具",
-      "usage": "flake8 <file>",
+      "name_cn": "Ruff检查",
+      "description": "极速 Python 代码检查和格式化工具(Rust 编写，替代 flake8+isort+black)",
+      "usage": "ruff <command> [path]",
       "category": "Python",
+      "hint": "check 检查代码, format 格式化, --fix 自动修复, --select 选择规则",
       "examples": [
-        "flake8 main.py # 检查单个文件",
-        "flake8 src/ # 检查整个目录",
-        "flake8 --max-line-length=120 src/ # 设置最大行长度",
-        "flake8 --ignore=E501,W503 src/ # 忽略指定规则",
-        "flake8 --exclude=migrations src/ # 排除目录"
+        "ruff check src/ # 检查代码问题",
+        "ruff check --fix src/ # 自动修复可修复的问题",
+        "ruff format src/ # 格式化代码",
+        "ruff check --select E,F,W src/ # 仅检查特定规则"
       ]
     },
     {
       "name": "mypy",
       "alias": [],
       "name_cn": "类型检查",
-      "description": "Python 静态类型检查",
-      "usage": "mypy <file>",
+      "description": "Python 静态类型检查工具，检查类型注解的正确性",
+      "usage": "mypy [options] <path>",
       "category": "Python",
+      "hint": "--strict 严格模式, --ignore-missing-imports 忽略第三方库缺失类型, --config-file 指定配置",
       "examples": [
-        "mypy main.py # 检查单个文件",
         "mypy src/ # 检查整个目录",
-        "mypy --strict src/ # 严格模式检查",
-        "mypy --ignore-missing-imports src/ # 忽略缺失的导入",
-        "mypy --config-file mypy.ini src/ # 使用配置文件"
+        "mypy main.py # 检查单个文件",
+        "mypy --strict src/ # 严格模式(检查所有类型)",
+        "mypy --ignore-missing-imports src/ # 忽略未安装类型存根的第三方库"
       ]
     },
     {
       "name": "jupyter",
       "alias": [],
       "name_cn": "Jupyter",
-      "description": "Jupyter Notebook",
-      "usage": "jupyter notebook",
+      "description": "Jupyter Notebook / JupyterLab 交互式计算环境",
+      "usage": "jupyter <command>",
       "category": "Python",
+      "hint": "notebook 启动经典笔记本, lab 启动 JupyterLab, nbconvert 转换格式, kernelspec 管理内核",
       "examples": [
-        "jupyter notebook # 启动Jupyter Notebook",
-        "jupyter lab # 启动JupyterLab",
-        "jupyter nbconvert --to script notebook.ipynb # 转换为Python脚本",
-        "jupyter kernelspec list # 列出已安装的内核",
-        "jupyter notebook --port 8889 # 指定端口启动"
+        "jupyter notebook # 启动经典 Notebook(自动打开浏览器)",
+        "jupyter lab # 启动 JupyterLab(推荐)",
+        "jupyter notebook --port 8889 --no-browser # 指定端口且不打开浏览器",
+        "jupyter nbconvert --to script notebook.ipynb # 转换为 Python 脚本",
+        "jupyter nbconvert --to html notebook.ipynb # 转换为 HTML",
+        "jupyter kernelspec list # 列出已安装的内核"
       ]
     },
     {
       "name": "uv",
       "alias": [],
       "name_cn": "UV包管理",
-      "description": "极速Python包管理器",
+      "description": "Astral 出品的极速 Python 包管理器(Rust 编写，比 pip 快 10-100 倍)",
       "usage": "uv <command>",
       "category": "Python",
+      "hint": "替代 pip/pip-tools/virtualenv/poetry 的统一工具。详见 uv 专属命令库",
       "examples": [
         "uv init demo-app # 初始化新项目",
         "uv add requests # 添加依赖",

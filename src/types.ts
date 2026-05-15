@@ -299,6 +299,20 @@ export interface SuggestionItem {
   placeholders?: ParsedPlaceholders;
 }
 
+export interface RemoteCommandLibrary {
+  name: string;
+  path: string;
+  size: number;
+  sha: string;
+  downloadUrl: string;
+  directory: 'system' | 'custom';
+  isInstalled: boolean;
+  commandCount: number;
+  label: string;
+  description: string;
+  loaded: boolean;
+}
+
 export interface TerminalInstance {
   id: string;
   x: number;

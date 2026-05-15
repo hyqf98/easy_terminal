@@ -34,11 +34,11 @@ export class CommandConfigPanel {
 
   constructor(
     container: HTMLDivElement,
-    private sendToTerminal: (command: string) => Promise<boolean>,
     private onLibraryChanged: (() => Promise<void>) | null = null
   ) {
     this.container = container;
     this.renderShell();
+    this.setupBodyDelegation();
     void this.init();
 
     document.addEventListener('click', (event) => {
@@ -64,6 +64,21 @@ export class CommandConfigPanel {
 
   private get body(): HTMLDivElement {
     return this.container.querySelector('.cmd-panel-body') as HTMLDivElement;
+  }
+
+  private setupBodyDelegation() {
+    this.container.addEventListener('click', async (event) => {
+      const target = event.target as HTMLElement;
+
+      const editBtn = target.closest('[data-edit-command]') as HTMLElement | null;
+      if (editBtn) {
+        event.stopImmediatePropagation();
+        event.stopPropagation();
+        await this.openCommandEditor(Number(editBtn.dataset.editCommand));
+        return;
+      }
+
+    });
   }
 
   private async init() {
@@ -227,7 +242,6 @@ export class CommandConfigPanel {
           ${preview}
         </div>
         <div class="cmd-command-actions">
-          <button class="cmd-mini-btn" data-send-command="${command.id}" title="${t('cmd.sendToTerminal')}">${sendIcon()}</button>
           <button class="cmd-mini-btn" data-edit-command="${command.id}" title="${t('cmd.edit')}">${editIcon()}</button>
         </div>
       </div>
@@ -281,7 +295,15 @@ export class CommandConfigPanel {
       `;
     }
 
-    const detail = this.overlayState.detail || emptyCommandDetail(this.overlayState.libraryId);
+    const raw = this.overlayState.detail || emptyCommandDetail(this.overlayState.libraryId);
+    const detail = {
+      ...raw,
+      alias: raw.alias || [],
+      tags: raw.tags || [],
+      triggers: raw.triggers || [],
+      keywords: raw.keywords || [],
+      examples: raw.examples || [],
+    };
     return `
       <div class="cmd-overlay-card wide">
         <div class="cmd-overlay-title">${detail.id ? t('cmd.editCmd') : t('cmd.addCmd')}</div>
@@ -292,7 +314,7 @@ export class CommandConfigPanel {
         </label>
         <label class="cmd-field">
           <span>${t('cmd.command')}</span>
-          <textarea id="cmd-command" rows="4" placeholder="npm run dev">${escapeHtml(detail.command || detail.name)}</textarea>
+          <textarea id="cmd-command" rows="4" placeholder="npm run dev&#10;支持 [%s:参数名] 占位符自动跳转光标">${escapeHtml(detail.command || detail.name)}</textarea>
         </label>
         <label class="cmd-field">
           <span>${t('cmd.nameCn')}</span>
@@ -431,20 +453,6 @@ export class CommandConfigPanel {
 
     this.body.querySelector('[data-export-library]')?.addEventListener('click', async () => {
       await this.exportActiveLibrary();
-    });
-
-    this.body.querySelectorAll<HTMLElement>('[data-send-command]').forEach((button) => {
-      button.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        await this.sendCommand(Number(button.dataset.sendCommand));
-      });
-    });
-
-    this.body.querySelectorAll<HTMLElement>('[data-edit-command]').forEach((button) => {
-      button.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        await this.openCommandEditor(Number(button.dataset.editCommand));
-      });
     });
 
     this.body.querySelectorAll<HTMLElement>('.cmd-command-item').forEach((item) => {
@@ -603,16 +611,7 @@ export class CommandConfigPanel {
     await this.render();
   }
 
-  private async sendCommand(id: number) {
-    const command = this.activePage.items.find((item) => item.id === id);
-    if (!command) return;
-    const sent = await this.sendToTerminal(command.command || command.name);
-    if (!sent) {
-      alert(t('cmd.noActiveTerminal'));
-    }
-  }
-
-  private showContextMenu(x: number, y: number, commandId: number) {
+  private async showContextMenu(x: number, y: number, commandId: number) {
     this.closeContextMenu();
     const command = this.activePage.items.find((item) => item.id === commandId);
     if (!command) return;
@@ -621,11 +620,6 @@ export class CommandConfigPanel {
     menu.className = 'context-menu cmd-context-menu';
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
-
-    menu.appendChild(this.createMenuItem(t('cmd.sendToTerminal'), sendIcon(), async () => {
-      await this.sendCommand(commandId);
-      this.closeContextMenu();
-    }));
 
     menu.appendChild(this.createMenuItem(t('cmd.edit'), editIcon(), async () => {
       await this.openCommandEditor(commandId);
@@ -721,7 +715,8 @@ function formatCategoryTitle(id: string): string {
   return titles[id] || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function escapeHtml(value: string): string {
+function escapeHtml(value: string | undefined | null): string {
+  if (value == null) return '';
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -747,10 +742,6 @@ function downloadIcon(): string {
 
 function resetIcon(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-9"></path></svg>`;
-}
-
-function sendIcon(): string {
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`;
 }
 
 function editIcon(): string {

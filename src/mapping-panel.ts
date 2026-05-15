@@ -84,7 +84,7 @@ export class MappingPanel {
           </label>
           <label class="cmd-field">
             <span>${t('cmd.command')}</span>
-            <textarea id="mapping-command" rows="4" placeholder="cd /work/project">${escapeHtml(mapping.command)}</textarea>
+            <textarea id="mapping-command" rows="4" placeholder="cd /work/project&#10;支持 [%s:参数名] 占位符自动跳转光标">${escapeHtml(mapping.command)}</textarea>
           </label>
           <label class="cmd-field">
             <span>${t('cmd.description')}</span>
