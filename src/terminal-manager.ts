@@ -36,6 +36,7 @@ export class TerminalManager {
   public onActiveTerminalCwdChange: ((cwd: string) => void) | null = null;
   public onActiveTerminalChange: ((context: { cwd: string; launchOptions: TerminalLaunchOptions } | null) => void) | null = null;
   public onAddMappingFromSelection: ((text: string) => void) | null = null;
+  public onTerminalClosed: (() => void) | null = null;
 
   constructor(
     canvasEl: HTMLElement,
@@ -102,6 +103,7 @@ export class TerminalManager {
       if (this.activeId === id) {
         this.activeId = null;
       }
+      this.onTerminalClosed?.();
     }
   }
 

@@ -127,6 +127,11 @@ const messages: Record<Lang, Record<string, string>> = {
     'file.modified': '修改时间',
     'file.sortDirection': '切换排序方向',
     'file.noResults': '没有匹配的文件',
+    'file.favorites': '收藏夹',
+    'file.favoritesEmpty': '右键文件夹添加到收藏',
+    'file.addToFavorites': '添加到收藏夹',
+    'file.removeFromFavorites': '从收藏夹移除',
+    'file.favoritesFull': '收藏夹已满（最多20个）',
 
     // Hints
     'hint.canvas': '在空白区域拖拽以创建终端 | 滚轮平移 | Shift+滚轮水平移动 | Ctrl+滚轮缩放',
@@ -379,6 +384,11 @@ const messages: Record<Lang, Record<string, string>> = {
     'file.modified': 'Modified',
     'file.sortDirection': 'Toggle sort direction',
     'file.noResults': 'No matching files',
+    'file.favorites': 'Favorites',
+    'file.favoritesEmpty': 'Right-click folder to add',
+    'file.addToFavorites': 'Add to Favorites',
+    'file.removeFromFavorites': 'Remove from Favorites',
+    'file.favoritesFull': 'Favorites full (max 20)',
 
     // Hints
     'hint.canvas': 'Drag empty area to create terminal | Scroll to pan | Shift+Scroll horizontal | Ctrl+Scroll zoom',

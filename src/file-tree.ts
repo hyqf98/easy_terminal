@@ -54,11 +54,14 @@ export class FileTree {
   private createModal: HTMLDivElement | null = null;
   private sshProfiles: SSHProfile[] = [];
   private remoteHomeCache = new Map<string, string>();
+  private nameColWidth = 0;
   private sortKey: SortKey = 'name';
   private sortDirection: SortDirection = 'asc';
   private transferBar: HTMLDivElement | null = null;
   private transferHideTimer: number | null = null;
   private activeDropTargetPath = '';
+  private favorites: Array<{ path: string; name: string }> = [];
+  private static readonly FAVORITES_MAX = 20;
 
   public onOpenTerminal?: (dirPath: string) => void;
 
@@ -126,12 +129,16 @@ export class FileTree {
         </select>
         <button class="file-sort-order-btn" id="file-sort-order-btn" title="${t('file.sortDirection')}">↓</button>
       </div>
-      <div class="file-tree-columns">
-        <span class="file-col-name">${t('file.sortName')}</span>
-        <span class="file-col-modified">${t('file.modified')}</span>
-        <span class="file-col-size">${t('file.sortSize')}</span>
+      <div class="file-tree-favorites" id="file-tree-favorites">
+        <div class="favorites-items" id="favorites-items"></div>
       </div>
-      <div class="panel-body">
+      <div class="file-tree-scroll-area">
+        <div class="file-tree-columns" id="file-tree-columns">
+          <span class="file-col-name">${t('file.sortName')}</span>
+          <div class="file-col-resizer" id="file-col-resizer"></div>
+          <span class="file-col-modified">${t('file.modified')}</span>
+          <span class="file-col-size">${t('file.sortSize')}</span>
+        </div>
         <div class="file-tree" id="file-tree-body"></div>
       </div>
     `;
@@ -164,6 +171,51 @@ export class FileTree {
         this.closeContextMenu();
       }
     });
+
+    const colResizer = this.container.querySelector('#file-col-resizer') as HTMLDivElement;
+    const columnsRow = this.container.querySelector('#file-tree-columns') as HTMLDivElement;
+    if (colResizer && columnsRow) {
+      colResizer.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const startX = e.clientX;
+        const nameSpan = columnsRow.querySelector('.file-col-name') as HTMLSpanElement;
+        const startNameWidth = nameSpan.getBoundingClientRect().width;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        colResizer.classList.add('active');
+        const onMove = (ev: MouseEvent) => {
+          const dx = ev.clientX - startX;
+          const newNameWidth = startNameWidth + dx;
+          if (newNameWidth < 40) return;
+          this.nameColWidth = newNameWidth;
+          this.applyColumnWidth(newNameWidth);
+        };
+        const onUp = () => {
+          colResizer.classList.remove('active');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
+
+    this.bindFavoritesEvents();
+    this.loadFavorites();
+  }
+
+  private applyColumnWidth(nameWidth: number) {
+    const colGrid = `${nameWidth}px 5px 92px 72px`;
+    const itemGrid = `18px 18px ${nameWidth}px 92px 72px`;
+    this.container.querySelectorAll('.tree-item').forEach((el) => {
+      (el as HTMLElement).style.gridTemplateColumns = itemGrid;
+    });
+    const columnsRow = this.container.querySelector('#file-tree-columns') as HTMLDivElement;
+    if (columnsRow) {
+      columnsRow.style.gridTemplateColumns = colGrid;
+    }
   }
 
   private get body(): HTMLDivElement {
@@ -187,6 +239,7 @@ export class FileTree {
     this.source = { kind: 'local' };
     this.selectedPaths.clear();
     this.lastClickedPath = '';
+    this.loadFavorites();
 
     if (this.platform === 'windows') {
       this.rootPath = '';
@@ -214,6 +267,7 @@ export class FileTree {
       || await invoke<string>('get_remote_home', { profile, profiles: this.sshProfiles });
     this.remoteHomeCache.set(profile.id, home);
     this.source = { kind: 'remote', profileId: profile.id, home };
+    this.loadFavorites();
 
     const normalizedTarget = normalizeRemotePath(revealPath || home);
     this.rootPath = normalizedTarget.startsWith(home) ? home : '/';
@@ -446,6 +500,9 @@ export class FileTree {
     item.dataset.path = entry.path;
     item.dataset.isDir = String(entry.is_dir);
     item.style.paddingLeft = `${depth * 16 + 8}px`;
+    if (this.nameColWidth > 0) {
+      item.style.gridTemplateColumns = `18px 18px ${this.nameColWidth}px 92px 72px`;
+    }
     if (this.selectedPaths.has(entry.path)) item.classList.add('selected');
 
     const arrow = document.createElement('span');
@@ -558,6 +615,20 @@ export class FileTree {
         this.closeContextMenu();
       }, true));
       menu.appendChild(this.menuSeparator());
+      if (entry.is_dir) {
+        if (this.isFavorite(entry.path)) {
+          menu.appendChild(this.menuItem(t('file.removeFromFavorites'), starOffSvg(), () => {
+            this.removeFavorite(entry.path);
+            this.closeContextMenu();
+          }));
+        } else {
+          menu.appendChild(this.menuItem(t('file.addToFavorites'), starOnSvg(), () => {
+            this.addFavorite(entry.path);
+            this.closeContextMenu();
+          }));
+        }
+      }
+      menu.appendChild(this.menuSeparator());
       menu.appendChild(this.menuItem('刷新目录', refreshSvg(), async () => {
         await this.refresh();
         this.closeContextMenu();
@@ -588,6 +659,20 @@ export class FileTree {
         await this.deleteSelected();
         this.closeContextMenu();
       }, true));
+      if (entry.is_dir) {
+        menu.appendChild(this.menuSeparator());
+        if (this.isFavorite(entry.path)) {
+          menu.appendChild(this.menuItem(t('file.removeFromFavorites'), starOffSvg(), () => {
+            this.removeFavorite(entry.path);
+            this.closeContextMenu();
+          }));
+        } else {
+          menu.appendChild(this.menuItem(t('file.addToFavorites'), starOnSvg(), () => {
+            this.addFavorite(entry.path);
+            this.closeContextMenu();
+          }));
+        }
+      }
     }
 
     document.body.appendChild(menu);
@@ -616,6 +701,94 @@ export class FileTree {
     if (!this.contextMenu) return;
     this.contextMenu.remove();
     this.contextMenu = null;
+  }
+
+  private get favoritesStorageKey(): string {
+    if (this.source.kind === 'remote') {
+      return `easy_terminal_favorites_ssh_${(this.source as { kind: 'remote'; profileId: string }).profileId}`;
+    }
+    return 'easy_terminal_favorites_local';
+  }
+
+  private loadFavorites() {
+    try {
+      const raw = localStorage.getItem(this.favoritesStorageKey);
+      this.favorites = raw ? JSON.parse(raw) : [];
+    } catch {
+      this.favorites = [];
+    }
+    this.renderFavorites();
+  }
+
+  private saveFavorites() {
+    localStorage.setItem(this.favoritesStorageKey, JSON.stringify(this.favorites));
+  }
+
+  private renderFavorites() {
+    const itemsEl = this.container.querySelector('#favorites-items') as HTMLDivElement;
+    if (!itemsEl) return;
+    itemsEl.innerHTML = '';
+
+    if (this.favorites.length === 0) {
+      itemsEl.classList.add('empty');
+      itemsEl.setAttribute('data-empty-text', t('file.favoritesEmpty'));
+      return;
+    }
+    itemsEl.classList.remove('empty');
+    itemsEl.removeAttribute('data-empty-text');
+
+    for (const fav of this.favorites) {
+      const item = document.createElement('span');
+      item.className = 'favorites-item';
+      item.title = fav.path;
+      item.innerHTML = `${starOnSvg()}<span class="favorites-item-name">${escapeHtml(fav.name)}</span><span class="favorites-item-remove">&times;</span>`;
+      item.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).classList.contains('favorites-item-remove')) return;
+        this.navigateToFavorite(fav.path);
+      });
+      item.querySelector('.favorites-item-remove')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.removeFavorite(fav.path);
+      });
+      itemsEl.appendChild(item);
+    }
+  }
+
+  addFavorite(path: string) {
+    if (this.favorites.length >= FileTree.FAVORITES_MAX) {
+      alert(t('file.favoritesFull'));
+      return;
+    }
+    if (this.favorites.some((f) => f.path === path)) return;
+    const name = path.split(/[\\/]/).filter(Boolean).pop() || path;
+    this.favorites.push({ path, name });
+    this.saveFavorites();
+    this.renderFavorites();
+  }
+
+  private removeFavorite(path: string) {
+    this.favorites = this.favorites.filter((f) => f.path !== path);
+    this.saveFavorites();
+    this.renderFavorites();
+  }
+
+  private isFavorite(path: string): boolean {
+    return this.favorites.some((f) => f.path === path);
+  }
+
+  private navigateToFavorite(path: string) {
+    if (this.source.kind === 'remote') {
+      const profile = this.getCurrentRemoteProfile();
+      if (profile) {
+        this.switchToRemote(profile, path).catch(console.error);
+      }
+    } else {
+      this.switchToLocal(path).catch(console.error);
+    }
+  }
+
+  private bindFavoritesEvents() {
+    // favorites interaction handled via right-click context menu only
   }
 
   private openCreateDialog(parentDir: string, isDir: boolean) {
@@ -1225,4 +1398,12 @@ function downloadSvg(): string {
 
 function refreshSvg(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.13-3.36L23 10"></path><path d="M20.49 15A9 9 0 0 1 6.36 18.36L1 14"></path></svg>`;
+}
+
+function starOnSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="var(--yellow)" stroke="var(--yellow)" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+}
+
+function starOffSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
 }

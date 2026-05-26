@@ -150,6 +150,40 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Sidebar (three-column layout)
   const sidebar = new Sidebar(sidebarContainer, panelArea);
+
+  // Panel resize handle
+  const panelResizeHandle = document.createElement('div');
+  panelResizeHandle.id = 'panel-area-resize-handle';
+  panelArea.appendChild(panelResizeHandle);
+  let panelResizing = false;
+  panelResizeHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    panelResizing = true;
+    panelResizeHandle.classList.add('active');
+    panelArea.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const startX = e.clientX;
+    const startWidth = panelArea.getBoundingClientRect().width;
+    const onMove = (ev: MouseEvent) => {
+      if (!panelResizing) return;
+      const newWidth = Math.max(200, Math.min(startWidth + (ev.clientX - startX), window.innerWidth - 200));
+      panelArea.style.width = newWidth + 'px';
+      panelArea.style.flex = '0 0 ' + newWidth + 'px';
+    };
+    const onUp = () => {
+      panelResizing = false;
+      panelResizeHandle.classList.remove('active');
+      panelArea.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
   const updateCanvasHintVisibility = () => {
     if (!hint) return;
     const layout = appBody.dataset.layout || 'canvas';
@@ -169,6 +203,9 @@ window.addEventListener('DOMContentLoaded', async () => {
   };
   terminalManager.onActiveTerminalChange = (context) => {
     void fileTree.syncToTerminal(context);
+  };
+  terminalManager.onTerminalClosed = () => {
+    void persistWorkspace();
   };
 
   // Settings Panel
