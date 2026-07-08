@@ -1,0 +1,129 @@
+/* Craft 温暖工艺主题 — 亮色 */
+:root,
+[data-theme="craft-light"] {
+  --craft-bg: #faf7f2;
+  --craft-surface: #ffffff;
+  --craft-surface-muted: #f0ebe3;
+  --craft-border: #e8e0d4;
+  --craft-accent: #c17f59;
+  --craft-accent-hover: #a86b47;
+  --craft-accent-soft: #e8d5c4;
+  --craft-text: #3d3832;
+  --craft-text-muted: #9a8f82;
+  --craft-term-bg: #f5f0e8;
+  --craft-shadow: 0 2px 12px rgba(61, 56, 50, 0.08);
+  --shadow-sm: 0 1px 3px rgba(61, 56, 50, 0.06), 0 1px 2px rgba(61, 56, 50, 0.04);
+  --shadow-md: 0 4px 16px rgba(61, 56, 50, 0.08), 0 2px 6px rgba(61, 56, 50, 0.05);
+  --shadow-lg: 0 12px 32px rgba(61, 56, 50, 0.14), 0 4px 12px rgba(61, 56, 50, 0.08);
+  --shadow-dock: 0 8px 28px rgba(61, 56, 50, 0.16), 0 2px 8px rgba(61, 56, 50, 0.10);
+  --shadow-focus: 0 0 0 1px var(--accent), 0 12px 36px rgba(193, 127, 89, 0.22), 0 4px 14px rgba(61, 56, 50, 0.12);
+  --overlay: rgba(61, 56, 50, 0.18);
+  --ghost: rgba(61, 56, 50, 0.32);
+  --grid-dot: rgba(154, 143, 130, 0.18);
+  --blue: #5a8ec4;
+
+  --bg-base: var(--craft-surface);
+  --bg-mantle: var(--craft-surface-muted);
+  --bg-crust: var(--craft-bg);
+  --bg-surface0: var(--craft-surface-muted);
+  --bg-surface1: #e8e0d4;
+  --bg-surface2: #d4ccc0;
+  --bg-overlay0: #9a8f82;
+  --text: var(--craft-text);
+  --text-sub: #5c554c;
+  --text-muted: var(--craft-text-muted);
+  --accent: var(--craft-accent);
+  --accent-hover: var(--craft-accent-hover);
+  --green: #6b9e5a;
+  --yellow: #d4a24a;
+  --red: #c45c5c;
+  --mauve: #9a7ab8;
+  --peach: #d4845a;
+  --teal: #5a9e8f;
+  --pink: #c45c7a;
+  --border: var(--craft-border);
+  --border-sub: var(--craft-surface-muted);
+  --shadow: rgba(61, 56, 50, 0.12);
+  --scrollbar: rgba(154, 143, 130, 0.35);
+  --scrollbar-hover: rgba(154, 143, 130, 0.55);
+  --selection-bg: rgba(193, 127, 89, 0.1);
+  --selection-border: rgba(193, 127, 89, 0.6);
+  --sidebar-bg: var(--craft-surface-muted);
+  --sidebar-hover: #e8e0d4;
+  --sidebar-active: var(--craft-surface);
+  --sidebar-border: var(--craft-border);
+  --tree-indent: var(--craft-border);
+  --term-token-command: #7a6b9e;
+  --term-token-flag: #9a7ab8;
+  --term-token-argument: var(--craft-text);
+  --term-token-path: #6b9e5a;
+  --term-token-operator: #d4845a;
+}
+
+/* Craft 暗色 */
+[data-theme="craft-dark"] {
+  --craft-bg: #1e1c1a;
+  --craft-surface: #2a2724;
+  --craft-surface-muted: #332f2b;
+  --craft-border: #3d3832;
+  --craft-accent: #d4956a;
+  --craft-accent-hover: #e8a87a;
+  --craft-accent-soft: #4a3f35;
+  --craft-text: #e8e0d4;
+  --craft-text-muted: #9a8f82;
+  --craft-term-bg: #252220;
+  --craft-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-dock: 0 8px 28px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-focus: 0 0 0 1px var(--accent), 0 12px 36px rgba(212, 149, 106, 0.28), 0 4px 14px rgba(0, 0, 0, 0.45);
+  --overlay: rgba(0, 0, 0, 0.4);
+  --ghost: rgba(232, 224, 212, 0.3);
+  --grid-dot: rgba(154, 143, 130, 0.1);
+  --blue: #6aa8d4;
+
+  --bg-base: var(--craft-surface);
+  --bg-mantle: var(--craft-surface-muted);
+  --bg-crust: var(--craft-bg);
+  --bg-surface0: var(--craft-surface-muted);
+  --bg-surface1: #3d3832;
+  --bg-surface2: #4a4540;
+  --bg-overlay0: #6b6560;
+  --text: var(--craft-text);
+  --text-sub: #c4bcb0;
+  --text-muted: var(--craft-text-muted);
+  --accent: var(--craft-accent);
+  --accent-hover: var(--craft-accent-hover);
+  --green: #7ab86a;
+  --yellow: #d4a24a;
+  --red: #e07070;
+  --mauve: #b09ad0;
+  --peach: #e8a070;
+  --teal: #6ab8a8;
+  --pink: #e08090;
+  --border: var(--craft-border);
+  --border-sub: var(--craft-surface-muted);
+  --shadow: rgba(0, 0, 0, 0.4);
+  --scrollbar: rgba(154, 143, 130, 0.3);
+  --scrollbar-hover: rgba(154, 143, 130, 0.5);
+  --selection-bg: rgba(212, 149, 106, 0.12);
+  --selection-border: rgba(212, 149, 106, 0.65);
+  --sidebar-bg: var(--craft-bg);
+  --sidebar-hover: var(--craft-surface-muted);
+  --sidebar-active: var(--craft-surface);
+  --sidebar-border: var(--craft-border);
+  --tree-indent: var(--craft-border);
+  --term-token-command: #a89ad0;
+  --term-token-flag: #b09ad0;
+  --term-token-argument: var(--craft-text);
+  --term-token-path: #7ab86a;
+  --term-token-operator: #e8a070;
+}
+
+/* 旧主题别名迁移 */
+[data-theme="dark"],
+[data-theme="light"],
+[data-theme="warm"] {
+  /* 由 JS 迁移到 craft-light / craft-dark */
+}

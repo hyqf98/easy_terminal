@@ -1,0 +1,10 @@
+.shortcut-record-capture {
+  min-height: 180px;
+}
+
+.shortcut-record-placeholder {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  color: var(--text-muted);
+  letter-spacing: 4px;
+}

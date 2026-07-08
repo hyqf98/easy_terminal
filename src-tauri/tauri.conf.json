@@ -15,8 +15,8 @@
     "windows": [
       {
         "title": "Easy Terminal",
-        "width": 1280,
-        "height": 800,
+        "width": 800,
+        "height": 600,
         "decorations": false
       }
     ],

@@ -1,0 +1,62 @@
+.minimap {
+  position: absolute;
+  right: 16px;
+  bottom: 88px;
+  width: 180px;
+  height: 120px;
+  background: var(--craft-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  z-index: 20;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.minimap-grid {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
+  background-size: 8px 8px;
+  opacity: 0.6;
+}
+
+.minimap-label {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  z-index: 2;
+}
+
+.minimap-term {
+  position: absolute;
+  border-radius: 1.5px;
+  background: var(--text-muted);
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.minimap-term.focused {
+  background: var(--accent);
+  opacity: 0.9;
+}
+
+.minimap-viewport {
+  position: absolute;
+  border: 1.5px solid var(--accent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  z-index: 3;
+  animation: minimapPulse 3s ease-in-out infinite;
+}
+
+@keyframes minimapPulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 0%, transparent); }
+}

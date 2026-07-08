@@ -1,0 +1,35 @@
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-crust);
+  font-family: var(--font-sans);
+  user-select: none;
+  color: var(--text);
+}
+
+body {
+  position: relative;
+}
+
+html.mode-desktop-draw,
+body.mode-desktop-draw {
+  background: transparent;
+  cursor: crosshair !important;
+}
+
+html.mode-desktop-draw *,
+body.mode-desktop-draw * {
+  cursor: crosshair !important;
+}
+
+html.mode-detached-terminal,
+body.mode-detached-terminal {
+  background: var(--bg-crust);
+}

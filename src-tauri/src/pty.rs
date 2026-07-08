@@ -68,6 +68,7 @@ function global:prompt {
             c.arg("-NoExit");
             c.arg("-Command");
             c.arg(prompt_script.trim());
+            c.env("TERM", "xterm-256color");
             apply_cwd(&mut c, cwd.as_deref());
             c
         } else {
@@ -84,19 +85,84 @@ function global:prompt {
         let sid = session_id.clone();
         std::thread::spawn(move || {
             let mut reader = reader;
-            let mut buf = [0u8; 4096];
+            let mut buf = [0u8; 8192];
+            let mut pending: Vec<u8> = Vec::new();
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                        let _ = app_handle.emit(
-                            "pty-output",
-                            PtyOutputEvent {
-                                session_id: sid.clone(),
-                                data,
-                            },
-                        );
+                        pending.extend_from_slice(&buf[..n]);
+
+                        // Decode as much valid UTF-8 as possible
+                        let mut start = 0;
+                        loop {
+                            if start >= pending.len() {
+                                pending.clear();
+                                break;
+                            }
+
+                            match std::str::from_utf8(&pending[start..]) {
+                                Ok(s) => {
+                                    if !s.is_empty() {
+                                        let _ = app_handle.emit(
+                                            "pty-output",
+                                            PtyOutputEvent {
+                                                session_id: sid.clone(),
+                                                data: s.to_string(),
+                                            },
+                                        );
+                                    }
+                                    pending.clear();
+                                    break;
+                                }
+                                Err(e) => {
+                                    let valid_up_to = e.valid_up_to();
+                                    if valid_up_to > 0 {
+                                        // Emit the valid portion
+                                        let valid_str = unsafe {
+                                            std::str::from_utf8_unchecked(&pending[start..start + valid_up_to])
+                                        };
+                                        let _ = app_handle.emit(
+                                            "pty-output",
+                                            PtyOutputEvent {
+                                                session_id: sid.clone(),
+                                                data: valid_str.to_string(),
+                                            },
+                                        );
+                                        start += valid_up_to;
+                                    }
+
+                                    let remaining = pending.len() - start;
+                                    let error_len = e.error_len();
+
+                                    if let Some(len) = error_len {
+                                        // Truly invalid byte(s) - skip them
+                                        let _ = app_handle.emit(
+                                            "pty-output",
+                                            PtyOutputEvent {
+                                                session_id: sid.clone(),
+                                                data: "\u{fffd}".to_string(),
+                                            },
+                                        );
+                                        start += len;
+                                    } else if remaining < 4 {
+                                        // Incomplete multi-byte char - keep remaining bytes for next read
+                                        pending = pending[start..].to_vec();
+                                        break;
+                                    } else {
+                                        // Shouldn't happen: >4 remaining but not valid and no error_len
+                                        let _ = app_handle.emit(
+                                            "pty-output",
+                                            PtyOutputEvent {
+                                                session_id: sid.clone(),
+                                                data: "\u{fffd}".to_string(),
+                                            },
+                                        );
+                                        start += 1;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -171,6 +237,7 @@ fn build_unix_command(cwd: Option<&str>) -> Result<CommandBuilder, String> {
         c.arg("-i");
         c.env("ZDOTDIR", zdotdir);
         c.env("EASY_TERMINAL", "1");
+        c.env("TERM", "xterm-256color");
         c.env("LANG", "en_US.UTF-8");
         c.env("LC_ALL", "en_US.UTF-8");
         apply_cwd(&mut c, cwd);
@@ -181,6 +248,7 @@ fn build_unix_command(cwd: Option<&str>) -> Result<CommandBuilder, String> {
     c.env("PROMPT_COMMAND", r#"printf "\033]0;%s\007" "$PWD""#);
     c.env("PS1", r#"\[\e]0;\w\a\]\w $ "#);
     c.env("EASY_TERMINAL", "1");
+    c.env("TERM", "xterm-256color");
     c.env("LANG", "en_US.UTF-8");
     c.env("LC_ALL", "en_US.UTF-8");
     apply_cwd(&mut c, cwd);

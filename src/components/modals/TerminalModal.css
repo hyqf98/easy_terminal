@@ -1,0 +1,19 @@
+.terminal-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.terminal-modal-body .field {
+  margin: 0;
+}
+
+.terminal-modal-body .segmented {
+  width: 100%;
+  justify-content: stretch;
+}
+
+.terminal-modal-body .segmented-item {
+  flex: 1;
+  justify-content: center;
+}

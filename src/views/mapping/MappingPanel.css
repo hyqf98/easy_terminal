@@ -1,0 +1,200 @@
+/* MappingPanel 视图特有样式 */
+.mapping-page {
+  padding: 24px 28px;
+  height: 100%;
+  overflow: auto;
+}
+
+/* 介绍横幅 */
+.mapping-intro {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 22px;
+  background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 10%, var(--craft-surface)));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+}
+.mapping-intro-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.mapping-intro-icon svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mapping-intro h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 3px;
+  color: var(--text);
+}
+.mapping-intro p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* 映射卡片列表 */
+.mapping-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mapping-pair {
+  padding: 14px 16px;
+  background: var(--craft-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+  animation: mappingCardPop 280ms ease both;
+}
+.mapping-pair:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+.mapping-pair:nth-child(2) { animation-delay: 60ms; }
+.mapping-pair:nth-child(3) { animation-delay: 120ms; }
+.mapping-pair:nth-child(4) { animation-delay: 180ms; }
+.mapping-pair:nth-child(5) { animation-delay: 240ms; }
+.mapping-pair:nth-child(6) { animation-delay: 300ms; }
+
+.mapping-pair-row {
+  display: grid;
+  grid-template-columns: 1fr 36px 1fr 32px;
+  gap: 14px;
+  align-items: center;
+}
+.mapping-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.mapping-side-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.mapping-side-value {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mapping-side-value.code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mauve);
+}
+.mapping-arrow {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.mapping-arrow svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mapping-copy-btn {
+  color: var(--text-muted);
+}
+
+.mapping-pair-desc {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.mapping-pair-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.mapping-pair-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.mapping-pair-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mapping-delete-btn {
+  color: var(--red);
+}
+.mapping-delete-btn:hover {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}
+
+/* 启用开关（复用 mockup 视觉） */
+.mapping-toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--border);
+  position: relative;
+  cursor: pointer;
+  transition: background 200ms ease;
+  flex-shrink: 0;
+}
+.mapping-toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--craft-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), background 200ms ease;
+}
+.mapping-toggle.on {
+  background: var(--accent);
+}
+.mapping-toggle.on::after {
+  transform: translateX(16px);
+  background: #fff;
+}
+
+.mapping-empty {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@keyframes mappingCardPop {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}

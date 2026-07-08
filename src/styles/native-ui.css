@@ -1,0 +1,489 @@
+/* ===== 遗留面板组件样式（Craft 主题兼容层，逐步迁移至 Naive UI） ===== */
+
+/* --- Button --- */
+.native-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-surface0);
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.native-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.native-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+.native-btn.primary {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 70%, var(--bg-surface0)), color-mix(in srgb, var(--teal) 35%, var(--bg-surface0)));
+  color: var(--bg-crust);
+  border-color: transparent;
+}
+.native-btn.primary:hover {
+  opacity: 0.9;
+}
+.native-btn.danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 30%, var(--border));
+}
+.native-btn.danger:hover {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  border-color: var(--red);
+}
+.native-btn.success {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 30%, var(--border));
+}
+.native-btn.success:hover {
+  background: color-mix(in srgb, var(--green) 8%, transparent);
+}
+.native-btn.link {
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  color: var(--text-muted);
+}
+.native-btn.link:hover {
+  color: var(--accent);
+  transform: none;
+}
+.native-btn.small {
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+/* --- Input --- */
+.native-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s ease;
+  line-height: 1.5;
+}
+.native-input:focus {
+  border-color: var(--accent);
+}
+.native-input::placeholder {
+  color: var(--text-muted);
+}
+.native-input:read-only {
+  background: color-mix(in srgb, var(--bg-surface0) 54%, transparent);
+  cursor: default;
+}
+textarea.native-input {
+  resize: vertical;
+  min-height: 80px;
+}
+input[type="number"].native-input {
+  -moz-appearance: textfield;
+}
+input[type="number"].native-input::-webkit-outer-spin-button,
+input[type="number"].native-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* --- Input Group --- */
+.native-input-group {
+  display: flex;
+  width: 100%;
+}
+.native-input-group .native-input {
+  flex: 1;
+  min-width: 0;
+}
+.native-input-group .native-input-group-append {
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-left: none;
+  background: var(--bg-surface0);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.native-input-group .native-input-group-append:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-surface0));
+}
+.native-input-group .native-input-group-append svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* --- Select --- */
+.native-select {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-base) 85%, transparent);
+  color: var(--text);
+  padding: 8px 30px 8px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%2386868b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px;
+  transition: border-color 0.15s ease;
+}
+.native-select:focus {
+  border-color: var(--accent);
+}
+[data-theme="dark"] .native-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%238e95b5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* --- Tag --- */
+.native-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.native-tag.default {
+  background: color-mix(in srgb, var(--bg-surface1) 70%, transparent);
+  color: var(--text-muted);
+}
+.native-tag.primary {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.native-tag.success {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+.native-tag.warning {
+  background: color-mix(in srgb, var(--yellow) 18%, transparent);
+  color: var(--yellow);
+}
+.native-tag.danger {
+  background: color-mix(in srgb, var(--red) 18%, transparent);
+  color: var(--red);
+}
+.native-tag.info {
+  background: color-mix(in srgb, var(--bg-surface1) 70%, transparent);
+  color: var(--text-muted);
+}
+.native-tag.round {
+  border-radius: 10px;
+}
+
+/* --- Dialog / Modal --- */
+.native-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-crust) 60%, rgba(0,0,0,0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  z-index: 2000;
+}
+.native-dialog-overlay.hidden {
+  display: none;
+}
+.native-dialog {
+  width: min(480px, calc(100vw - 64px));
+  max-height: calc(100vh - 72px);
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: linear-gradient(180deg, var(--bg-mantle), var(--bg-base));
+  padding: 20px;
+  box-shadow: 0 24px 48px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.native-dialog-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.native-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.native-dialog-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* --- Form Field --- */
+.native-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.native-field-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.native-field-label .required {
+  color: var(--red);
+  margin-left: 2px;
+}
+
+/* --- Checkbox --- */
+.native-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-sub);
+  user-select: none;
+}
+.native-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* --- Radio --- */
+.native-radio-group {
+  display: flex;
+  gap: 16px;
+}
+.native-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-sub);
+  user-select: none;
+}
+.native-radio input[type="radio"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* --- Collapse --- */
+.native-collapse {
+  display: flex;
+  flex-direction: column;
+}
+.native-collapse-item {
+  border-bottom: 1px solid var(--border);
+}
+.native-collapse-item:last-child {
+  border-bottom: none;
+}
+.native-collapse-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.native-collapse-header:hover {
+  background: var(--sidebar-hover);
+}
+.native-collapse-arrow {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.native-collapse-arrow.expanded {
+  transform: rotate(90deg);
+}
+.native-collapse-body {
+  overflow: hidden;
+}
+.native-collapse-body.collapsed {
+  display: none;
+}
+
+/* --- Statistic --- */
+.native-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.native-stat-title {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.native-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Progress --- */
+.native-progress {
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-surface1) 80%, transparent);
+  overflow: hidden;
+}
+.native-progress-bar {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 88%, white 12%), color-mix(in srgb, var(--teal) 78%, white 22%));
+  transition: width 0.3s ease;
+}
+
+/* --- Card --- */
+.native-card {
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--bg-surface0);
+}
+.native-card-body {
+  padding: 12px;
+}
+
+/* --- Confirm Dialog --- */
+.native-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-crust) 60%, rgba(0,0,0,0.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+}
+.native-confirm {
+  width: min(400px, calc(100vw - 48px));
+  border-radius: var(--radius-sm);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: linear-gradient(180deg, var(--bg-mantle), var(--bg-base));
+  padding: 20px;
+  box-shadow: 0 24px 48px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.native-confirm-message {
+  font-size: 13px;
+  color: var(--text-sub);
+  line-height: 1.6;
+}
+.native-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* --- SVG Icon Container --- */
+.native-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.native-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.native-icon.loading svg {
+  animation: native-spin 0.8s linear infinite;
+}
+@keyframes native-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- Inline SVG icons used across panels --- */
+.panel-header .native-icon {
+  color: var(--accent);
+}
+
+/* --- Toast Notification --- */
+.native-toast {
+  position: fixed;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 100000;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 16px var(--shadow);
+}
+.native-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.native-toast-info {
+  background: var(--bg-surface0);
+  color: var(--text);
+  border: 1px solid var(--accent);
+}
+.native-toast-success {
+  background: color-mix(in srgb, var(--green) 15%, var(--bg-surface0));
+  color: var(--green);
+  border: 1px solid color-mix(in srgb, var(--green) 40%, var(--border));
+}
+.native-toast-warning {
+  background: color-mix(in srgb, var(--yellow) 15%, var(--bg-surface0));
+  color: var(--yellow);
+  border: 1px solid color-mix(in srgb, var(--yellow) 40%, var(--border));
+}
+.native-toast-error {
+  background: color-mix(in srgb, var(--red) 15%, var(--bg-surface0));
+  color: var(--red);
+  border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border));
+}

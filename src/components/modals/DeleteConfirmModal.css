@@ -1,0 +1,4 @@
+/* 删除确认弹框：复用共享 .danger-banner，仅微调按钮间距 */
+.danger-banner {
+  margin-bottom: 0;
+}

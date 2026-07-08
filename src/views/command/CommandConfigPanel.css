@@ -1,0 +1,212 @@
+/* CommandConfigPanel 视图特有样式（基于 Craft mockup 命令库视图） */
+.command-page {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.command-page .page-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+}
+
+/* ===== master-detail 布局 ===== */
+.library-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+.lib-rail {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 14px 10px;
+  overflow-y: auto;
+}
+.lib-rail-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 6px 10px;
+  margin-top: 6px;
+}
+.lib-rail-title:first-child {
+  margin-top: 0;
+}
+.lib-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.lib-rail-item:hover {
+  background: var(--surface-muted);
+}
+.lib-rail-item.active {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.lib-rail-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.lib-rail-icon :deep(svg) {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lib-rail-item.active .lib-rail-icon {
+  background: var(--surface);
+}
+.lib-rail-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+}
+.lib-rail-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  padding: 1px 7px;
+  border-radius: 8px;
+}
+.lib-rail-danger {
+  color: var(--red);
+}
+.lib-rail-danger .lib-rail-icon {
+  color: var(--red);
+}
+
+/* ===== 右侧主区 ===== */
+.lib-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lib-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.lib-source-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.lib-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 20px;
+}
+.lib-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  margin-bottom: 8px;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+  animation: craftRowFadeIn 280ms ease both;
+}
+.lib-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+.lib-row-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+.lib-row-icon :deep(svg) {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lib-row-main {
+  min-width: 0;
+}
+.lib-row-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.lib-row-cmd {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11.5px;
+  color: var(--text-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-row-cmd :deep(.tok-command) {
+  color: var(--mauve);
+  font-weight: 600;
+}
+.lib-row-cmd :deep(.tok-flag) {
+  color: var(--peach);
+}
+.lib-row-cmd :deep(.tok-path) {
+  color: var(--green);
+}
+.lib-row-cmd :deep(.tok-string) {
+  color: var(--green);
+}
+.lib-row-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-row-tags {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.lib-row-actions {
+  display: flex;
+  gap: 6px;
+}
+.lib-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+}

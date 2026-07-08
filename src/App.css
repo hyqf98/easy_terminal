@@ -1,0 +1,30 @@
+#desktop-draw-root {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair !important;
+  overflow: hidden;
+}
+
+.desktop-draw-backdrop {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.detached-viewport,
+.detached-canvas {
+  position: fixed;
+  inset: 0;
+}
+
+.detached-viewport {
+  overflow: hidden;
+  background: var(--bg-base);
+}
+
+.detached-canvas {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    var(--bg-base);
+}

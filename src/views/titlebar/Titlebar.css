@@ -1,0 +1,174 @@
+#app-titlebar {
+  height: 36px;
+  background: var(--craft-surface-muted, var(--bg-mantle));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 0 14px;
+  border-bottom: 1px solid var(--craft-border, var(--border));
+  flex-shrink: 0;
+  position: relative;
+  z-index: 9999;
+}
+
+#app-titlebar .app-titlebar-drag {
+  min-width: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+#app-titlebar .app-title {
+  color: var(--text-sub);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 8px;
+  height: 100%;
+}
+
+#app-titlebar .app-title img {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-sm);
+  display: block;
+  flex: 0 0 auto;
+}
+
+#app-titlebar .app-window-controls {
+  display: flex;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  position: relative;
+  z-index: 10000;
+  pointer-events: auto;
+}
+
+#app-titlebar .app-window-controls button {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.15s ease;
+  position: relative;
+  pointer-events: auto;
+}
+
+#app-titlebar .app-window-controls button:hover {
+  transform: scale(1.15);
+}
+
+.app-btn-minimize { background: var(--yellow); }
+.app-btn-maximize { background: var(--green); }
+.app-btn-close { background: var(--red); }
+
+/* ===== 标题栏右侧操作区：命令搜索 + 主题切换 ===== */
+#app-titlebar .app-titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  pointer-events: auto;
+}
+
+#app-titlebar .cmdk {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--craft-border, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--craft-surface-muted, var(--bg-mantle));
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 200ms ease, color 200ms ease;
+  max-width: 220px;
+  overflow: hidden;
+}
+#app-titlebar .cmdk:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+#app-titlebar .cmdk svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+#app-titlebar .cmdk-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+#app-titlebar .cmdk-kbd {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--craft-border, var(--border));
+  border-radius: var(--radius-xs);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--craft-surface-muted, var(--bg-mantle));
+}
+
+#app-titlebar .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--craft-border, var(--border));
+  border-radius: var(--radius-sm);
+  background: var(--craft-surface-muted, var(--bg-mantle));
+  color: var(--text);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color 200ms ease;
+}
+#app-titlebar .theme-toggle:hover {
+  border-color: var(--accent);
+}
+#app-titlebar .theme-track {
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--craft-border, var(--border));
+  position: relative;
+  transition: background 200ms ease;
+  flex-shrink: 0;
+}
+#app-titlebar .theme-track.dark {
+  background: var(--accent);
+}
+#app-titlebar .theme-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--craft-surface, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), background 220ms ease;
+}
+#app-titlebar .theme-track.dark .theme-thumb {
+  transform: translateX(12px);
+}
+#app-titlebar .theme-label {
+  flex-shrink: 0;
+}

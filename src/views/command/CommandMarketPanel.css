@@ -1,0 +1,204 @@
+/* CommandMarketPanel 视图特有样式（基于 Craft mockup 命令市场视图） */
+.market-page {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.market-page .page-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.market-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 28px;
+}
+
+/* ===== Hero ===== */
+.market-hero {
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    color-mix(in srgb, var(--accent) 18%, var(--surface)) 100%
+  );
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+  position: relative;
+  overflow: hidden;
+}
+.market-hero::before {
+  content: '';
+  position: absolute;
+  right: -40px;
+  top: -40px;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 30%, transparent),
+    transparent 70%
+  );
+}
+.market-hero h2 {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.market-hero p {
+  font-size: 13px;
+  color: var(--text-sub);
+  max-width: 480px;
+}
+.market-hero-stats {
+  display: flex;
+  gap: 24px;
+  margin-top: 14px;
+}
+.market-stat {
+  display: flex;
+  flex-direction: column;
+}
+.market-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+}
+.market-stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ===== 筛选 chip ===== */
+.market-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.filter-chip {
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-sub);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 160ms ease;
+  user-select: none;
+}
+.filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* ===== 卡片网格 ===== */
+.market-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.market-card {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  animation: craftCardPopIn 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.market-card-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.market-card-icon-wrap :deep(.market-card-icon) {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  flex-shrink: 0;
+}
+.market-card-icon-wrap :deep(.market-card-icon svg) {
+  width: 22px;
+  height: 22px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.market-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.market-card-author {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.market-card-desc {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.55;
+  margin-bottom: 12px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+.market-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  gap: 8px;
+}
+.market-card-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+}
+.market-card-installed {
+  color: var(--green);
+}
+.market-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.market-install-btn {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 11px;
+}
+
+/* ===== 状态 ===== */
+.market-loading,
+.market-error,
+.market-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.market-error {
+  color: var(--red);
+}

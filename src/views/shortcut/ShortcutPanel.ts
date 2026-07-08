@@ -1,0 +1,285 @@
+import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
+import { invoke } from '@tauri-apps/api/core';
+import { t, onLangChange } from '../../i18n';
+import { showMessage } from '../../composables/useAppMessage';
+import type { ShortcutBinding } from '../../types';
+import ShortcutRecordModal from '../../components/modals/ShortcutRecordModal.vue';
+
+type ShortcutField = 'windows' | 'darwin' | 'linux';
+type RecordPlatform = 'mac' | 'win' | 'linux';
+
+const FIELD_ORDER: ShortcutField[] = ['darwin', 'windows', 'linux'];
+const FIELD_LABELS: Record<ShortcutField, string> = {
+  darwin: 'macOS',
+  windows: 'Windows',
+  linux: 'Linux',
+};
+const FIELD_PLATFORM: Record<ShortcutField, RecordPlatform> = {
+  darwin: 'mac',
+  windows: 'win',
+  linux: 'linux',
+};
+
+const CATEGORY_ORDER = ['terminal', 'navigation', 'workspace'];
+
+const MAC_TOKEN_MAP: Record<string, string> = {
+  Cmd: '⌘',
+  Meta: '⌘',
+  Ctrl: '⌃',
+  Alt: '⌥',
+  Option: '⌥',
+  Shift: '⇧',
+  Enter: '⏎',
+  Return: '⏎',
+  Tab: '⇥',
+  Escape: '⎋',
+  Esc: '⎋',
+  Space: '␣',
+  Backspace: '⌫',
+  Delete: '⌦',
+  Left: '←',
+  Right: '→',
+  Up: '↑',
+  Down: '↓',
+  Home: '↖',
+  End: '↘',
+  PageUp: '⇞',
+  PageDown: '⇟',
+};
+
+const WIN_TOKEN_MAP: Record<string, string> = {
+  Cmd: 'Win',
+  Meta: 'Win',
+  Ctrl: 'Ctrl',
+  Alt: 'Alt',
+  Option: 'Alt',
+  Shift: 'Shift',
+  Enter: 'Enter',
+  Return: 'Enter',
+  Tab: 'Tab',
+  Escape: 'Esc',
+  Esc: 'Esc',
+  Space: 'Space',
+  Backspace: '⌫',
+  Delete: 'Del',
+  Left: '←',
+  Right: '→',
+  Up: '↑',
+  Down: '↓',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PgUp',
+  PageDown: 'PgDn',
+};
+
+function mapToken(field: ShortcutField, token: string): string {
+  const map = field === 'darwin' ? MAC_TOKEN_MAP : WIN_TOKEN_MAP;
+  return map[token] ?? token;
+}
+
+function comboToTokens(combo: string, field: ShortcutField): string[] {
+  if (!combo) return [];
+  return combo
+    .split('+')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((token) => mapToken(field, token));
+}
+
+/** 动作图标，按 id 关键词匹配，缺省回退到通用键盘图标 */
+function actionIcon(binding: ShortcutBinding): string {
+  const id = binding.id;
+  if (id.startsWith('terminal.duplicate')) {
+    return '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M8 16v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2"/></svg>';
+  }
+  if (id.startsWith('terminal.paste')) {
+    return '<svg viewBox="0 0 24 24"><path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/></svg>';
+  }
+  if (id.startsWith('terminal.copy')) {
+    return '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2"/><path d="M8 16v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2"/></svg>';
+  }
+  if (id.startsWith('terminal.select')) {
+    return '<svg viewBox="0 0 24 24"><path d="M3 3l7 18 2-7 7-2z"/></svg>';
+  }
+  if (id.startsWith('desktop.draw')) {
+    return '<svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5z"/><path d="M2 17l10 5 10-5"/></svg>';
+  }
+  if (id.startsWith('sidebar.') || id.startsWith('workspace.')) {
+    return '<svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+}
+
+export default defineComponent({
+  name: 'ShortcutPanel',
+  components: { ShortcutRecordModal },
+  setup() {
+    const draftBindings = ref<ShortcutBinding[]>([]);
+    const recording = ref<{ bindingId: string; field: ShortcutField } | null>(null);
+    const modalOpen = ref(false);
+    const modalAction = ref('');
+    const modalPlatform = ref<RecordPlatform>('mac');
+
+    const langTick = ref(0);
+
+    const titleLabel = computed(() => { void langTick.value; return t('shortcut.title'); });
+    const subtitleLabel = computed(() => { void langTick.value; return t('shortcut.summary', platformLabel()); });
+    const resetLabel = computed(() => { void langTick.value; return t('shortcut.reset'); });
+
+    function platformLabel(): string {
+      const platform = navigator.platform.toLowerCase();
+      if (platform.includes('mac')) return 'macOS';
+      if (platform.includes('linux')) return 'Linux';
+      return 'Windows';
+    }
+
+    const grouped = computed(() => {
+      const buckets = new Map<string, ShortcutBinding[]>();
+      draftBindings.value.forEach((binding) => {
+        const category = binding.category || 'workspace';
+        const list = buckets.get(category) || [];
+        list.push(binding);
+        buckets.set(category, list);
+      });
+      return CATEGORY_ORDER.filter((category) => buckets.has(category)).map((category) => {
+        const bindings = (buckets.get(category) || []).slice().sort((a, b) =>
+          a.label.localeCompare(b.label, 'zh-CN')
+        );
+        return [category, bindings] as [string, ShortcutBinding[]];
+      });
+    });
+
+    /** 同平台下相同组合视为冲突，返回冲突的 bindingId 集合 */
+    const conflictMap = computed(() => {
+      const conflicts = new Set<string>();
+      FIELD_ORDER.forEach((field) => {
+        const comboToIds = new Map<string, string[]>();
+        draftBindings.value.forEach((binding) => {
+          const combo = binding[field].trim();
+          if (!combo) return;
+          const list = comboToIds.get(combo) || [];
+          list.push(binding.id);
+          comboToIds.set(combo, list);
+        });
+        comboToIds.forEach((ids) => {
+          if (ids.length > 1) ids.forEach((id) => conflicts.add(id));
+        });
+      });
+      return conflicts;
+    });
+
+    function categoryLabel(category: string): string {
+      if (category === 'terminal') return t('shortcut.categoryTerminal');
+      if (category === 'navigation') return t('shortcut.categoryNavigation');
+      return t('shortcut.categoryWorkspace');
+    }
+
+    function isCurrentPlatform(field: ShortcutField): boolean {
+      const platform = navigator.platform.toLowerCase();
+      if (field === 'darwin') return platform.includes('mac');
+      if (field === 'linux') return platform.includes('linux');
+      return !platform.includes('mac') && !platform.includes('linux');
+    }
+
+    function getFieldValue(binding: ShortcutBinding, field: ShortcutField): string {
+      return binding[field] || '';
+    }
+
+    function getComboTokens(binding: ShortcutBinding, field: ShortcutField): string[] {
+      return comboToTokens(binding[field], field);
+    }
+
+    function isConflict(binding: ShortcutBinding): boolean {
+      return conflictMap.value.has(binding.id);
+    }
+
+    function openRecord(binding: ShortcutBinding, field: ShortcutField) {
+      recording.value = { bindingId: binding.id, field };
+      modalAction.value = binding.label;
+      modalPlatform.value = FIELD_PLATFORM[field];
+      modalOpen.value = true;
+    }
+
+    function onRecordClose() {
+      modalOpen.value = false;
+      recording.value = null;
+    }
+
+    function onRecordConfirm(combo: string) {
+      const target = recording.value;
+      if (!target) {
+        modalOpen.value = false;
+        return;
+      }
+      draftBindings.value = draftBindings.value.map((binding) =>
+        binding.id === target.bindingId ? { ...binding, [target.field]: combo } : binding
+      );
+      modalOpen.value = false;
+      recording.value = null;
+      void persistBindings();
+    }
+
+    function clearField(binding: ShortcutBinding, field: ShortcutField) {
+      draftBindings.value = draftBindings.value.map((item) =>
+        item.id === binding.id ? { ...item, [field]: '' } : item
+      );
+      void persistBindings();
+    }
+
+    async function persistBindings() {
+      try {
+        await invoke('save_shortcuts', { entries: draftBindings.value.map((b) => ({ ...b })) });
+        showMessage(t('cmd.save') + ' ✓', 'success');
+      } catch (error) {
+        showMessage(String(error), 'error');
+      }
+    }
+
+    async function resetDefaults() {
+      try {
+        const defaults = await invoke<ShortcutBinding[]>('load_default_shortcuts');
+        draftBindings.value = defaults;
+        await invoke('save_shortcuts', { entries: defaults.map((b) => ({ ...b })) });
+        showMessage(t('shortcut.reset') + ' ✓', 'success');
+      } catch (error) {
+        showMessage(String(error), 'error');
+      }
+    }
+
+    onMounted(async () => {
+      try {
+        draftBindings.value = await invoke<ShortcutBinding[]>('load_shortcuts');
+      } catch (error) {
+        showMessage(String(error), 'error');
+      }
+    });
+
+    const unsubLang = onLangChange(() => { langTick.value++; });
+
+    onUnmounted(() => { unsubLang(); });
+
+    return {
+      shortcutFields: FIELD_ORDER,
+      fieldLabels: FIELD_LABELS,
+      titleLabel,
+      subtitleLabel,
+      resetLabel,
+      modalOpen,
+      modalAction,
+      modalPlatform,
+      recording,
+      grouped,
+      categoryLabel,
+      isCurrentPlatform,
+      getFieldValue,
+      getComboTokens,
+      isConflict,
+      openRecord,
+      onRecordClose,
+      onRecordConfirm,
+      clearField,
+      resetDefaults,
+      actionIcon,
+    };
+  },
+});

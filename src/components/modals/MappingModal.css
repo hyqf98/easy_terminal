@@ -1,0 +1,6 @@
+/* MappingModal 视图特有样式：表单元素间距收紧 */
+.mapping-modal-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}

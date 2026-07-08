@@ -1,0 +1,8 @@
+/* SshHostModal：复用共享表单类，仅做轻微修饰 */
+.segmented {
+  width: 100%;
+}
+.segmented-item {
+  flex: 1;
+  justify-content: center;
+}

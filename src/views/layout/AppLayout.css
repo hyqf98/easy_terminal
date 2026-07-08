@@ -1,0 +1,121 @@
+/* ===== 舞台与视图 ===== */
+#stage {
+  position: relative;
+  flex: 1 1 0%;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: var(--craft-bg);
+}
+
+.view {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: var(--craft-bg);
+  animation: craftViewFade 240ms ease both;
+}
+
+@keyframes craftViewFade {
+  0% { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* ===== 终端画布视图 ===== */
+.canvas-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: default;
+  /* 底层网格点 + 上层边缘渐隐遮罩（canvas-fade，与 mockup 一致） */
+  background:
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--craft-bg) 50%, transparent) 100%),
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+  background-color: var(--craft-bg);
+}
+
+#canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  contain: layout style;
+  image-rendering: optimizeQuality;
+  -webkit-font-smoothing: antialiased;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+#selection-rect {
+  display: none;
+  position: absolute;
+  border: 2px dashed var(--selection-border);
+  background: var(--selection-bg);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.canvas-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.canvas-empty :deep(.n-empty) {
+  pointer-events: auto;
+}
+
+/* ===== 窗口缩放手柄 ===== */
+#app-resize-handles {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2000;
+}
+
+.app-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+.app-resize-handle-n,
+.app-resize-handle-s {
+  left: 10px;
+  right: 10px;
+  height: 8px;
+}
+
+.app-resize-handle-e,
+.app-resize-handle-w {
+  top: 10px;
+  bottom: 10px;
+  width: 8px;
+}
+
+.app-resize-handle-n { top: 0; cursor: ns-resize; }
+.app-resize-handle-s { bottom: 0; cursor: ns-resize; }
+.app-resize-handle-e { right: 0; cursor: ew-resize; }
+.app-resize-handle-w { left: 0; cursor: ew-resize; }
+
+.app-resize-handle-ne,
+.app-resize-handle-nw,
+.app-resize-handle-se,
+.app-resize-handle-sw {
+  width: 10px;
+  height: 10px;
+  z-index: 2001;
+}
+
+.app-resize-handle-ne { top: 0; right: 0; cursor: nesw-resize; }
+.app-resize-handle-nw { top: 0; left: 0; cursor: nwse-resize; }
+.app-resize-handle-se { right: 0; bottom: 0; cursor: nwse-resize; }
+.app-resize-handle-sw { left: 0; bottom: 0; cursor: nesw-resize; }

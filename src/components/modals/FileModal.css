@@ -1,0 +1,8 @@
+/* FileModal：复用共享表单类，仅做轻微修饰 */
+.file-modal-type {
+  width: 100%;
+}
+.file-modal-type .segmented-item {
+  flex: 1;
+  justify-content: center;
+}

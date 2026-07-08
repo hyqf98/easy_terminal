@@ -1,0 +1,35 @@
+.canvas-status {
+  position: absolute;
+  left: 16px;
+  bottom: 88px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--craft-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  z-index: 20;
+  pointer-events: none;
+  -webkit-app-region: no-drag;
+}
+
+.canvas-status .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: craftStatusBreathe 2.4s ease-in-out infinite;
+}
+
+.canvas-status .sep {
+  color: var(--border);
+}
+
+.canvas-status .value {
+  color: var(--text);
+}
