@@ -1,0 +1,282 @@
+/* TerminalFilePanel — 画布独立文件面板（与终端拼接为一体） */
+
+.terminal-file-panel {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: var(--term-bg);
+  border: none;
+  border-radius: 0 0 0 8px;
+  box-shadow: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 左下角缩放手柄：触发终端自身的 startResize('sw')，面板随之同步（一体） */
+.filepanel-resize-handle {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  cursor: nesw-resize;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  opacity: 0.35;
+  transition: opacity 160ms ease, color 160ms ease;
+  z-index: 10;
+}
+.filepanel-resize-handle svg {
+  width: 12px;
+  height: 12px;
+}
+.filepanel-resize-handle:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* FileTree 组件自身的 .files-layout 默认是左侧浮层，嵌入时覆盖为相对填充 */
+.terminal-file-panel :deep(.files-layout) {
+  position: relative;
+  left: auto; top: auto; bottom: auto; right: auto;
+  /* 嵌入时撑满面板（覆盖 CSS 变量 --filetree-width） */
+  width: 100% !important;
+  height: 100%;
+  z-index: auto;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: var(--term-bg);
+  border: none;
+  box-shadow: none;
+  animation: none;
+}
+
+.terminal-file-panel :deep(.files-tree) {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-muted) 22%, transparent), transparent 110px),
+    var(--term-bg);
+}
+
+.terminal-file-panel :deep(.fav-cards-row) {
+  display: flex;
+  gap: 4px;
+  padding: 7px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 26%, transparent);
+  background: color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted));
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 62%, transparent) var(--term-bg);
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar) {
+  display: block !important;
+  width: 2px !important;
+  height: 2px !important;
+}
+.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-track) {
+  background: var(--term-bg) !important;
+}
+.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-thumb) {
+  background: color-mix(in srgb, var(--accent) 62%, transparent) !important;
+  border-radius: 999px;
+}
+.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-thumb:hover) {
+  background: var(--accent) !important;
+}
+.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-corner) {
+  background: var(--term-bg) !important;
+}
+
+.terminal-file-panel :deep(.fav-card) {
+  min-width: 74px;
+  max-width: 128px;
+  height: 26px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: transparent;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transform: none;
+}
+
+.terminal-file-panel :deep(.fav-card:hover) {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--term-bg));
+  box-shadow: none;
+  transform: none;
+}
+
+.terminal-file-panel :deep(.fav-card-icon) {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: transparent;
+  opacity: 0.9;
+}
+
+.terminal-file-panel :deep(.fav-card-icon svg) {
+  width: 12px;
+  height: 12px;
+}
+
+.terminal-file-panel :deep(.fav-card-name) {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-sub);
+  letter-spacing: 0;
+}
+
+.terminal-file-panel :deep(.tree-search-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px 28px 28px;
+  grid-template-areas:
+    "search search search search"
+    "sort dir refresh locate";
+  gap: 7px;
+  align-items: center;
+  padding: 9px 10px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 34%, transparent);
+  background: color-mix(in srgb, var(--term-bg) 84%, var(--surface-muted));
+}
+
+.terminal-file-panel :deep(.tree-search) {
+  grid-area: search;
+  height: 30px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--term-bg) 70%, var(--surface));
+  border-color: color-mix(in srgb, var(--border) 45%, transparent);
+}
+
+.terminal-file-panel :deep(.tree-search:focus-within) {
+  border-color: color-mix(in srgb, var(--accent) 70%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.terminal-file-panel :deep(.tree-search svg) {
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
+}
+
+.terminal-file-panel :deep(.tree-search input) {
+  font-size: 12px;
+}
+
+.terminal-file-panel :deep(.tree-sort) {
+  grid-area: sort;
+  width: 100%;
+  height: 28px;
+}
+
+.terminal-file-panel :deep(.tree-sort-dir-btn) { grid-area: dir; }
+.terminal-file-panel :deep(.tree-refresh-btn) { grid-area: refresh; }
+.terminal-file-panel :deep(.tree-locate-btn) { grid-area: locate; }
+
+.terminal-file-panel :deep(.tree-sort-dir-btn),
+.terminal-file-panel :deep(.tree-refresh-btn),
+.terminal-file-panel :deep(.tree-locate-btn) {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--term-bg) 68%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--border) 42%, transparent);
+  color: var(--text-muted);
+}
+
+.terminal-file-panel :deep(.tree-sort-dir-btn:hover),
+.terminal-file-panel :deep(.tree-refresh-btn:hover),
+.terminal-file-panel :deep(.tree-locate-btn:hover) {
+  background: color-mix(in srgb, var(--accent) 11%, var(--term-bg));
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  color: var(--accent);
+}
+
+.terminal-file-panel :deep(.tree-sort .n-base-selection) {
+  --n-height: 28px !important;
+  background: color-mix(in srgb, var(--term-bg) 68%, var(--surface)) !important;
+}
+
+.terminal-file-panel :deep(.tree-sort .n-base-selection-label) {
+  height: 28px;
+  background: transparent !important;
+}
+
+.terminal-file-panel :deep(.tree-sort .n-base-selection-input__content),
+.terminal-file-panel :deep(.tree-sort .n-base-selection-label__content) {
+  font-size: 11px;
+}
+
+.terminal-file-panel :deep(.tree-sort .n-base-selection__border),
+.terminal-file-panel :deep(.tree-sort .n-base-selection__state-border) {
+  border-color: color-mix(in srgb, var(--border) 42%, transparent) !important;
+}
+
+.terminal-file-panel :deep(.tree-sort:hover .n-base-selection__state-border),
+.terminal-file-panel :deep(.tree-sort .n-base-selection--active .n-base-selection__state-border) {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border)) !important;
+}
+
+.terminal-file-panel :deep(.tree-list) {
+  padding: 8px 6px 10px;
+  background: transparent;
+  min-height: 0;
+}
+
+.terminal-file-panel :deep(.tree-node) {
+  min-height: 28px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-radius: 6px;
+}
+
+.terminal-file-panel :deep(.tree-node:hover) {
+  background: color-mix(in srgb, var(--surface-muted) 58%, transparent);
+}
+
+.terminal-file-panel :deep(.tree-node.selected) {
+  background: color-mix(in srgb, var(--accent) 16%, var(--term-bg));
+}
+
+.terminal-file-panel :deep(.tree-meta) {
+  opacity: 0.76;
+}
+
+.terminal-file-panel :deep(.tree-rename-input) {
+  background: color-mix(in srgb, var(--term-bg) 72%, var(--surface));
+}
+/* 嵌入时隐藏 FileTree 自带的右侧列宽手柄（宽度改由面板左下角手柄控制） */
+.terminal-file-panel :deep(.files-resizer) {
+  display: none !important;
+}
+
+/* 滚动条与主题一致 */
+.terminal-file-panel :deep(.tree-list) {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 62%, transparent) var(--term-bg);
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar) {
+  width: 2px !important;
+  height: 2px !important;
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-track) {
+  background: var(--term-bg) !important;
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-thumb) {
+  background: color-mix(in srgb, var(--accent) 62%, transparent) !important;
+  border-radius: 999px;
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-thumb:hover) {
+  background: var(--accent) !important;
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-corner) {
+  background: var(--term-bg) !important;
+}

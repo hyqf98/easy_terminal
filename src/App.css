@@ -20,11 +20,13 @@
 
 .detached-viewport {
   overflow: hidden;
-  background: var(--bg-base);
+  background: var(--bg);
 }
 
 .detached-canvas {
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
-    var(--bg-base);
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--bg) 72%, transparent) 100%),
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+  background-color: var(--bg);
 }

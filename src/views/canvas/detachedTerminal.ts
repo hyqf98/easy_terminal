@@ -250,7 +250,6 @@ export async function initDetachedTerminalMode() {
   const { getTerminalThemeStrategy } = await import('../terminal/strategies/terminalIndex');
   const { defaultWindowIcon } = await import('@tauri-apps/api/app');
   const { listen } = await import('@tauri-apps/api/event');
-  const sessionId = appWindow.label;
 
   try {
     const icon = await defaultWindowIcon();
@@ -280,25 +279,27 @@ export async function initDetachedTerminalMode() {
   term.open(canvasEl);
   fitAddon.fit();
 
-  const unlisten = await listen(`pty-output-${sessionId}`, (event) => {
-    const output = (event.payload as { data: string }).data;
-    term.write(output);
-  });
-
   const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
 
-  await tauriInvoke('create_pty', {
-    sessionId,
+  // create_pty 由后端生成并返回真实 sessionId（不接受 sessionId 参数）
+  const realSessionId = await tauriInvoke<string>('create_pty', {
     cols: term.cols,
     rows: term.rows,
     cwd: undefined,
   });
 
+  // 后端 emit 扁平事件 "pty-output"，payload 含 { session_id, data }，需按 session_id 过滤
+  const unlisten = await listen('pty-output', (event) => {
+    const payload = event.payload as { session_id: string; data: string };
+    if (payload.session_id !== realSessionId) return;
+    term.write(payload.data);
+  });
+
   term.onData((data) => {
     void tauriInvoke('write_pty', {
-      sessionId,
+      sessionId: realSessionId,
       data,
-    });
+    }).catch(() => {});
   });
 
   term.focus();
@@ -306,10 +307,10 @@ export async function initDetachedTerminalMode() {
   const syncSize = () => {
     fitAddon.fit();
     void tauriInvoke('resize_pty', {
-      sessionId,
+      sessionId: realSessionId,
       cols: term.cols,
       rows: term.rows,
-    });
+    }).catch(() => {});
   };
 
   window.addEventListener('resize', syncSize);
@@ -321,7 +322,7 @@ export async function initDetachedTerminalMode() {
     closing = true;
     event.preventDefault();
     try {
-      await tauriInvoke('kill_pty', { sessionId });
+      await tauriInvoke('kill_pty', { sessionId: realSessionId }).catch(() => {});
       unlisten();
       term.dispose();
     } finally {

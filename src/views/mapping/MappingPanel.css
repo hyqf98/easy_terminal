@@ -5,7 +5,7 @@
   overflow: auto;
 }
 
-/* 介绍横幅 */
+/* ===== 介绍横幅 ===== */
 .mapping-intro {
   display: flex;
   align-items: center;
@@ -13,13 +13,13 @@
   padding: 18px 22px;
   background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 10%, var(--craft-surface)));
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: 12px;
   margin-bottom: 20px;
 }
 .mapping-intro-icon {
   width: 42px;
   height: 42px;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: var(--accent);
   display: grid;
   place-items: center;
@@ -38,27 +38,30 @@
 .mapping-intro h3 {
   font-size: 15px;
   font-weight: 700;
-  margin: 0 0 3px;
+  margin-bottom: 3px;
   color: var(--text);
 }
 .mapping-intro p {
   font-size: 12px;
-  color: var(--text-muted);
-  margin: 0;
+  color: var(--text-sub);
   line-height: 1.5;
 }
 
-/* 映射卡片列表 */
+/* ===== 映射卡片列表 ===== */
 .mapping-pairs {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 .mapping-pair {
+  display: grid;
+  grid-template-columns: 1fr 36px 1fr auto;
+  gap: 14px;
+  align-items: center;
   padding: 14px 16px;
   background: var(--craft-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
+  border-radius: 10px;
   transition: border-color 180ms ease, box-shadow 180ms ease;
   animation: mappingCardPop 280ms ease both;
 }
@@ -70,14 +73,7 @@
 .mapping-pair:nth-child(3) { animation-delay: 120ms; }
 .mapping-pair:nth-child(4) { animation-delay: 180ms; }
 .mapping-pair:nth-child(5) { animation-delay: 240ms; }
-.mapping-pair:nth-child(6) { animation-delay: 300ms; }
 
-.mapping-pair-row {
-  display: grid;
-  grid-template-columns: 1fr 36px 1fr 32px;
-  gap: 14px;
-  align-items: center;
-}
 .mapping-side {
   display: flex;
   flex-direction: column;
@@ -105,6 +101,30 @@
   font-weight: 600;
   color: var(--mauve);
 }
+
+/* 触发短语 chip 群：多触发短语并排展示 */
+.mapping-side-triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.mapping-trigger-chip {
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mapping-side-empty {
+  font-size: 13px;
+  color: var(--text-muted);
+}
 .mapping-arrow {
   display: grid;
   place-items: center;
@@ -119,35 +139,26 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.mapping-copy-btn {
-  color: var(--text-muted);
-}
 
-.mapping-pair-desc {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.mapping-pair-foot {
+/* 末列：开关 + 悬浮操作按钮 */
+.mapping-tail {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-}
-.mapping-pair-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 .mapping-pair-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.mapping-pair:hover .mapping-pair-actions {
+  opacity: 1;
+}
+.mapping-copy-btn {
+  color: var(--text-muted);
 }
 .mapping-delete-btn {
   color: var(--red);
@@ -156,7 +167,15 @@
   background: color-mix(in srgb, var(--red) 12%, transparent);
 }
 
-/* 启用开关（复用 mockup 视觉） */
+.mapping-pair-desc {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ===== 启用开关（36x20 胶囊，对齐 mockup） ===== */
 .mapping-toggle {
   width: 36px;
   height: 20px;

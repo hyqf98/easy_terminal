@@ -13,13 +13,23 @@
     @minimize="onMinimize"
     @maximize="onMaximize"
     @close="onClose"
+    @cmdk="onCmdk"
   />
   <main id="stage">
     <!-- 终端画布视图 -->
     <section class="view" :class="{ active: activeView === 'canvas' }" v-show="activeView === 'canvas'">
       <div class="canvas-stage" ref="viewportRef">
-        <CanvasStatus />
         <CanvasMinimap />
+        <div class="canvas-hint">{{ canvasHintLabel }}</div>
+        <!-- 画布左边缘的文件树开关窄条：点击切换文件树浮层显隐 -->
+        <button
+          class="canvas-sidebar-toggle"
+          :class="{ open: filesPanelVisible }"
+          :title="filesPanelVisible ? '隐藏文件树' : '显示文件树'"
+          @click="filesPanelVisible = !filesPanelVisible"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+        </button>
         <div v-if="showHint" class="canvas-empty">
           <n-empty :description="hintLabel">
             <template #extra>
@@ -30,9 +40,19 @@
           </n-empty>
         </div>
         <div id="canvas" ref="canvasRef">
+          <div
+            v-if="filePanelTerminal"
+            :key="`unified-shell-${filePanelTerminal.id}`"
+            class="terminal-unified-window"
+            :class="getUnifiedWindowClasses(filePanelTerminal)"
+            :style="getUnifiedWindowStyle(filePanelTerminal)"
+            :data-unified-terminal-id="filePanelTerminal.id"
+            aria-hidden="true"
+          ></div>
           <TerminalWindow
             v-for="terminal in terminals"
-            :key="terminal.id"
+            :key="`terminal-${terminal.id}`"
+            :ref="(el) => { setTerminalRef(terminal.id, el); }"
             :terminal-id="terminal.id"
             :initial-x="terminal.x"
             :initial-y="terminal.y"
@@ -43,14 +63,107 @@
             :snap-rect="snapRectFn"
             :clear-guides="clearGuidesFn"
             :viewport-zoom="canvasZoom"
+            :ssh-profiles="sshProfiles"
+            :file-panel-open="filePanelTerminalId === terminal.id"
+            :file-panel-inset="filePanelWidth"
+            :data-unified-terminal-id="terminal.id"
+            @mouseenter="onUnifiedPointerEnter(terminal.id)"
+            @mouseleave="(event) => onUnifiedPointerLeave(terminal.id, event)"
             @activate="onTerminalActivate"
             @close="onTerminalClose"
-            @command-executed="onCommandExecuted"
+            @command-executed="(cmd, cwd) => onCommandExecuted(cmd, cwd, terminal.launchOptions)"
+            @cwd-change="(cwd) => onTerminalCwdChange(terminal.id, cwd)"
             @interaction-start="onTerminalInteractionStart"
             @interaction-end="onTerminalInteractionEnd"
+            @switch-ssh="(pid) => onSwitchSsh(terminal.id, pid)"
+            @toggle-file-panel="onToggleFilePanel"
+            @rect-change="(id, rect) => onTerminalRectChange(id, rect)"
+          />
+          <div
+            v-if="filePanelTerminal"
+            :key="`unified-title-${filePanelTerminal.id}`"
+            class="terminal-unified-titlebar"
+            :class="getUnifiedWindowClasses(filePanelTerminal)"
+            :style="getUnifiedTitlebarStyle(filePanelTerminal)"
+            :data-unified-terminal-id="filePanelTerminal.id"
+            @mousedown.prevent="(event) => onUnifiedTitleDrag(filePanelTerminal.id, event)"
+          >
+            <div class="terminal-dots unified-terminal-dots">
+              <button class="terminal-dot dot-close" title="关闭" @mousedown.stop @click.stop="onUnifiedClose(filePanelTerminal.id)"></button>
+              <button class="terminal-dot dot-minimize" title="最小化" @mousedown.stop @click.stop="onUnifiedMinimize(filePanelTerminal.id)"></button>
+              <button class="terminal-dot dot-maximize" title="最大化" @mousedown.stop @click.stop="onUnifiedMaximize(filePanelTerminal.id)"></button>
+            </div>
+            <div class="terminal-title unified-terminal-title">
+              <svg v-if="isUnifiedSsh(filePanelTerminal)" class="terminal-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+              <svg v-else class="terminal-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <span class="terminal-title-name">{{ getUnifiedTitle(filePanelTerminal) }}</span>
+              <span v-if="getUnifiedCwd(filePanelTerminal)" class="terminal-title-cwd" :title="getUnifiedCwd(filePanelTerminal)">{{ getUnifiedCwd(filePanelTerminal) }}</span>
+            </div>
+            <div class="terminal-status unified-terminal-status">
+              <div class="terminal-ssh-switch" v-if="sshProfiles.length > 0">
+                <button
+                  class="ssh-switch-btn"
+                  :class="{ active: isUnifiedSsh(filePanelTerminal) }"
+                  :title="isUnifiedSsh(filePanelTerminal) ? '切换 SSH / 本地' : '连接 SSH 服务器'"
+                  @mousedown.stop
+                  @click.stop="toggleUnifiedSshMenu(filePanelTerminal.id)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+                </button>
+                <div class="ssh-switch-menu unified-ssh-menu" v-if="unifiedSshMenuTerminalId === filePanelTerminal.id" @mousedown.stop @click.stop>
+                  <div v-if="!isUnifiedSsh(filePanelTerminal)" class="ssh-switch-header">连接 SSH 服务器</div>
+                  <button
+                    v-for="p in sshProfiles"
+                    :key="p.id"
+                    class="ssh-switch-item"
+                    @click="onUnifiedSwitchSsh(filePanelTerminal.id, p.id)"
+                  >{{ p.name }} ({{ p.user }}@{{ p.host }})</button>
+                  <button v-if="isUnifiedSsh(filePanelTerminal)" class="ssh-switch-item" @click="onUnifiedSwitchSsh(filePanelTerminal.id, null)">切换为本地终端</button>
+                </div>
+              </div>
+              <span :class="['status-pulse', getUnifiedStatusPulse(filePanelTerminal)]"></span>
+              <span>{{ getUnifiedStatusText(filePanelTerminal) }}</span>
+            </div>
+          </div>
+          <!-- 文件面板：画布上独立元素，拼接在终端左侧（不挤压/不悬浮） -->
+          <TerminalFilePanel
+            v-if="filePanelTerminal"
+            :key="`terminal-file-panel-${filePanelTerminal.id}`"
+            :terminal-id="filePanelTerminal.id"
+            :cwd="terminalCwds[filePanelTerminal.id] || filePanelTerminal.launchOptions.cwd || ''"
+            :launch-options="filePanelTerminal.launchOptions"
+            :ssh-profiles="sshProfiles"
+            :style="filePanelStyle"
+            :data-unified-terminal-id="filePanelTerminal.id"
+            @mousedown="onTerminalActivate(filePanelTerminal.id)"
+            @mouseenter="onUnifiedPointerEnter(filePanelTerminal.id)"
+            @mouseleave="(event) => onUnifiedPointerLeave(filePanelTerminal.id, event)"
+            @open-preview="onTerminalPanelPreview"
+            @open-terminal="onOpenTerminalAt"
+            @cd-to="onPanelCdTo"
+            @panel-resize-start="onPanelResizeStart"
           />
           <div id="selection-rect"></div>
         </div>
+
+        <!-- 文件树浮层：从左侧滑入的浮动面板（始终叠加在画布之上） -->
+        <FileTree
+          v-if="filesPanelVisible"
+          ref="fileTreeRef"
+          @open-terminal="onOpenTerminalAt"
+          @open-preview="previewPath = $event"
+          @locate-cwd="onLocateCwd"
+          @cd-to="onCdTo"
+          @ready="onFileTreeReady"
+          @strategy-change="onStrategyChange"
+        />
+        <!-- 文件预览浮层：从右侧滑入的浮动面板 -->
+        <PreviewPanel
+          v-if="previewPath"
+          :file-path="previewPath"
+          :strategy="currentFileStrategy"
+          @close="previewPath = ''"
+        />
       </div>
       <TerminalModal
         :open="terminalModalOpen"
@@ -60,9 +173,12 @@
       />
     </section>
 
-    <!-- 文件管理视图 -->
-    <section class="view" v-show="activeView === 'files'">
-      <FileTree ref="fileTreeRef" @open-terminal="onOpenTerminalAt" />
+    <!-- 文件管理视图：独立空视图占位，后续实现（不再复用画布左侧的 FileTree 浮层） -->
+    <section class="view view-files-placeholder" v-show="activeView === 'files'">
+      <div class="files-placeholder-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+        <p>{{ filesPlaceholderLabel }}</p>
+      </div>
     </section>
 
     <!-- 命令管理视图 -->
@@ -107,6 +223,50 @@
   </main>
 
   <Dock :active-view="activeView" @view-change="onViewChange" />
+
+  <!-- ⌘K 命令面板：搜索命令 / 主机 / 文件并快速跳转 -->
+  <Teleport to="body">
+    <div v-if="cmdkOpen" class="cmdk-overlay" @click="cmdkOpen = false" @keydown.esc="cmdkOpen = false">
+      <div class="cmdk-panel" @click.stop>
+        <div class="cmdk-input-row">
+          <svg class="cmdk-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input
+            ref="cmdkInputRef"
+            v-model="cmdkQuery"
+            class="cmdk-input"
+            :placeholder="cmdkPlaceholder"
+            @keydown.enter="onCmdkEnter"
+            @keydown.down.prevent="cmdkIndex = Math.min(cmdkIndex + 1, cmdkResults.length - 1)"
+            @keydown.up.prevent="cmdkIndex = Math.max(cmdkIndex - 1, 0)"
+            @keydown.esc="cmdkOpen = false"
+          />
+          <span class="cmdk-esc">Esc</span>
+        </div>
+        <div class="cmdk-results" v-if="cmdkResults.length > 0">
+          <div
+            v-for="(item, idx) in cmdkResults"
+            :key="item.id"
+            :class="['cmdk-result', { active: cmdkIndex === idx }]"
+            @click="cmdkIndex = idx; onCmdkEnter()"
+            @mouseenter="cmdkIndex = idx"
+          >
+            <span class="cmdk-result-icon" :style="{ color: item.color }">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="item.icon"></svg>
+            </span>
+            <div class="cmdk-result-body">
+              <span class="cmdk-result-title">{{ item.title }}</span>
+              <span class="cmdk-result-desc" v-if="item.desc">{{ item.desc }}</span>
+            </div>
+            <span class="cmdk-result-type">{{ item.type }}</span>
+          </div>
+        </div>
+        <div class="cmdk-empty" v-else>{{ cmdkQuery ? '未找到匹配结果' : '开始输入以搜索…' }}</div>
+        <div class="cmdk-footer">
+          <span>↑↓ 导航 · ↹ 跳转 · Esc 关闭</span>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 <script src="./AppLayout.ts"></script>
 <style src="./AppLayout.css"></style>

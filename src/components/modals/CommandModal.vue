@@ -28,16 +28,19 @@
     <div class="field-row">
       <div class="field">
         <div class="field-label">分类</div>
-        <select class="select" v-model="form.category">
-          <option value="">我的收藏</option>
-          <option v-for="name in categoryOptions" :key="name" :value="name">{{ name }}</option>
-        </select>
+        <AppSelect
+          :model-value="form.category"
+          :options="categorySelectOptions"
+          @update:model-value="onCategoryChange"
+        />
       </div>
       <div class="field">
         <div class="field-label">执行范围</div>
-        <select class="select" v-model="form.scope">
-          <option v-for="item in scopeOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
-        </select>
+        <AppSelect
+          :model-value="form.scope"
+          :options="scopeOptions"
+          @update:model-value="onScopeChange"
+        />
       </div>
     </div>
     <div class="field">

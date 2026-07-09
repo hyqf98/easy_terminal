@@ -1,8 +1,13 @@
-/* FileModal：复用共享表单类，仅做轻微修饰 */
-.file-modal-type {
+/* FileModal：类型选择器复用共享 .choice-cards / .choice-card，按钮需重置默认外观 */
+.choice-cards {
   width: 100%;
 }
-.file-modal-type .segmented-item {
-  flex: 1;
-  justify-content: center;
+.choice-card {
+  width: 100%;
+  font-family: var(--font-sans);
+  text-align: center;
+}
+.choice-card:focus {
+  outline: none;
+  border-color: var(--accent);
 }

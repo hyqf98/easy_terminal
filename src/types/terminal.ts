@@ -19,6 +19,8 @@ export interface SnapOptions {
   sourceId?: string;
   mode: 'drag' | 'resize';
   direction?: string;
+  minW?: number;
+  minH?: number;
 }
 
 export interface SnapPoint {

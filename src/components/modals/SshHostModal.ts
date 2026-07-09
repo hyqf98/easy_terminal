@@ -1,12 +1,14 @@
 import { defineComponent, reactive, computed, watch, ref } from 'vue';
 import AppModal from '../AppModal.vue';
+import AppSelect from '../AppSelect.vue';
+import type { SelectOption } from '../AppSelect';
 import { showMessage } from '../../composables/useAppMessage';
 import { t } from '../../i18n';
 import type { SSHProfile } from '../../types';
 
 export default defineComponent({
   name: 'SshHostModal',
-  components: { AppModal },
+  components: { AppModal, AppSelect },
   props: {
     open: { type: Boolean, default: false },
     /** 编辑时传入已有主机；新建时传 null */
@@ -50,6 +52,21 @@ export default defineComponent({
       if (form.group) set.add(form.group);
       return [...set].sort();
     });
+
+    // AppSelect 所需 options：固定“未分组”置顶 + 动态分组
+    const groupSelectOptions = computed<SelectOption[]>(() => [
+      { label: '未分组', value: '' },
+      ...groupOptions.value.map((name) => ({ label: name, value: name })),
+    ]);
+
+    // 跳板机选项：固定“不使用跳板”置顶 + 候选主机
+    const jumpSelectOptions = computed<SelectOption[]>(() => [
+      { label: '不使用跳板', value: '' },
+      ...props.jumpCandidates.map((candidate) => ({
+        label: `${candidate.name} (${candidate.user}@${candidate.host})`,
+        value: candidate.id,
+      })),
+    ]);
 
     /** 密钥路径：UI 上以 ~/ 作前缀装饰，内部存储完整路径 */
     const privateKeyTail = computed<string>({
@@ -102,6 +119,15 @@ export default defineComponent({
       if (!value) emit('close');
     }
 
+    // AppSelect 值回调（模板中无法使用 as 类型断言，故在此做类型收窄）
+    function onGroupChange(value: unknown) {
+      form.group = String(value ?? '');
+    }
+
+    function onJumpProfileChange(value: unknown) {
+      form.jumpProfileId = String(value ?? '');
+    }
+
     function buildProfile(): SSHProfile {
       return {
         id: form.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -144,9 +170,13 @@ export default defineComponent({
       testLabel,
       modalTitle,
       groupOptions,
+      groupSelectOptions,
+      jumpSelectOptions,
       privateKeyTail,
       close,
       onUpdateOpen,
+      onGroupChange,
+      onJumpProfileChange,
       onSave,
       onTest,
     };

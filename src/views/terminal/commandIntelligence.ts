@@ -282,7 +282,8 @@ export class CommandIntelligence {
     const preferredLang = getLang();
     for (const mapping of this.mappings) {
       if (!mapping.enabled) continue;
-      const fields = localizedMappingFields(mapping, preferredLang);
+      // 任意触发短语命中即视为精确匹配
+      const fields = [...mapping.triggers, ...localizedMappingFields(mapping, preferredLang)];
       if (fields.some((field) => normalize(field) === normalizedInput)) {
         return mapping;
       }
@@ -545,7 +546,9 @@ function mappingToSuggestionItem(mapping: CommandMapping): SuggestionItem {
   const sourceLabel = mapping.sourceType === 'builtin'
     ? t('mapping.sourceBuiltin')
     : t('mapping.sourceLabel');
-  const localizedTrigger = pickLocalizedValue([mapping.trigger, ...mapping.examples], preferredLang) || mapping.trigger;
+  const localizedTrigger = pickLocalizedValue([...mapping.triggers, ...mapping.examples], preferredLang)
+    || mapping.triggers[0]
+    || '';
   const placeholders = hasPlaceholder(mapping.command) ? parsePlaceholders(mapping.command) : undefined;
   return {
     id: mapping.id,
@@ -558,7 +561,7 @@ function mappingToSuggestionItem(mapping: CommandMapping): SuggestionItem {
     usage: mapping.command,
     hint: mapping.hint || mapping.command,
     examples: mapping.examples,
-    aliases: [],
+    aliases: [...mapping.triggers],
     tags: mapping.tags,
     category: t('mapping.title'),
     sourceLabel,
@@ -757,7 +760,8 @@ function localizedMappingFields(mapping: CommandMapping, lang: ReturnType<typeof
   const tags = mapping.tags.filter((value) => matchesLanguagePreference(value, lang));
   const fallbackExamples = mapping.examples.filter((value) => !examples.includes(value));
   const fallbackTags = mapping.tags.filter((value) => !tags.includes(value));
-  return [mapping.trigger, ...examples, ...tags, ...fallbackExamples, ...fallbackTags].filter(Boolean);
+  // 多触发短语：全部纳入匹配候选
+  return [...mapping.triggers, ...examples, ...tags, ...fallbackExamples, ...fallbackTags].filter(Boolean);
 }
 
 function preferredLanguageBonus(value: string, lang: ReturnType<typeof getLang>): number {

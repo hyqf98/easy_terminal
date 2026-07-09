@@ -1,27 +1,38 @@
 import { invoke } from '@tauri-apps/api/core';
+import type { SSHProfile } from '../../types';
 
+// SSH 远程文件管理服务：所有命令统一透传完整的 profile + profiles 对象，
+// 以匹配 Rust 后端命令签名（见 src-tauri/src/lib.rs）
 export const sshService = {
-  testConnection: (profile: { host: string; port: number; user: string; authType: string; password: string; privateKeyPath: string; jumpProfileId: string }) =>
-    invoke<boolean>('test_ssh_connection', { profile }),
+  // 读取远程目录条目列表
+  readRemoteDir: (profile: SSHProfile, path: string, profiles: SSHProfile[]) =>
+    invoke('read_remote_dir', { profile, path, profiles }),
 
-  readRemoteDir: (profileId: string, path: string) =>
-    invoke<{ name: string; path: string; is_dir: boolean; size: number; modified: number; icon: string }[]>('read_remote_dir', { profileId, path }),
+  // 读取远程文件完整内容（返回 FilePreviewData，调用方按需取 content）
+  readRemoteFile: (profile: SSHProfile, path: string, profiles: SSHProfile[]) =>
+    invoke('read_remote_file', { profile, path, profiles }),
 
-  readRemoteFilePreview: (profileId: string, path: string) =>
-    invoke<{ path: string; language: string; content: string; truncated: boolean; size: number }>('read_remote_file_preview', { profileId, path }),
+  // 读取远程文件预览（截断 + 语言识别，返回 FilePreviewData）
+  readRemoteFilePreview: (profile: SSHProfile, path: string, profiles: SSHProfile[]) =>
+    invoke('read_remote_file_preview', { profile, path, profiles }),
 
-  readRemoteFile: (profileId: string, path: string) =>
-    invoke<string>('read_remote_file', { profileId, path }),
+  // 写入远程文件内容
+  writeRemoteFile: (profile: SSHProfile, path: string, content: string, profiles: SSHProfile[]) =>
+    invoke('write_remote_file', { profile, path, content, profiles }),
 
-  writeRemoteFile: (profileId: string, path: string, content: string) =>
-    invoke('write_remote_file', { profileId, path, content }),
+  // 获取远程家目录路径
+  getRemoteHome: (profile: SSHProfile, profiles: SSHProfile[]) =>
+    invoke('get_remote_home', { profile, profiles }),
 
-  downloadRemoteEntries: (profileId: string, remotePaths: string[], localDir: string) =>
-    invoke('download_remote_entries', { profileId, remotePaths, localDir }),
+  // 重命名远程条目
+  renameRemoteEntry: (profile: SSHProfile, oldPath: string, newPath: string, profiles: SSHProfile[]) =>
+    invoke('rename_remote_entry', { profile, oldPath, newPath, profiles }),
 
-  uploadLocalEntries: (profileId: string, localPaths: string[], remoteDir: string) =>
-    invoke('upload_local_entries', { profileId, localPaths, remoteDir }),
+  // 批量删除远程条目
+  deleteRemoteEntries: (profile: SSHProfile, paths: string[], profiles: SSHProfile[]) =>
+    invoke('delete_remote_entries', { profile, paths, profiles }),
 
-  getRemoteHome: (profileId: string) =>
-    invoke<string>('get_remote_home', { profileId }),
+  // 批量移动远程条目到目标目录
+  moveRemoteEntries: (profile: SSHProfile, sources: string[], destDir: string, profiles: SSHProfile[]) =>
+    invoke('move_remote_entries', { profile, sources, destDir, profiles }),
 };

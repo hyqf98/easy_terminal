@@ -116,6 +116,15 @@ export default {
   'file.openInTerminal': '在终端中打开',
   'file.newFile': '新建文件',
   'file.newFolder': '新建文件夹',
+  'file.copyPath': '复制路径',
+  'file.pathCopied': '路径已复制',
+  'file.copyFailed': '复制失败',
+  'file.refresh': '刷新',
+  'file.cannotPreview': '无法预览此文件类型',
+  'file.previewMode': '预览',
+  'file.sourceMode': '源码',
+  'file.outline': '大纲',
+  'file.previewTitle': '文件预览',
   'file.rename': '重命名',
   'file.delete': '删除',
   'file.confirmDelete': '确定删除 {0} ?',
@@ -142,6 +151,7 @@ export default {
 
   // Hints
   'hint.canvas': '在空白区域拖拽以创建终端 | 滚轮平移 | Shift+滚轮水平移动 | Ctrl+滚轮缩放',
+  'hint.canvasDrag': '拖拽空白区域框选创建终端',
 
   // Suggest
   'suggest.other': '其他',
@@ -194,6 +204,13 @@ export default {
   'history.dayYesterday': '昨天',
   'history.dayThisWeek': '本周',
   'history.countShort': '{0} 条',
+  'history.sectionTime': '时间',
+  'history.sectionTerminal': '终端',
+  'history.sectionFrequent': '高频',
+  'history.groupLocal': '本地终端',
+  'history.groupSsh': 'SSH 终端',
+  'history.copy': '复制',
+  'history.copied': '已复制',
 
   // Mapping
   'mapping.title': '命令映射',

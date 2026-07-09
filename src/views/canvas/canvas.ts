@@ -106,6 +106,7 @@ export class Canvas implements CanvasController {
     this.applyTransform();
   }
 
+  // 点吸附：将裸坐标吸附到最近的对齐候选点，并刷新对齐辅助线
   snapPoint(x: number, y: number, excludeId?: string): SnapPoint {
     const candidates = this.collectCandidates(excludeId);
     const xSnap = this.findClosest(x, candidates.vertical);
@@ -117,11 +118,14 @@ export class Canvas implements CanvasController {
     };
   }
 
+  // 矩形吸附：拖拽时整体平移吸附，缩放时按方向单边吸附，同步更新辅助线
   snapRect(rect: Rect, options: SnapOptions): Rect {
     const next = { ...rect };
     const candidates = this.collectCandidates(options.sourceId);
     let guideX: number | null = null;
     let guideY: number | null = null;
+    const minW = options.minW ?? 200;
+    const minH = options.minH ?? 100;
 
     if (options.mode === 'drag') {
       const xSnap = this.findBestRectSnap(
@@ -140,40 +144,38 @@ export class Canvas implements CanvasController {
       const direction = options.direction || '';
       if (direction.includes('e')) {
         const snap = this.findClosest(rect.x + rect.w, candidates.vertical);
-        next.w = Math.max(200, rect.w + (snap.value - (rect.x + rect.w)));
+        next.w = Math.max(minW, rect.w + (snap.value - (rect.x + rect.w)));
         guideX = snap.guide;
       }
       if (direction.includes('w')) {
         const snap = this.findClosest(rect.x, candidates.vertical);
         const delta = snap.value - rect.x;
         next.x += delta;
-        next.w = Math.max(200, rect.w - delta);
-        if (next.w === 200) {
-          next.x = rect.x + (rect.w - 200);
+        next.w = Math.max(minW, rect.w - delta);
+        if (next.w === minW) {
+          next.x = rect.x + (rect.w - minW);
         }
         guideX = snap.guide;
       }
       if (direction.includes('s')) {
         const snap = this.findClosest(rect.y + rect.h, candidates.horizontal);
-        next.h = Math.max(100, rect.h + (snap.value - (rect.y + rect.h)));
+        next.h = Math.max(minH, rect.h + (snap.value - (rect.y + rect.h)));
         guideY = snap.guide;
       }
       if (direction.includes('n')) {
         const snap = this.findClosest(rect.y, candidates.horizontal);
         const delta = snap.value - rect.y;
         next.y += delta;
-        next.h = Math.max(100, rect.h - delta);
-        if (next.h === 100) {
-          next.y = rect.y + (rect.h - 100);
+        next.h = Math.max(minH, rect.h - delta);
+        if (next.h === minH) {
+          next.y = rect.y + (rect.h - minH);
         }
         guideY = snap.guide;
       }
     }
 
-    // 反查吸附目标终端，把辅助线收敛为两终端边缘之间的局部短线
-    const xRange = guideX !== null ? this.computeVerticalRange(guideX, next) : null;
-    const yRange = guideY !== null ? this.computeHorizontalRange(guideY, next) : null;
-    this.updateGuides(guideX, guideY, xRange, yRange);
+    // 始终绘制全屏对齐辅助线（不再绘制终端之间的局部短线“分割线”），仅保留坐标徽标
+    this.updateGuides(guideX, guideY);
     return next;
   }
 
@@ -215,9 +217,10 @@ export class Canvas implements CanvasController {
     Perf.mark('canvas.onWheel');
     const target = e.target as HTMLElement | null;
     if (!target) return;
-    if (target.closest('.json-editor-overlay')) return;
+    // 浮动面板（文件树、预览面板、弹框等）内部的滚动不触发画布平移/缩放
+    if (target.closest('.files-layout, .preview-panel, .modal-overlay, .tree-context-menu, .n-select-menu')) return;
 
-    const isOverTerminal = !!target.closest('.terminal-window');
+    const isOverTerminal = this.isTerminalInteractionTarget(target);
 
     if (e.ctrlKey) {
       e.preventDefault();
@@ -260,7 +263,7 @@ export class Canvas implements CanvasController {
 
   private onMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    if ((e.target as HTMLElement).closest('.terminal-window')) return;
+    if (this.isTerminalInteractionTarget(e.target as HTMLElement)) return;
     this.closeCanvasMenu();
 
     this.isDragging = true;
@@ -317,6 +320,7 @@ export class Canvas implements CanvasController {
     this.selectionRect.style.height = `${h}px`;
   }
 
+  // 将画布的平移与缩放合成 transform 并应用，同时广播视图状态变化
   private applyTransform() {
     Perf.mark('canvas.applyTransform');
     this.canvasEl.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0) scale(${this.zoom})`;
@@ -397,13 +401,11 @@ export class Canvas implements CanvasController {
     return { delta: bestDelta, guide: bestGuide };
   }
 
-  private updateGuides(
-    x: number | null,
-    y: number | null,
-    xRange: { top: number; height: number } | null = null,
-    yRange: { left: number; width: number } | null = null,
-  ) {
-    // 视口左上角在 canvas 坐标系中的位置，用于 badge 兜底定位
+  // 渲染或隐藏水平/垂直对齐辅助线及坐标徽标。
+  // 统一使用“全屏辅助线”模式：吸附命中时画一条贯穿视口的线（top/left ±4000px, 8000px 长度），
+  // 不再在拖拽终端与吸附目标终端之间绘制局部短线，避免出现“分割线”视觉。坐标徽标贴在视口边缘附近。
+  private updateGuides(x: number | null, y: number | null) {
+    // 视口左上角在 canvas 坐标系中的位置，用于把徽标钉在视口边缘
     const viewTop = -this.panY / this.zoom;
     const viewLeft = -this.panX / this.zoom;
 
@@ -413,21 +415,12 @@ export class Canvas implements CanvasController {
     } else {
       this.verticalGuide.style.display = 'block';
       this.verticalGuide.style.left = `${x}px`;
-      let vTop = xRange ? xRange.top : viewTop;
-      let vHeight = xRange ? xRange.height : 0;
-      if (xRange && vHeight > 160) { vTop = vTop + vHeight / 2 - 80; vHeight = 160; }
-      if (xRange) {
-        // 局部短线：吸附点附近 ±80px，避免穿过其他终端
-        this.verticalGuide.style.top = `${vTop}px`;
-        this.verticalGuide.style.height = `${vHeight}px`;
-      } else {
-        // 无明确目标终端（如吸附画布原点）时退化为全屏线
-        this.verticalGuide.style.top = '-4000px';
-        this.verticalGuide.style.height = '8000px';
-      }
+      // 全屏垂直线：覆盖整个视口高度，命中即显示
+      this.verticalGuide.style.top = '-4000px';
+      this.verticalGuide.style.height = '8000px';
       this.verticalBadge.style.display = 'block';
       this.verticalBadge.style.left = `${x - 14}px`;
-      this.verticalBadge.style.top = `${vTop + 6}px`;
+      this.verticalBadge.style.top = `${viewTop + 6}px`;
       this.verticalBadge.textContent = `x: ${Math.round(x)}`;
     }
 
@@ -437,66 +430,20 @@ export class Canvas implements CanvasController {
     } else {
       this.horizontalGuide.style.display = 'block';
       this.horizontalGuide.style.top = `${y}px`;
-      let hLeft = yRange ? yRange.left : viewLeft;
-      let hWidth = yRange ? yRange.width : 0;
-      if (yRange && hWidth > 160) { hLeft = hLeft + hWidth / 2 - 80; hWidth = 160; }
-      if (yRange) {
-        // 局部短线：吸附点附近 ±80px，避免穿过其他终端
-        this.horizontalGuide.style.left = `${hLeft}px`;
-        this.horizontalGuide.style.width = `${hWidth}px`;
-      } else {
-        this.horizontalGuide.style.left = '-4000px';
-        this.horizontalGuide.style.width = '8000px';
-      }
+      // 全屏水平线：覆盖整个视口宽度，命中即显示
+      this.horizontalGuide.style.left = '-4000px';
+      this.horizontalGuide.style.width = '8000px';
       this.horizontalBadge.style.display = 'block';
-      this.horizontalBadge.style.left = `${hLeft + 6}px`;
+      this.horizontalBadge.style.left = `${viewLeft + 6}px`;
       this.horizontalBadge.style.top = `${y - 10}px`;
       this.horizontalBadge.textContent = `y: ${Math.round(y)}`;
     }
   }
 
-  // 在已吸附的垂直坐标上反查目标终端，返回拖拽终端与目标终端的垂直并集范围，用于绘制局部短线
-  private computeVerticalRange(guideX: number, rect: Rect): { top: number; height: number } | null {
-    const targets = this.snapCache?.targets;
-    if (!targets || targets.length === 0) return null;
-    const tol = 0.5;
-    for (const target of targets) {
-      if (
-        Math.abs(target.x - guideX) < tol ||
-        Math.abs(target.x + target.w / 2 - guideX) < tol ||
-        Math.abs(target.x + target.w - guideX) < tol
-      ) {
-        const top = Math.min(rect.y, target.y);
-        const bottom = Math.max(rect.y + rect.h, target.y + target.h);
-        return { top, height: bottom - top };
-      }
-    }
-    return null;
-  }
-
-  // 在已吸附的水平坐标上反查目标终端，返回拖拽终端与目标终端的水平并集范围，用于绘制局部短线
-  private computeHorizontalRange(guideY: number, rect: Rect): { left: number; width: number } | null {
-    const targets = this.snapCache?.targets;
-    if (!targets || targets.length === 0) return null;
-    const tol = 0.5;
-    for (const target of targets) {
-      if (
-        Math.abs(target.y - guideY) < tol ||
-        Math.abs(target.y + target.h / 2 - guideY) < tol ||
-        Math.abs(target.y + target.h - guideY) < tol
-      ) {
-        const left = Math.min(rect.x, target.x);
-        const right = Math.max(rect.x + rect.w, target.x + target.w);
-        return { left, width: right - left };
-      }
-    }
-    return null;
-  }
-
   private canvasMenu: HTMLDivElement | null = null;
 
   private onContextMenu(e: MouseEvent) {
-    if ((e.target as HTMLElement).closest('.terminal-window')) return;
+    if (this.isTerminalInteractionTarget(e.target as HTMLElement)) return;
     e.preventDefault();
     this.closeCanvasMenu();
     if (this.onCanvasContextMenu) {
@@ -546,6 +493,10 @@ export class Canvas implements CanvasController {
       document.addEventListener('contextmenu', close as EventListener);
     }, 0);
     menu.addEventListener('remove', cleanup);
+  }
+
+  private isTerminalInteractionTarget(target: HTMLElement | null): boolean {
+    return !!target?.closest('.terminal-window, .terminal-file-panel, .terminal-unified-window, .terminal-unified-titlebar, .unified-ssh-menu');
   }
 }
 

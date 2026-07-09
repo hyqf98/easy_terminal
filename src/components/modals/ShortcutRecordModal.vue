@@ -6,7 +6,7 @@
     :icon="icon"
     size="sm"
     @close="close"
-    @update:open="(value: boolean) => $emit('update:open', value)"
+    @update:open="(value) => $emit('update:open', value)"
   >
     <div class="keycapture recording shortcut-record-capture">
       <div class="keycapture-icon">

@@ -119,6 +119,15 @@ export default {
   'file.openInTerminal': 'Open in Terminal',
   'file.newFile': 'New File',
   'file.newFolder': 'New Folder',
+  'file.copyPath': 'Copy Path',
+  'file.pathCopied': 'Path copied',
+  'file.copyFailed': 'Copy failed',
+  'file.refresh': 'Refresh',
+  'file.cannotPreview': 'Cannot preview this file type',
+  'file.previewMode': 'Preview',
+  'file.sourceMode': 'Source',
+  'file.outline': 'Outline',
+  'file.previewTitle': 'File Preview',
   'file.rename': 'Rename',
   'file.delete': 'Delete',
   'file.confirmDelete': 'Delete {0} ?',
@@ -145,6 +154,7 @@ export default {
 
   // Hints
   'hint.canvas': 'Drag empty area to create terminal | Scroll to pan | Shift+Scroll horizontal | Ctrl+Scroll zoom',
+  'hint.canvasDrag': 'Drag empty area to box-select and create a terminal',
 
   // Suggest
   'suggest.other': 'Other',
@@ -197,6 +207,13 @@ export default {
   'history.dayYesterday': 'Yesterday',
   'history.dayThisWeek': 'This week',
   'history.countShort': '{0}',
+  'history.sectionTime': 'Time',
+  'history.sectionTerminal': 'Terminal',
+  'history.sectionFrequent': 'Frequent',
+  'history.groupLocal': 'Local Terminal',
+  'history.groupSsh': 'SSH Terminal',
+  'history.copy': 'Copy',
+  'history.copied': 'Copied',
 
   // Mapping
   'mapping.title': 'Mappings',

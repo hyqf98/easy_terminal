@@ -1,34 +1,15 @@
 <template>
   <div class="page ssh-page">
-    <div class="page-header">
-      <div>
-        <div class="page-title">
-          <div class="page-title-icon">
-            <svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-          </div>
-          {{ titleLabel }}
-        </div>
-        <div class="page-subtitle">{{ subtitleLabel }}</div>
-      </div>
-      <div class="page-actions">
-        <button class="btn btn-ghost" @click="testSelected" :disabled="!selectedProfile">
-          <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9" /><path d="M21 3v6h-6" /></svg>
-          {{ testLabel }}
-        </button>
-        <button class="btn btn-primary" @click="openAdd">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-          {{ addLabel }}
-        </button>
-      </div>
-    </div>
-
     <div class="ssh-layout">
       <aside class="ssh-list-pane">
         <div class="ssh-list-head">
           <h3>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
             SSH 连接
-            <span class="tag tag-accent" style="margin-left:auto">{{ profiles.length }}</span>
+            <span class="tag tag-accent ssh-count-tag">{{ profiles.length }}</span>
+            <button class="ssh-add-btn" type="button" :title="addLabel" :aria-label="addLabel" @click="openAdd">
+              <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            </button>
           </h3>
           <div class="search-input">
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>

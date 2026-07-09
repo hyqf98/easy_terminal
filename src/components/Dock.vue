@@ -8,7 +8,7 @@
       @click="$emit('view-change', item.id)"
       :aria-label="item.label"
     >
-      <span v-html="item.icon"></span>
+      <Icon :size="20"><component :is="iconMap[item.id]" /></Icon>
       <span class="dock-label">{{ item.label }}</span>
     </button>
     <div class="dock-divider"></div>
@@ -20,7 +20,7 @@
       @click="$emit('view-change', item.id)"
       :aria-label="item.label"
     >
-      <span v-html="item.icon"></span>
+      <Icon :size="20"><component :is="iconMap[item.id]" /></Icon>
       <span class="dock-label">{{ item.label }}</span>
     </button>
   </nav>

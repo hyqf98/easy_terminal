@@ -20,6 +20,8 @@ interface TerminalRect extends WorldRect {
 interface MinimapItem {
   style: CSSProperties;
   focused: boolean;
+  /** 该小地图块对应的终端画布世界坐标，用于点击导航时读取中心点 */
+  rect: WorldRect;
 }
 
 interface CanvasTransform {
@@ -28,9 +30,11 @@ interface CanvasTransform {
   zoom: number;
 }
 
-/** 读取 .terminal-window 元素的内联 left/top/width/height（画布世界坐标） */
+/** 读取终端窗口世界坐标；展开文件栏时使用统一外壳矩形，避免小地图只显示右侧终端。 */
 function readTerminalRects(): TerminalRect[] {
-  const nodes = document.querySelectorAll<HTMLElement>('.canvas-stage .terminal-window');
+  const nodes = document.querySelectorAll<HTMLElement>(
+    '.canvas-stage .terminal-unified-window, .canvas-stage .terminal-window:not(.has-file-panel)'
+  );
   const rects: TerminalRect[] = [];
   nodes.forEach((node) => {
     const left = parseFloat(node.style.left || '0');
@@ -74,6 +78,8 @@ export default defineComponent({
     const visible = ref(true);
     const items = ref<MinimapItem[]>([]);
     const viewportStyle = ref<CSSProperties>({ display: 'none' });
+    // 当前悬停的终端小地图块索引（无 id 可用，使用渲染索引作为悬停标识）
+    const hoveredIndex = ref<number | null>(null);
 
     let pollTimer: number | null = null;
     let mutationObserver: MutationObserver | null = null;
@@ -122,6 +128,7 @@ export default defineComponent({
 
       const nextItems: MinimapItem[] = terminals.map((rect) => ({
         focused: rect.focused,
+        rect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
         style: {
           left: `${offsetX + rect.x * scale}px`,
           top: `${offsetY + rect.y * scale}px`,
@@ -137,6 +144,70 @@ export default defineComponent({
         width: `${Math.max(viewport.w * scale, 4)}px`,
         height: `${Math.max(viewport.h * scale, 4)}px`,
       };
+    }
+
+    function onTermEnter(idx: number) {
+      hoveredIndex.value = idx;
+    }
+    function onTermLeave() {
+      hoveredIndex.value = null;
+    }
+
+    /**
+     * 点击小地图中的终端块：把该终端平移到视口正中央。
+     * 直接写 #canvas 的 transform（保持现有 zoom，仅调整 pan），
+     * 这样小地图复用与画布一致的 DOM 读写模式，无需依赖 Canvas 实例引用。
+     * 注意：此操作绕过 Canvas 内部 panX/panY 状态，后续滚轮/拖拽会以 Canvas
+     * 自身状态为准；当前交互场景下可接受。
+     */
+    function onTermClick(item: MinimapItem) {
+      const canvas = document.getElementById('canvas');
+      const stage = document.querySelector<HTMLElement>('.canvas-stage');
+      if (!canvas || !stage) return;
+
+      const rect = item.rect;
+      const centerX = rect.x + rect.w / 2;
+      const centerY = rect.y + rect.h / 2;
+
+      const transform = parseCanvasTransform(canvas);
+      const zoom = transform.zoom || 1;
+      const stageW = stage.clientWidth;
+      const stageH = stage.clientHeight;
+
+      const panX = stageW / 2 - centerX * zoom;
+      const panY = stageH / 2 - centerY * zoom;
+
+      canvas.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoom})`;
+
+      // 跳转后短暂高亮目标终端，便于用户定位
+      focusTerminal(rect);
+      render();
+    }
+
+    /** 根据世界矩形在 DOM 中匹配对应 .terminal-window 并短暂高亮 */
+    function focusTerminal(rect: WorldRect) {
+      const nodes = Array.from(document.querySelectorAll<HTMLElement>(
+        '.canvas-stage .terminal-unified-window, .canvas-stage .terminal-window:not(.has-file-panel)'
+      ));
+      let best: HTMLElement | null = null;
+      let bestDist = Infinity;
+      // 使用同步 for...of 而非 forEach 闭包，避免 TS 控制流把 best 误判为 never
+      for (const node of nodes) {
+        const l = parseFloat(node.style.left || '0');
+        const t = parseFloat(node.style.top || '0');
+        const w = parseFloat(node.style.width || '0');
+        const h = parseFloat(node.style.height || '0');
+        const dist = Math.abs(l - rect.x) + Math.abs(t - rect.y) +
+                     Math.abs(w - rect.w) + Math.abs(h - rect.h);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = node;
+        }
+      }
+      if (!best) return;
+      const target = best;
+      target.classList.add('minimap-flash');
+      window.setTimeout(() => target.classList.remove('minimap-flash'), 900);
     }
 
     onMounted(() => {
@@ -160,6 +231,6 @@ export default defineComponent({
       }
     });
 
-    return { visible, items, viewportStyle };
+    return { visible, items, viewportStyle, hoveredIndex, onTermClick, onTermEnter, onTermLeave };
   },
 });

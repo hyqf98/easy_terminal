@@ -235,6 +235,12 @@ pub struct CommandHistoryEntry {
     pub count: u32,
     #[serde(default)]
     pub variants: Vec<CommandHistoryVariant>,
+    /// 命令来源终端类型：local / ssh，缺省回退为 local
+    #[serde(default = "default_history_mode")]
+    pub mode: String,
+    /// SSH 终端对应的配置名称（仅 ssh 模式有值）
+    #[serde(default)]
+    pub profile_name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -251,10 +257,20 @@ fn default_history_count() -> u32 {
     1
 }
 
+/// 历史记录缺省模式：本地终端
+fn default_history_mode() -> String {
+    "local".to_string()
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CommandMapping {
     pub id: String,
+    /// 多触发短语数组：任意命中即映射到 command
+    #[serde(default)]
+    pub triggers: Vec<String>,
+    /// 兼容旧版单 trigger 字段，加载后迁移到 triggers
+    #[serde(default, skip_serializing)]
     pub trigger: String,
     pub command: String,
     #[serde(default)]
@@ -361,6 +377,9 @@ pub fn record_command_history(
         existing.timestamp = entry.timestamp;
         existing.count += 1;
         existing.id = entry.id;
+        // 同步最新执行时的终端类型与配置名，保证按 local/ssh 分组准确
+        existing.mode = entry.mode;
+        existing.profile_name = entry.profile_name;
         merge_history_variant(existing, &normalized_cwd, entry.timestamp, 1);
         existing.cwd = pick_preferred_history_cwd(&existing.variants);
     } else {
@@ -452,7 +471,13 @@ pub fn load_command_mappings() -> Result<Vec<CommandMapping>, String> {
     }
 
     let mut values: Vec<CommandMapping> = merged.into_values().collect();
-    values.sort_by(|left, right| left.trigger.cmp(&right.trigger));
+    values.sort_by(|left, right| {
+        left.triggers
+            .first()
+            .cloned()
+            .unwrap_or_default()
+            .cmp(&right.triggers.first().cloned().unwrap_or_default())
+    });
     Ok(filter_mappings_for_current_platform(values))
 }
 
@@ -518,7 +543,8 @@ fn default_command_mappings() -> Vec<CommandMapping> {
     vec![
         CommandMapping {
             id: "go-home".to_string(),
-            trigger: "去用户路径下".to_string(),
+            triggers: vec!["去用户路径下".to_string()],
+            trigger: String::new(),
             command: "cd ~".to_string(),
             description: "快速回到当前用户主目录".to_string(),
             tags: vec![
@@ -534,7 +560,8 @@ fn default_command_mappings() -> Vec<CommandMapping> {
         },
         CommandMapping {
             id: "open-desktop".to_string(),
-            trigger: "去桌面路径下".to_string(),
+            triggers: vec!["去桌面路径下".to_string()],
+            trigger: String::new(),
             command: "cd ~/Desktop".to_string(),
             description: "开发时快速切到桌面目录".to_string(),
             tags: vec!["desktop".to_string(), "桌面".to_string()],
@@ -546,7 +573,8 @@ fn default_command_mappings() -> Vec<CommandMapping> {
         },
         CommandMapping {
             id: "open-downloads".to_string(),
-            trigger: "去下载目录".to_string(),
+            triggers: vec!["去下载目录".to_string()],
+            trigger: String::new(),
             command: "cd ~/Downloads".to_string(),
             description: "快速切到下载目录处理安装包和临时文件".to_string(),
             tags: vec![
@@ -664,7 +692,20 @@ fn pick_preferred_history_cwd(variants: &[CommandHistoryVariant]) -> String {
 }
 
 fn normalize_mapping(mut mapping: CommandMapping) -> CommandMapping {
-    mapping.trigger = mapping.trigger.trim().to_string();
+    // 旧数据迁移：triggers 为空但旧版 trigger 有值时，将其转换为单元素数组
+    if mapping.triggers.is_empty() && !mapping.trigger.is_empty() {
+        mapping.triggers = vec![mapping.trigger.clone()];
+    }
+    // 去重 + 去空白，保持插入顺序
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    mapping.triggers = mapping
+        .triggers
+        .into_iter()
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty() && seen.insert(item.clone()))
+        .collect();
+    // 迁移完成后清空旧字段，避免重复
+    mapping.trigger = String::new();
     mapping.command = mapping.command.trim().to_string();
     mapping.description = mapping.description.trim().to_string();
     mapping.tags = mapping

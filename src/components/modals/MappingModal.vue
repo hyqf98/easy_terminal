@@ -13,7 +13,19 @@
         {{ triggerLabel }}<span class="req">*</span>
         <span class="field-hint">{{ triggerHint }}</span>
       </div>
-      <input class="input" v-model="trigger" :placeholder="triggerPlaceholder" />
+      <div class="tag-input" @click="focusTriggerInput">
+        <span v-for="(trigger, index) in triggers" :key="trigger" class="tag-pill">
+          {{ trigger }}
+          <button class="x" type="button" @click.stop="removeTrigger(index)" aria-label="移除触发短语">×</button>
+        </span>
+        <input
+          ref="triggerInputEl"
+          v-model="triggerInputValue"
+          :placeholder="triggerPlaceholder"
+          @keydown="onTriggerKeydown"
+          @blur="addTrigger"
+        />
+      </div>
     </div>
 
     <div class="field">

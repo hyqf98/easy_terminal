@@ -11,7 +11,7 @@
   box-sizing: border-box;
 }
 
-/* ===== Global Scrollbar (transparent, appears on hover/scroll) ===== */
+/* ===== Global Scrollbar (thin, themed, appears on hover/scroll) ===== */
 * {
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
@@ -19,9 +19,9 @@
 *:hover {
   scrollbar-color: var(--scrollbar) transparent;
 }
-::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 0; transition: background 0.3s; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; transition: background 0.3s; }
 *:hover > ::-webkit-scrollbar-thumb,
 *:active > ::-webkit-scrollbar-thumb,
 *:focus-within > ::-webkit-scrollbar-thumb { background: var(--scrollbar); }
@@ -45,7 +45,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--bg-crust);
+  background: var(--bg);
   font-family: var(--font-sans);
   user-select: none;
   color: var(--text);
@@ -94,7 +94,7 @@ body.mode-desktop-draw * {
 
 html.mode-detached-terminal,
 body.mode-detached-terminal {
-  background: var(--bg-crust);
+  background: var(--bg);
 }
 
 #desktop-draw-root {
@@ -163,13 +163,15 @@ body.mode-detached-terminal {
 
 .detached-viewport {
   overflow: hidden;
-  background: var(--bg-base);
+  background: var(--bg);
 }
 
 .detached-canvas {
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
-    var(--bg-base);
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--bg) 72%, transparent) 100%),
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+  background-color: var(--bg);
 }
 
 .terminal-window-native-host {
@@ -678,12 +680,12 @@ body.mode-detached-terminal {
 /* ===== Context Menu ===== */
 .context-menu {
   position: fixed;
-  background: var(--bg-mantle);
+  background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: 8px;
   padding: 4px;
   min-width: 180px;
-  box-shadow: 0 8px 24px var(--shadow);
+  box-shadow: var(--shadow-lg);
   z-index: 10000;
   animation: menuAppear 0.12s ease;
 }
@@ -697,15 +699,15 @@ body.mode-detached-terminal {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px;
-  border-radius: 0;
-  font-size: 13px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12px;
   color: var(--text-sub);
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-.context-menu-item:hover { background: var(--sidebar-hover); color: var(--text); }
+.context-menu-item:hover { background: var(--surface-muted); color: var(--text); }
 .context-menu-item.danger { color: var(--red); }
 .context-menu-item.danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); }
 .context-menu-separator { height: 1px; background: var(--border); margin: 4px 8px; }
@@ -2201,8 +2203,10 @@ body.mode-detached-terminal #canvas {
   height: 100vh;
   transform: none !important;
   background:
-    radial-gradient(circle at top, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
-    var(--bg-base);
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--bg) 72%, transparent) 100%),
+    radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
+  background-size: 100% 100%, 24px 24px;
+  background-color: var(--bg);
 }
 
 #selection-rect {
@@ -2210,7 +2214,7 @@ body.mode-detached-terminal #canvas {
   position: absolute;
   border: 2px dashed var(--selection-border);
   background: var(--selection-bg);
-  border-radius: 0;
+  border-radius: 6px;
   pointer-events: none;
   z-index: 9999;
 }
@@ -2308,14 +2312,19 @@ body.mode-detached-terminal .terminal-window-native-host {
 
 /* ===== Hint ===== */
 .canvas-hint {
-  position: fixed;
-  bottom: 24px;
+  position: absolute;
   left: 50%;
+  bottom: 100px;
   transform: translateX(-50%);
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 13px;
+  padding: 6px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  z-index: 10;
   pointer-events: none;
-  opacity: 0.6;
+  white-space: nowrap;
   transition: opacity 0.3s;
 }
 
@@ -2349,27 +2358,27 @@ body.mode-detached-terminal .terminal-window-native-host {
 }
 
 .input-syntax-command {
-  color: color-mix(in srgb, var(--yellow) 82%, white 18%);
+  color: var(--term-token-command, var(--mauve));
 }
 
 .input-syntax-flag {
-  color: color-mix(in srgb, var(--peach) 82%, white 18%);
+  color: var(--term-token-flag, var(--peach));
 }
 
 .input-syntax-arg {
-  color: color-mix(in srgb, var(--text) 98%, white 2%);
+  color: var(--text);
 }
 
 .input-syntax-variable {
-  color: color-mix(in srgb, var(--green) 82%, white 18%);
+  color: var(--green);
 }
 
 .input-syntax-path {
-  color: color-mix(in srgb, var(--teal) 82%, white 18%);
+  color: var(--term-token-path, var(--green));
 }
 
 .input-syntax-operator {
-  color: color-mix(in srgb, var(--mauve) 72%, white 28%);
+  color: var(--term-token-operator, var(--peach));
 }
 
 .terminal-placeholder-overlay {

@@ -19,51 +19,74 @@
         <span v-if="currentCwd" class="terminal-title-cwd" :title="currentCwd">{{ currentCwd }}</span>
       </div>
       <div class="terminal-status">
+        <!-- SSH 切换按钮：在本地/SSH 终端间快速切换 -->
+        <div class="terminal-ssh-switch" v-if="sshProfiles.length > 0">
+          <button
+            class="ssh-switch-btn"
+            :class="{ active: isSsh }"
+            :title="isSsh ? '切换 SSH / 本地' : '连接 SSH 服务器'"
+            @click.stop="sshMenuOpen = !sshMenuOpen"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          </button>
+          <div class="ssh-switch-menu" v-if="sshMenuOpen" @click.stop>
+            <div v-if="!isSsh" class="ssh-switch-header">连接 SSH 服务器</div>
+            <button
+              v-for="p in sshProfiles"
+              :key="p.id"
+              class="ssh-switch-item"
+              @click="emitSwitchSsh(p.id)"
+            >{{ p.name }} ({{ p.user }}@{{ p.host }})</button>
+            <button v-if="isSsh" class="ssh-switch-item" @click="emitSwitchSsh(null)">切换为本地终端</button>
+          </div>
+        </div>
         <span :class="['status-pulse', statusPulseColor]"></span>
         <span>{{ statusText }}</span>
       </div>
     </div>
     <div class="terminal-body" ref="bodyRef"></div>
-    <div class="terminal-suggest" v-if="suggestVisible && suggestItems.length > 0"
-      :style="suggestStyle">
-      <div class="suggest-header">
-        <span class="suggest-header-label">{{ suggestItems.length }} results</span>
-      </div>
-      <div class="suggest-body">
-        <div class="suggest-list">
+    <!-- 箭头把手：absolute 定位在终端左边缘垂直居中，点击切换独立文件面板 -->
+    <button
+      class="terminal-file-tab"
+      :class="{ expanded: filePanelExpanded }"
+      :title="filePanelExpanded ? '收起文件列表' : '展开文件列表'"
+      @click.stop="toggleFilePanel"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline v-if="!filePanelExpanded" points="9 6 15 12 9 18" />
+        <polyline v-else points="15 6 9 12 15 18" />
+      </svg>
+    </button>
+    <!-- 补全弹窗 Teleport 到 body 并使用 position:fixed，避免被 .terminal-window 的 overflow:hidden 裁剪 -->
+    <Teleport to="body">
+      <div class="completion-popup" v-if="suggestVisible && suggestItems.length > 0"
+        :style="suggestStyle">
+        <div class="completion-header">
+          <span>{{ suggestHeaderText }}</span>
+          <span class="completion-count">{{ suggestItems.length }} 条匹配</span>
+        </div>
+        <div class="completion-list">
           <div
             v-for="(item, idx) in suggestItems"
             :key="item.id"
-            :class="['suggest-item', { active: suggestIndex === idx }]"
+            :class="['completion-item', { selected: suggestIndex === idx }]"
             @click="selectSuggestion(item)"
             @mouseenter="suggestIndex = idx"
           >
-            <span :class="['suggest-type-badge', `type-${item.type}`]">{{ item.type === 'history' ? 'H' : item.type === 'mapping' ? 'M' : item.type === 'completion' ? 'S' : 'C' }}</span>
-            <div class="suggest-info">
-              <span class="suggest-title">{{ item.title }}</span>
-              <span class="suggest-subtitle" v-if="item.subtitle">{{ item.subtitle }}</span>
+            <span class="completion-icon" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + suggestIconSvg(item) + '</svg>'"></span>
+            <div class="completion-body">
+              <div class="completion-cmd" v-html="item.title"></div>
+              <div class="completion-desc" v-if="item.subtitle || item.description">{{ item.subtitle || item.description }}</div>
             </div>
+            <span class="completion-kbd">{{ suggestKbdHint(idx, item) }}</span>
           </div>
         </div>
-        <div class="suggest-detail" v-if="activeSuggestion">
-          <div class="suggest-detail-title">{{ activeSuggestion.title }}</div>
-          <div class="suggest-detail-desc" v-if="activeSuggestion.description">{{ activeSuggestion.description }}</div>
-          <div class="suggest-detail-section" v-if="activeSuggestion.usage">
-            <span class="suggest-detail-label">Usage</span>
-            <code class="suggest-detail-code">{{ activeSuggestion.usage }}</code>
-          </div>
-          <div class="suggest-detail-section" v-if="activeSuggestion.examples && activeSuggestion.examples.length > 0">
-            <span class="suggest-detail-label">Examples</span>
-            <code class="suggest-detail-code" v-for="(ex, i) in activeSuggestion.examples.slice(0, 3)" :key="i">{{ ex }}</code>
-          </div>
-          <div class="suggest-detail-section" v-if="activeSuggestion.tags && activeSuggestion.tags.length > 0">
-            <div class="suggest-detail-tags">
-              <span class="suggest-detail-tag" v-for="tag in activeSuggestion.tags.slice(0, 5)" :key="tag">{{ tag }}</span>
-            </div>
-          </div>
+        <div class="completion-footer">
+          <span>↑↓ 选择 · ↹ 接受 · Esc 关闭</span>
+          <span class="completion-source">{{ activeSuggestion ? activeSuggestion.sourceLabel : '' }}</span>
         </div>
       </div>
-    </div>
+    </Teleport>
     <div class="resize-handle resize-n" @mousedown.prevent.stop="startResize('n', $event)"></div>
     <div class="resize-handle resize-s" @mousedown.prevent.stop="startResize('s', $event)"></div>
     <div class="resize-handle resize-e" @mousedown.prevent.stop="startResize('e', $event)"></div>

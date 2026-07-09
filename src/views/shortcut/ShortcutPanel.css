@@ -1,73 +1,107 @@
+/* ============================================================
+   快捷键视图 — Craft 风格（对照 mockup 视图 8，CSS 463-482）
+   共享类 .keycap-group / .keycap / .keycap-plus 来自 components.css
+   ============================================================ */
+
 .shortcut-view {
   padding: 24px 28px;
+  height: 100%;
+  overflow: auto;
 }
 
-/* 平台标签条 */
-.shortcut-platforms-bar {
+/* ===== 平台切换标签（对照 mockup .shortcut-platforms / .platform-tab） ===== */
+.shortcut-platforms {
   display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
+  gap: 6px;
+  margin-bottom: 20px;
 }
-.shortcut-platform-pill {
-  display: inline-flex;
+.platform-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--craft-surface);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 160ms ease;
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  color: var(--text-muted);
-  background: var(--craft-surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
 }
-.shortcut-platform-pill.current {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-  background: var(--accent-soft);
+.platform-tab:hover {
+  color: var(--text);
+  border-color: var(--accent);
 }
-.shortcut-platform-pill em {
-  font-size: 10px;
-  font-style: normal;
-  color: var(--accent);
+.platform-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.platform-tab-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.platform-tab-icon :deep(svg) {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
-/* 分组 */
+/* ===== 分组（对照 mockup .shortcut-section / .shortcut-section-title） ===== */
 .shortcut-section {
   margin-bottom: 22px;
 }
-.shortcut-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-/* 单条快捷键 */
-.shortcut-row {
+.shortcut-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 14px 16px;
+  gap: 8px;
+}
+.shortcut-section-title::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+/* ===== 单条快捷键行（对照 mockup .shortcut-row，grid 1fr auto auto） ===== */
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
   background: var(--craft-surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  transition: border-color 180ms ease, box-shadow 180ms ease;
+  border-radius: 9px;
+  margin-bottom: 6px;
+  transition: border-color 180ms ease;
+}
+.shortcut-row:last-child {
+  margin-bottom: 0;
 }
 .shortcut-row:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  box-shadow: var(--shadow-sm);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
 
 .shortcut-action {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex: 1;
+  gap: 10px;
   min-width: 0;
 }
 .shortcut-action-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-sm);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   background: var(--craft-surface-muted);
   display: grid;
   place-items: center;
@@ -75,8 +109,8 @@
   flex-shrink: 0;
 }
 .shortcut-action-icon :deep(svg) {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.7;
@@ -87,90 +121,57 @@
   min-width: 0;
 }
 .shortcut-action-name {
-  font-size: var(--font-size-md);
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--text);
 }
 .shortcut-action-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-/* 平台列 */
-.shortcut-platforms {
-  display: flex;
-  gap: 10px;
-  flex-shrink: 0;
-}
-.shortcut-platform-col {
-  width: 150px;
-  padding: 8px 10px;
-  border-radius: var(--radius-sm);
-  background: var(--craft-surface-muted);
-  border: 1px solid transparent;
-  transition: border-color 180ms ease, background 180ms ease;
-}
-.shortcut-platform-col.current {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 60%, var(--craft-surface-muted));
-}
-.shortcut-platform-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.shortcut-platform-name {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
-}
-.shortcut-record-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: 1px solid var(--border);
-  background: var(--craft-surface);
-  color: var(--text-sub);
   font-size: 11px;
-  font-family: var(--font-sans);
-  padding: 3px 8px;
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  transition: all 160ms ease;
-}
-.shortcut-record-btn:hover {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-}
-.shortcut-record-btn.active {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.shortcut-record-btn svg {
-  width: 11px;
-  height: 11px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  color: var(--text-muted);
+  margin-top: 1px;
 }
 
-/* 按键展示 */
-.shortcut-keycap-wrap {
+/* ===== 按键列（点击触发录制） ===== */
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  cursor: pointer;
+}
+.shortcut-empty {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ===== 状态列（已绑定 / 冲突 / 清空） ===== */
+.shortcut-status-cell {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 26px;
 }
+.shortcut-status {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.shortcut-conflict {
+  font-size: 10px;
+  color: var(--yellow);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.shortcut-conflict svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* 清空按钮：常驻占位避免列宽抖动，悬停时显形（对照 mockup 行无内联清空，保留逻辑） */
 .shortcut-clear-btn {
-  margin-left: auto;
   width: 18px;
   height: 18px;
   display: grid;
@@ -183,7 +184,7 @@
   opacity: 0;
   transition: opacity 160ms ease, color 160ms ease;
 }
-.shortcut-platform-col:hover .shortcut-clear-btn {
+.shortcut-row:hover .shortcut-clear-btn {
   opacity: 1;
 }
 .shortcut-clear-btn:hover {
@@ -192,48 +193,8 @@
 .shortcut-clear-btn svg {
   width: 12px;
   height: 12px;
-  stroke: currentColor;
   fill: none;
+  stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
-}
-
-.shortcut-empty {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-style: italic;
-  min-height: 26px;
-  display: flex;
-  align-items: center;
-}
-
-.shortcut-conflict {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: 10px;
-  color: var(--red);
-  font-weight: 600;
-}
-.shortcut-conflict svg {
-  width: 11px;
-  height: 11px;
-  stroke: currentColor;
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* 行内录制态 */
-.shortcut-capture-inline {
-  min-height: 26px;
-  padding: 4px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-xs);
-}
-.shortcut-capture-inline .keycapture-hint {
-  margin: 0;
 }

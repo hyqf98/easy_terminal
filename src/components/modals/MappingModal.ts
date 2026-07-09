@@ -16,38 +16,70 @@ export default defineComponent({
   },
   emits: ['close', 'update:open', 'save'],
   setup(props, { emit }) {
-    const trigger = ref('');
+    const triggers = ref<string[]>([]);
     const command = ref('');
     const description = ref('');
     const tags = ref<string[]>([]);
     const enabled = ref(true);
     const tagInputValue = ref('');
     const tagInputEl = ref<HTMLInputElement | null>(null);
+    const triggerInputValue = ref('');
+    const triggerInputEl = ref<HTMLInputElement | null>(null);
 
     const isEditing = computed(() => !!props.mapping);
 
-    // 打开时根据传入映射初始化表单
+    // 打开时根据传入映射初始化表单（兼容旧版单 trigger 字段）
     watch(
       () => props.open,
       (open) => {
         if (!open) return;
         const source = props.mapping;
         if (source) {
-          trigger.value = source.trigger;
+          triggers.value = source.triggers && source.triggers.length
+            ? [...source.triggers]
+            : [];
           command.value = source.command;
           description.value = source.description;
           tags.value = [...source.tags];
           enabled.value = source.enabled;
         } else {
-          trigger.value = '';
+          triggers.value = [];
           command.value = '';
           description.value = '';
           tags.value = [];
           enabled.value = true;
         }
         tagInputValue.value = '';
+        triggerInputValue.value = '';
       }
     );
+
+    /** 提交一个触发短语为 chip */
+    function addTrigger() {
+      const value = triggerInputValue.value.trim().replace(/,+$/, '').trim();
+      if (!value) return;
+      if (!triggers.value.includes(value)) triggers.value.push(value);
+      triggerInputValue.value = '';
+    }
+
+    /** 移除指定触发短语 */
+    function removeTrigger(index: number) {
+      triggers.value.splice(index, 1);
+    }
+
+    /** 触发短语输入键盘控制：Enter/逗号确认，空输入 Backspace 删除末项 */
+    function onTriggerKeydown(event: KeyboardEvent) {
+      if (event.key === 'Enter' || event.key === ',') {
+        event.preventDefault();
+        addTrigger();
+      } else if (event.key === 'Backspace' && !triggerInputValue.value && triggers.value.length) {
+        triggers.value.pop();
+      }
+    }
+
+    function focusTriggerInput() {
+      triggerInputEl.value?.focus();
+    }
 
     function addTag() {
       const value = tagInputValue.value.trim().replace(/,+$/, '').trim();
@@ -83,14 +115,16 @@ export default defineComponent({
     }
 
     function save() {
-      if (!trigger.value.trim() || !command.value.trim()) {
+      // 提交输入框中残留的触发短语，避免遗漏
+      addTrigger();
+      if (!triggers.value.length || !command.value.trim()) {
         showMessage(t('mapping.required'), 'warning');
         return;
       }
       const base = props.mapping;
       const draft: CommandMapping = {
         id: base?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        trigger: trigger.value.trim(),
+        triggers: [...triggers.value],
         command: command.value.trim(),
         description: description.value.trim(),
         tags: [...tags.value],
@@ -105,9 +139,11 @@ export default defineComponent({
     }
 
     return {
-      trigger, command, description, tags, enabled,
+      triggers, command, description, tags, enabled,
       tagInputValue, tagInputEl,
+      triggerInputValue, triggerInputEl,
       isEditing, linkIcon: LINK_ICON,
+      addTrigger, removeTrigger, onTriggerKeydown, focusTriggerInput,
       addTag, removeTag, onTagKeydown, focusTagInput, close, save, onUpdateOpen,
       titleLabel: computed(() => (isEditing.value ? t('mapping.edit') : t('mapping.new'))),
       subtitleLabel: t('mapping.modalSubtitle'),

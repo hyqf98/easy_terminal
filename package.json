@@ -45,6 +45,8 @@
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-updater": "^2",
+    "@vicons/tabler": "^0.13.0",
+    "@vicons/utils": "^0.1.4",
     "@vitejs/plugin-vue": "^6.0.7",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-unicode11": "^0.9.0",
@@ -53,7 +55,10 @@
     "@xterm/xterm": "^5.5.0",
     "codemirror": "^6.0.2",
     "flexsearch": "^0.8.212",
+    "marked": "^18.0.5",
     "naive-ui": "^2.44.1",
+    "upath": "^3.0.8",
+    "video.js": "^8.23.9",
     "vue": "^3.5.35"
   },
   "devDependencies": {

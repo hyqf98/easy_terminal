@@ -1,0 +1,38 @@
+/* ===== AppSelect：Craft 主题下拉选择器封装 ===== */
+
+.app-select {
+  width: 100%;
+  /* 使用 CSS 变量作为回退字体，确保与全局 Manrope 一致 */
+  font-family: var(--font-sans);
+}
+
+/* small 尺寸对齐现有 .settings-select / .select 的 28px 行高 */
+.app-select.small :deep(.n-base-selection) {
+  --n-height: 28px !important;
+}
+.app-select.small :deep(.n-base-selection .n-base-selection-label) {
+  height: 28px;
+}
+
+/* medium / large 让 Naive UI 自身尺寸生效，仅做最小兜底防抖动 */
+.app-select.medium :deep(.n-base-selection) {
+  min-height: 32px;
+}
+
+/* 内容自适应模式：宽度跟随最长选项，避免无谓撑开 */
+.app-select.fit-content {
+  width: auto;
+  min-width: 0;
+}
+
+/* 选中区域文字字号与圆角微调，保持与原生 .select 的 Craft 观感一致 */
+.app-select :deep(.n-base-selection-input .n-base-selection-input__content),
+.app-select :deep(.n-base-selection-label .n-base-selection-label__content) {
+  font-size: var(--font-size-sm);
+  color: var(--text);
+}
+
+/* 箭头颜色对齐 Craft 次要文字色 */
+.app-select :deep(.n-base-selection .n-base-suffix) {
+  color: var(--text-muted);
+}

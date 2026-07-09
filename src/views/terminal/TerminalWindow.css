@@ -1,40 +1,48 @@
 .terminal-window {
   position: absolute;
-  background: var(--craft-surface, var(--bg-base));
-  border: 1px solid var(--craft-border, var(--border));
-  border-radius: var(--radius-md);
-  box-shadow: var(--craft-shadow, 0 8px 32px var(--shadow));
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* terminalPopIn：弹出入场（仅 transform，不触碰 opacity，避免拖拽时 animation 被移除导致闪隐） */
-  animation: terminalPopIn 420ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
   min-width: 200px;
   min-height: 100px;
   transition: box-shadow 220ms ease, border-color 220ms ease;
   will-change: left, top, width, height;
 }
 
-/* 入场动画播放完毕：永久移除 animation，避免拖拽结束 .dragging 移除时 terminalPopIn 重播弹跳 */
-.terminal-window.appeared {
-  animation: none;
-}
-
-@keyframes terminalPopIn {
-  0% { transform: scale(0.92) translateY(8px); }
-  100% { transform: scale(1) translateY(0); }
-}
-
 .terminal-window.focused {
   border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent),
-              0 12px 36px color-mix(in srgb, var(--accent) 22%, transparent),
-              0 4px 14px rgba(61, 56, 50, 0.12);
+  box-shadow: var(--shadow-focus);
+}
+
+/* 文件面板展开时：统一外框由父级 .terminal-unified-window 绘制 */
+.terminal-window.has-file-panel {
+  border-color: transparent;
+  border-left: none;
+  border-radius: 0 0 8px 0;
+  box-shadow: none;
+}
+
+.terminal-window.has-file-panel .title-bar {
+  display: none;
 }
 
 .terminal-window:hover {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--craft-border, var(--border)));
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
   box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.terminal-window.has-file-panel:hover,
+.terminal-window.has-file-panel.focused,
+.terminal-window.has-file-panel.dragging,
+.terminal-window.has-file-panel.resizing,
+.terminal-window.has-file-panel.focused.dragging,
+.terminal-window.has-file-panel.focused.resizing {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .terminal-window.dragging .title-bar { cursor: grabbing; }
@@ -50,8 +58,16 @@
 
 .terminal-window.focused.dragging,
 .terminal-window.focused.resizing {
-  border-color: var(--craft-border, var(--border));
+  border-color: var(--border);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
+}
+
+.terminal-window.has-file-panel.dragging,
+.terminal-window.has-file-panel.resizing,
+.terminal-window.has-file-panel.focused.dragging,
+.terminal-window.has-file-panel.focused.resizing {
+  border-color: transparent;
+  box-shadow: none;
 }
 
 .terminal-window.dragging .terminal-body,
@@ -66,7 +82,7 @@
 
 .terminal-window .title-bar {
   height: 28px;
-  background: var(--craft-surface-muted, var(--bg-mantle));
+  background: var(--surface-muted);
   display: flex;
   align-items: center;
   padding: 0 10px;
@@ -74,7 +90,7 @@
   cursor: default;
   user-select: none;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--craft-border, var(--border));
+  border-bottom: 1px solid var(--border);
 }
 
 /* macOS 风格红黄绿 dots：默认灰色，hover 整组才显色 */
@@ -89,7 +105,7 @@
   border-radius: 50%;
   border: none;
   padding: 0;
-  background: var(--craft-border, var(--border));
+  background: var(--border);
   cursor: pointer;
   transition: background 160ms ease, transform 160ms ease;
 }
@@ -136,7 +152,7 @@
 .terminal-title-cwd::before {
   content: '·';
   margin-right: 6px;
-  color: var(--craft-border, var(--border));
+  color: var(--border);
 }
 
 .terminal-status {
@@ -168,13 +184,147 @@
 .status-pulse.yellow { background: var(--yellow); }
 .status-pulse.accent { background: var(--accent); }
 
+/* ===== SSH 切换按钮（标题栏右侧） ===== */
+.terminal-ssh-switch {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.ssh-switch-btn {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+.ssh-switch-btn svg {
+  width: 13px;
+  height: 13px;
+}
+.ssh-switch-btn:hover {
+  color: var(--text);
+  border-color: var(--border);
+  background: var(--surface-muted);
+}
+.ssh-switch-btn.active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+}
+/* 下拉菜单：绝对定位展开于按钮下方 */
+.ssh-switch-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 160px;
+  max-width: 240px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ssh-switch-header {
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ssh-switch-item {
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-sub);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 120ms ease, color 120ms ease;
+}
+.ssh-switch-item:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
 .terminal-window .terminal-body {
   flex: 1;
   overflow: hidden;
   padding: 10px 12px;
-  background: var(--craft-term-bg, var(--bg-base));
+  background: var(--term-bg);
   position: relative;
 }
+
+/* 箭头把手：小药丸，absolute 定位在终端左边缘垂直居中 */
+.terminal-window .terminal-file-tab {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 8px;
+  height: 36px;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  background: var(--surface);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  z-index: 20;
+  transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              background 160ms ease,
+              color 160ms ease;
+}
+.terminal-window .terminal-file-tab svg {
+  width: 0;
+  height: 12px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 120ms ease 60ms;
+}
+/* hover：把手宽度展开，露出箭头 */
+.terminal-window .terminal-file-tab:hover {
+  width: 20px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent);
+}
+.terminal-window .terminal-file-tab:hover svg {
+  width: 12px;
+  opacity: 1;
+}
+/* 面板已展开：把手常驻宽 + 实心 accent */
+.terminal-window .terminal-file-tab.expanded {
+  width: 20px;
+  background: var(--accent);
+  color: var(--surface);
+}
+.terminal-window .terminal-file-tab.expanded svg {
+  width: 12px;
+  opacity: 1;
+}
+
+.terminal-window.minimized .terminal-file-tab { display: none; }
 
 .terminal-window .terminal-body .xterm {
   height: 100%;
@@ -187,7 +337,7 @@
 }
 
 .terminal-window .terminal-body .xterm-viewport {
-  background-color: var(--craft-term-bg, var(--bg-base)) !important;
+  background-color: var(--term-bg) !important;
 }
 
 /* xterm 输入辅助 textarea 必须离屏隐藏，避免深色下出现白色竖条 */
@@ -207,204 +357,154 @@
 .terminal-window.minimized .resize-handle { display: none; }
 .terminal-window.minimized { height: 28px !important; }
 
-/* ===== Terminal Suggest Popup ===== */
-.terminal-suggest {
-  position: absolute;
-  z-index: 20;
-  background: var(--craft-surface, var(--bg-mantle));
-  border: 1px solid var(--craft-border, var(--border));
-  border-radius: var(--radius-md);
+/* ===== Completion Popup — 与 mockup completion-popup 一致的单列布局 ===== */
+/* 弹窗通过 Teleport 渲染到 body，使用 position:fixed 脱离 .terminal-window 的 overflow:hidden，
+   内联 suggestStyle 会覆盖具体坐标；此处保持 fixed 与极高 z-index 以免被裁剪或遮挡 */
+.completion-popup {
+  position: fixed;
+  z-index: 99999;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: var(--craft-shadow, 0 8px 24px var(--shadow));
-  min-width: 200px;
-  max-width: 560px;
+  box-shadow: var(--shadow-lg);
+  min-width: 300px;
+  max-width: 420px;
   display: flex;
   flex-direction: column;
+  color: var(--text);
 }
 
-.suggest-header {
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--craft-border, var(--border));
-  background: var(--craft-surface-muted, var(--bg-surface0));
-  flex-shrink: 0;
-}
-
-.suggest-header-label {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
+.completion-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.suggest-body {
-  display: flex;
-  min-height: 0;
-}
-
-.suggest-list {
+  letter-spacing: 0.04em;
+  font-weight: 600;
   flex-shrink: 0;
-  width: 200px;
-  max-height: 190px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar) transparent;
-  border-right: 1px solid var(--craft-border, var(--border));
 }
 
-.suggest-list::-webkit-scrollbar { width: 4px; }
-.suggest-list::-webkit-scrollbar-track { background: transparent; }
-.suggest-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
-.suggest-list::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
-
-.suggest-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 8px;
-  cursor: pointer;
-  transition: background 0.08s ease;
-  min-width: 0;
-}
-
-.suggest-item:hover {
-  background: color-mix(in srgb, var(--accent) 6%, var(--craft-surface-muted, var(--bg-surface0)));
-}
-
-.suggest-item.active {
-  background: color-mix(in srgb, var(--accent) 12%, var(--craft-surface-muted, var(--bg-surface0)));
-}
-
-.suggest-type-badge {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-}
-
-.suggest-type-badge.type-history {
-  background: color-mix(in srgb, var(--green) 15%, transparent);
-  color: var(--green);
-}
-
-.suggest-type-badge.type-mapping {
-  background: color-mix(in srgb, var(--mauve) 15%, transparent);
-  color: var(--mauve);
-}
-
-.suggest-type-badge.type-completion {
-  background: color-mix(in srgb, var(--teal) 15%, transparent);
-  color: var(--teal);
-}
-
-.suggest-type-badge.type-command {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
-}
-
-.suggest-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.suggest-title {
-  min-width: 0;
-  color: var(--text);
-  font-size: var(--font-size-sm);
+.completion-count {
+  color: var(--text-muted);
   font-weight: 500;
-  font-family: var(--font-mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
-.suggest-subtitle {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.suggest-detail {
-  flex: 1;
-  min-width: 0;
-  max-height: 190px;
+.completion-list {
+  padding: 4px;
+  max-height: 220px;
   overflow-y: auto;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar) transparent;
 }
 
-.suggest-detail::-webkit-scrollbar { width: 4px; }
-.suggest-detail::-webkit-scrollbar-track { background: transparent; }
-.suggest-detail::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
+.completion-list::-webkit-scrollbar { width: 4px; }
+.completion-list::-webkit-scrollbar-track { background: transparent; }
+.completion-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
 
-.suggest-detail-title {
-  font-size: var(--font-size-sm);
-  font-weight: 600;
-  color: var(--text);
-  font-family: var(--font-mono);
-  word-break: break-all;
-}
-
-.suggest-detail-desc {
-  font-size: var(--font-size-sm);
-  color: var(--text-sub);
-  line-height: 1.4;
-}
-
-.suggest-detail-section {
+.completion-item {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease;
+  min-width: 0;
 }
 
-.suggest-detail-label {
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.completion-item:hover {
+  background: var(--surface-muted);
 }
 
-.suggest-detail-code {
-  display: block;
-  font-size: var(--font-size-sm);
-  font-family: var(--font-mono);
+.completion-item.selected {
+  background: var(--accent-soft);
+}
+
+.completion-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: var(--surface-muted);
+  display: grid;
+  place-items: center;
   color: var(--accent);
-  background: color-mix(in srgb, var(--craft-surface-muted, var(--bg-surface0)) 80%, transparent);
-  padding: 3px 6px;
-  border-radius: var(--radius-sm);
-  word-break: break-all;
-  line-height: 1.4;
+  flex-shrink: 0;
 }
 
-.suggest-detail-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
+.completion-item.selected .completion-icon {
+  background: var(--surface);
 }
 
-.suggest-detail-tag {
-  font-size: var(--font-size-xs);
+.completion-icon svg {
+  width: 13px;
+  height: 13px;
+  display: block;
+}
+
+.completion-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.completion-cmd {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.completion-desc {
+  font-size: 11px;
   color: var(--text-muted);
-  background: color-mix(in srgb, var(--craft-surface-muted, var(--bg-surface1)) 50%, transparent);
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+.completion-kbd {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.completion-item.selected .completion-kbd {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+}
+
+.completion-footer {
+  padding: 5px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+.completion-source {
+  color: var(--accent);
 }
 
 /* Resize Handles — 热区外延，hover 才显示 accent 视觉条/块（与 mockup 一致） */
@@ -419,6 +519,13 @@
   pointer-events: none;
 }
 .terminal-window:hover .resize-handle::before { opacity: 0.7; }
+.terminal-window.has-file-panel:hover .resize-handle::before { opacity: 0; }
+.terminal-window.has-file-panel .resize-handle:hover::before { opacity: 0.7; }
+.terminal-window.has-file-panel .resize-w,
+.terminal-window.has-file-panel .resize-nw,
+.terminal-window.has-file-panel .resize-sw {
+  display: none;
+}
 
 .resize-n { top: -4px; left: 12px; right: 12px; height: 8px; cursor: n-resize; }
 .resize-s { bottom: -4px; left: 12px; right: 12px; height: 8px; cursor: s-resize; }

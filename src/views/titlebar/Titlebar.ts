@@ -8,6 +8,7 @@ export default defineComponent({
     const minimizeLabel = computed(() => 'Minimize');
     const maximizeLabel = computed(() => 'Maximize');
     const closeLabel = computed(() => 'Close');
+    const versionLabel = computed(() => 'v0.1.0');
 
     const { isDark, setTheme } = useCraftTheme();
     const themeLabel = computed(() => (isDark.value ? '暗色' : '亮色'));
@@ -24,6 +25,7 @@ export default defineComponent({
       minimizeLabel,
       maximizeLabel,
       closeLabel,
+      versionLabel,
       isDark,
       themeLabel,
       toggleTheme,

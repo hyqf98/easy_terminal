@@ -23,5 +23,8 @@ export interface IFileOperationStrategy {
   createEntry(path: string, isDir: boolean): Promise<void>;
   renameEntry(oldPath: string, newPath: string): Promise<void>;
   deleteEntries(paths: string[]): Promise<void>;
+  moveEntries(sources: string[], destDir: string): Promise<void>;
   getHomePath(): Promise<string>;
+  /** Windows 多盘符：返回盘符根路径列表（仅本地策略实现，远程返回 undefined） */
+  listDrives?(): Promise<string[]>;
 }

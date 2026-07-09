@@ -1,4 +1,4 @@
-import { defineComponent, ref, computed, onMounted, onUnmounted, nextTick, type PropType } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted, onUnmounted, nextTick, type PropType } from 'vue';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -11,6 +11,7 @@ import { getTerminalThemeStrategy } from './strategies/terminalIndex';
 import { CommandIntelligence } from './commandIntelligence';
 import { Perf } from '../../utils/perf';
 import type { TerminalLaunchOptions, SuggestionItem, Rect, SnapOptions } from '../../types';
+import type { SSHProfile } from '../../types/ssh';
 
 type WindowRect = { x: number; y: number; w: number; h: number };
 
@@ -51,9 +52,15 @@ export default defineComponent({
     clearGuides: { type: Function as PropType<() => void>, default: null },
     // 画布当前缩放，用于把屏幕像素增量换算为画布坐标增量
     viewportZoom: { type: Number, default: 1 },
+    // 可用的 SSH 配置列表：用于标题栏 SSH 快速切换
+    sshProfiles: { type: Array as PropType<SSHProfile[]>, default: () => [] },
+    // 文件面板是否展开（父组件控制，仅影响 tab 视觉）
+    filePanelOpen: { type: Boolean, default: false },
+    // 文件面板展开时，整体窗口左侧比终端多出的宽度，用于整体吸附/拖拽坐标换算
+    filePanelInset: { type: Number, default: 0 },
   },
-  emits: ['activate', 'close', 'command-executed', 'cwd-change', 'interaction-start', 'interaction-end'],
-  setup(props, { emit }) {
+  emits: ['activate', 'close', 'command-executed', 'cwd-change', 'interaction-start', 'interaction-end', 'switch-ssh', 'toggle-file-panel', 'rect-change'],
+  setup(props, { emit, expose }) {
     const bodyRef = ref<HTMLDivElement | null>(null);
     const rootRef = ref<HTMLDivElement | null>(null);
 
@@ -68,6 +75,15 @@ export default defineComponent({
     const suggestItems = ref<SuggestionItem[]>([]);
     const suggestIndex = ref(0);
     const suggestStyle = ref<Record<string, string>>({});
+    // SSH 切换下拉菜单显隐
+    const sshMenuOpen = ref(false);
+    // 文件面板展开状态（由父组件控制，仅用于 tab 视觉反馈）
+    const filePanelExpanded = computed(() => props.filePanelOpen);
+
+    /** 点击箭头：通知父组件切换独立文件面板 */
+    function toggleFilePanel() {
+      emit('toggle-file-panel', props.terminalId);
+    }
 
     const activeSuggestion = computed(() => {
       if (suggestVisible.value && suggestItems.value.length > 0) {
@@ -75,6 +91,40 @@ export default defineComponent({
       }
       return null;
     });
+
+    // 补全弹窗头部文案：与 mockup completion-header 一致（命令补全 / 历史联想 / 映射匹配）
+    const suggestHeaderText = computed(() => {
+      if (!suggestItems.value.length) return '命令补全';
+      const hasHistory = suggestItems.value.some((i) => i.type === 'history');
+      const hasMapping = suggestItems.value.some((i) => i.type === 'mapping');
+      if (hasMapping) return '命令映射';
+      if (hasHistory && suggestItems.value.every((i) => i.type === 'history')) {
+        return '历史联想';
+      }
+      return '命令补全';
+    });
+
+    // 每条建议的小图标 SVG path（按来源类型区分，贴近 mockup completion-icon）
+    function suggestIconSvg(item: SuggestionItem): string {
+      switch (item.type) {
+        case 'history':
+          return '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+        case 'mapping':
+          return '<path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 4l-4 16"/>';
+        case 'completion':
+          return '<path d="M3 12h4l3-8 4 16 3-8h4"/>';
+        default:
+          return '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>';
+      }
+    }
+
+    // 每条建议的键盘提示徽标：首条 Tab 接受，其余按序号映射 ⌃N / ⌃P 风格
+    function suggestKbdHint(idx: number, item: SuggestionItem): string {
+      if (idx === 0) return '↹ Tab';
+      if (item.type === 'history') return `⌃${idx}`;
+      if (item.type === 'mapping') return '⇥';
+      return `⌥${idx}`;
+    }
 
     const rectState = ref<WindowRect>({
       x: props.initialX,
@@ -114,6 +164,7 @@ export default defineComponent({
       minimized: isMinimized.value,
       dragging: isDragging.value,
       resizing: isResizing.value,
+      'has-file-panel': props.filePanelOpen,
     }));
 
     const statusClass = computed(() => {
@@ -125,11 +176,14 @@ export default defineComponent({
     const statusPulseColor = computed(() => (isSsh.value ? 'accent' : 'green'));
     const statusText = computed(() => (isSsh.value ? 'SSH' : 'Local'));
 
+    const UNIFIED_TITLEBAR_H = 28;
     const containerStyle = computed(() => ({
       left: `${rectState.value.x}px`,
-      top: `${rectState.value.y}px`,
+      top: `${props.filePanelOpen ? rectState.value.y + UNIFIED_TITLEBAR_H : rectState.value.y}px`,
       width: `${rectState.value.w}px`,
-      height: isMinimized.value ? '38px' : `${rectState.value.h}px`,
+      height: isMinimized.value
+        ? '38px'
+        : `${Math.max(100, rectState.value.h - (props.filePanelOpen ? UNIFIED_TITLEBAR_H : 0))}px`,
       zIndex: props.zIndex,
     }));
 
@@ -150,6 +204,7 @@ export default defineComponent({
       currentPlaceholderIdx = -1;
     }
 
+    // 根据当前输入行向命令智能引擎查询并刷新补全建议列表
     async function updateSuggestions(input: string) {
       const intel = getCommandIntel();
       const trimmed = input.trimStart();
@@ -177,9 +232,18 @@ export default defineComponent({
       }
     }
 
+    // 补全弹窗已 Teleport 到 document.body 并使用 position:fixed。
+    // 因此定位基于终端根元素在屏幕上的矩形（getBoundingClientRect）+ 光标像素偏移，再按视口边界兜底。
     function updateSuggestPosition() {
+      const fallback = { position: 'fixed', left: '4px', top: '60px', maxHeight: '200px' };
       if (!term || disposed) {
-        suggestStyle.value = { left: '4px', top: '60px', maxHeight: '200px' };
+        suggestStyle.value = fallback;
+        return;
+      }
+
+      const rootRect = rootRef.value?.getBoundingClientRect();
+      if (!rootRect) {
+        suggestStyle.value = fallback;
         return;
       }
 
@@ -192,29 +256,51 @@ export default defineComponent({
       const cellW = (bodyW / term.cols) || 9;
       const cellH = (bodyH / term.rows) || 18;
       const titleBarH = 38;
-
-      const pxLeft = cursorX * cellW;
-      const pxTop = titleBarH + (cursorY + 1) * cellH;
       const maxH = 200;
+      const popupMaxW = 420;
 
-      const spaceBelow = bodyH + titleBarH - pxTop;
-      const spaceAbove = cursorY * cellH;
+      // 光标在终端内的像素偏移 → 转换为屏幕坐标（fixed 定位基准）
+      const cursorPxX = cursorX * cellW;
+      const cursorPxY = titleBarH + (cursorY + 1) * cellH;
+      const screenX = rootRect.left + cursorPxX;
+      const screenY = rootRect.top + cursorPxY;
 
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      // 水平：贴光标列，右溢出回缩，左边界兜底
+      let left = screenX;
+      if (left + popupMaxW > vw - 8) left = Math.max(8, vw - 8 - popupMaxW);
+
+      // 垂直：默认落在光标下方；下方空间不足且上方足够时翻转到光标上方
+      const spaceBelow = vh - screenY;
+      const spaceAbove = cursorPxY - titleBarH; // 光标行以上在终端内的可用像素
+      let top: number;
+      let clampedMaxH: number;
       if (spaceBelow < maxH + 10 && spaceAbove > maxH) {
-        const bottom = (rectState.value.h - titleBarH) - (cursorY * cellH) + cellH * 0.3;
-        suggestStyle.value = { left: `${pxLeft}px`, bottom: `${Math.max(2, bottom)}px`, maxHeight: `${maxH}px` };
+        // 翻转到上方：弹窗底边贴近光标行上沿
+        const cursorLineTopScreenY = rootRect.top + titleBarH + cursorY * cellH;
+        top = cursorLineTopScreenY - cellH * 0.3 - maxH;
+        top = Math.max(8, top);
+        clampedMaxH = Math.min(maxH, spaceAbove - 6);
       } else {
-        const clampedTop = Math.max(titleBarH + 2, Math.min(pxTop, rectState.value.h - maxH - 4));
-        const clampedMaxH = Math.min(maxH, spaceBelow - 6);
-        suggestStyle.value = { left: `${pxLeft}px`, top: `${clampedTop}px`, maxHeight: `${Math.max(80, clampedMaxH)}px` };
+        top = screenY;
+        clampedMaxH = Math.min(maxH, Math.max(0, spaceBelow - 6));
       }
+
+      suggestStyle.value = {
+        position: 'fixed',
+        left: `${Math.round(left)}px`,
+        top: `${Math.round(top)}px`,
+        maxHeight: `${Math.max(80, clampedMaxH)}px`,
+      };
     }
 
     function scrollSuggestIntoView() {
       void nextTick(() => {
         const container = bodyRef.value?.closest('.terminal-window')
-          ?.querySelector('.suggest-list') as HTMLElement | null;
-        const active = container?.querySelector('.suggest-item.active') as HTMLElement | null;
+          ?.querySelector('.completion-list') as HTMLElement | null;
+        const active = container?.querySelector('.completion-item.selected') as HTMLElement | null;
         if (container && active) {
           active.scrollIntoView({ block: 'nearest', behavior: 'instant' });
         }
@@ -680,6 +766,7 @@ export default defineComponent({
       }, 40);
     }
 
+    // 选中并应用某条建议到命令行（委托给 applySuggestion）
     function selectSuggestion(item: SuggestionItem) {
       applySuggestion(item);
     }
@@ -706,29 +793,42 @@ export default defineComponent({
       } catch { /* ignore */ }
     }
 
+    // 开始拖拽终端窗口：监听全局鼠标移动，按视口缩放换算坐标并触发吸附
     function startDrag(e: MouseEvent) {
       isDragging.value = true;
-      emit('interaction-start', props.terminalId);
+      emit('interaction-start', props.terminalId, 'drag');
       const startX = e.clientX;
       const startY = e.clientY;
       const startLeft = rectState.value.x;
       const startTop = rectState.value.y;
+      const inset = props.filePanelOpen ? props.filePanelInset : 0;
 
       function onMove(ev: MouseEvent) {
         const zoom = props.viewportZoom || 1;
-        const raw: Rect = {
+        const rawTerminalRect: Rect = {
           x: startLeft + (ev.clientX - startX) / zoom,
           y: startTop + (ev.clientY - startY) / zoom,
           w: rectState.value.w,
           h: rectState.value.h,
         };
-        const snapped = props.snapRect ? props.snapRect(raw, { mode: 'drag', sourceId: props.terminalId }) : raw;
-        rectState.value = { ...rectState.value, x: snapped.x, y: snapped.y };
+        const rawGroupRect: Rect = inset > 0
+          ? { x: rawTerminalRect.x - inset, y: rawTerminalRect.y, w: rawTerminalRect.w + inset, h: rawTerminalRect.h }
+          : rawTerminalRect;
+        const snappedGroup = props.snapRect ? props.snapRect(rawGroupRect, {
+          mode: 'drag',
+          sourceId: props.terminalId,
+          minW: inset + 200,
+          minH: 100,
+        }) : rawGroupRect;
+        const nextX = snappedGroup.x + inset;
+        const nextY = snappedGroup.y;
+        rectState.value = { ...rectState.value, x: nextX, y: nextY };
+        emit('rect-change', props.terminalId, { x: nextX, y: nextY, w: rectState.value.w, h: rectState.value.h });
       }
 
       function onUp() {
         isDragging.value = false;
-        emit('interaction-end', props.terminalId);
+        emit('interaction-end', props.terminalId, 'drag');
         props.clearGuides?.();
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
@@ -738,12 +838,14 @@ export default defineComponent({
       document.addEventListener('mouseup', onUp);
     }
 
+    // 开始缩放终端窗口：按方向（n/s/e/w）单边调整尺寸，受最小宽高与吸附约束
     function startResize(direction: string, e: MouseEvent) {
       isResizing.value = true;
-      emit('interaction-start', props.terminalId);
+      emit('interaction-start', props.terminalId, 'resize');
       const startX = e.clientX;
       const startY = e.clientY;
       const startRect = { ...rectState.value };
+      const inset = props.filePanelOpen ? props.filePanelInset : 0;
 
       function onMove(ev: MouseEvent) {
         const zoom = props.viewportZoom || 1;
@@ -756,20 +858,39 @@ export default defineComponent({
         if (direction.includes('w')) {
           newRect.w = Math.max(200, startRect.w - dx);
           newRect.x = startRect.x + dx;
+          if (newRect.w === 200) {
+            newRect.x = startRect.x + (startRect.w - 200);
+          }
         }
         if (direction.includes('n')) {
           newRect.h = Math.max(100, startRect.h - dy);
           newRect.y = startRect.y + dy;
+          if (newRect.h === 100) {
+            newRect.y = startRect.y + (startRect.h - 100);
+          }
         }
 
-        const snapped = props.snapRect ? props.snapRect(newRect, { mode: 'resize', direction, sourceId: props.terminalId }) : newRect;
+        const rawGroupRect: Rect = inset > 0
+          ? { x: newRect.x - inset, y: newRect.y, w: newRect.w + inset, h: newRect.h }
+          : newRect;
+        const snappedGroup = props.snapRect ? props.snapRect(rawGroupRect, {
+          mode: 'resize',
+          direction,
+          sourceId: props.terminalId,
+          minW: inset + 200,
+          minH: 100,
+        }) : rawGroupRect;
+        const snapped: Rect = inset > 0
+          ? { x: snappedGroup.x + inset, y: snappedGroup.y, w: Math.max(200, snappedGroup.w - inset), h: snappedGroup.h }
+          : snappedGroup;
         rectState.value = snapped;
+        emit('rect-change', props.terminalId, { x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
         handleResize();
       }
 
       function onUp() {
         isResizing.value = false;
-        emit('interaction-end', props.terminalId);
+        emit('interaction-end', props.terminalId, 'resize');
         props.clearGuides?.();
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
@@ -803,6 +924,27 @@ export default defineComponent({
 
     function onActivate() {
       emit('activate', props.terminalId);
+    }
+
+    // 外部向当前终端 PTY 注入数据（用于「在终端执行 cd」等场景）
+    function writeToTerminal(data: string) {
+      if (sessionId) void invoke('write_pty', { sessionId, data });
+    }
+
+    // 切换 SSH 连接：null 表示切回本地终端
+    function emitSwitchSsh(profileId: string | null) {
+      sshMenuOpen.value = false;
+      emit('switch-ssh', profileId);
+    }
+
+    // 点击 SSH 菜单外部时关闭下拉
+    function onSshMenuOutsideClick(event: MouseEvent) {
+      if (!sshMenuOpen.value) return;
+      const target = event.target as Node | null;
+      const switchEl = rootRef.value?.querySelector('.terminal-ssh-switch');
+      if (switchEl && target && !switchEl.contains(target)) {
+        sshMenuOpen.value = false;
+      }
     }
 
     function focus() {
@@ -870,13 +1012,6 @@ export default defineComponent({
 
     onMounted(() => {
       Perf.mark('terminal.mount');
-      // 入场动画播放完毕后永久移除，避免拖拽结束 .dragging 移除时 terminalPopIn 重播造成弹跳延迟
-      if (rootRef.value) {
-        const markAppeared = () => rootRef.value?.classList.add('appeared');
-        rootRef.value.addEventListener('animationend', markAppeared, { once: true });
-        // 兜底：动画被中断时确保最终标记
-        window.setTimeout(markAppeared, 460);
-      }
       void initTerminal().catch((err) => {
         console.error('[TerminalWindow] initTerminal failed:', err);
       });
@@ -896,11 +1031,21 @@ export default defineComponent({
         }
       });
       themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+      // 监听外部点击以关闭 SSH 切换下拉
+      document.addEventListener('click', onSshMenuOutsideClick);
+    });
+
+    watch(() => props.filePanelOpen, () => {
+      void nextTick(() => handleResize());
     });
 
     onUnmounted(() => {
+      document.removeEventListener('click', onSshMenuOutsideClick);
       destroy();
     });
+
+    // 暴露命令式能力，供父组件统一标题栏和文件面板调用
+    expose({ writeToTerminal, startDrag, startResize, minimize, toggleMaximize, requestClose });
 
     return {
       bodyRef,
@@ -932,6 +1077,15 @@ export default defineComponent({
       getState,
       selectSuggestion,
       activeSuggestion,
+      suggestHeaderText,
+      suggestIconSvg,
+      suggestKbdHint,
+      // SSH 切换
+      sshMenuOpen,
+      emitSwitchSsh,
+      // 文件面板 tab
+      filePanelExpanded,
+      toggleFilePanel,
     };
   },
 });

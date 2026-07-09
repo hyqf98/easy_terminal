@@ -170,6 +170,65 @@ pub fn read_remote_file(
     })
 }
 
+/// 读取远程文件预览：截断至 1MB 并返回语言/内容等元数据。
+/// 行为与本地 `fs::read_file_preview` 保持一致，供前端文件预览面板使用。
+/// 注：跳板机链路当前通过 `connect_session` 拒绝（暂不支持）。
+pub fn read_remote_file_preview(
+    profile: settings::SSHProfile,
+    path: String,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<fs::FilePreviewData, String> {
+    let session = connect_session(&profile)?;
+    let sftp = session
+        .sftp()
+        .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
+    let remote_path = Path::new(&path);
+
+    let stat = sftp
+        .stat(remote_path)
+        .map_err(|e| format!("读取远程文件信息失败: {}", e))?;
+    if stat.is_dir() {
+        return Err(format!("不能预览目录: {}", path));
+    }
+
+    const MAX_PREVIEW_BYTES: usize = 1024 * 1024; // 1MB，与本地预览保持一致
+    let file_size = stat.size.unwrap_or(0) as usize;
+    let mut remote_file = sftp
+        .open(remote_path)
+        .map_err(|e| format!("打开远程文件失败: {}", e))?;
+
+    let read_size = if file_size > MAX_PREVIEW_BYTES {
+        MAX_PREVIEW_BYTES
+    } else {
+        file_size
+    };
+    let mut buf = vec![0u8; read_size];
+    let mut total_read = 0;
+    while total_read < read_size {
+        let n = remote_file
+            .read(&mut buf[total_read..])
+            .map_err(|e| format!("读取远程文件失败: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        total_read += n;
+    }
+    buf.truncate(total_read);
+
+    if buf.iter().take(4096).any(|b| *b == 0) {
+        return Err("二进制文件暂不支持预览".to_string());
+    }
+
+    let truncated = file_size > MAX_PREVIEW_BYTES;
+    Ok(fs::FilePreviewData {
+        path: path.clone(),
+        language: fs::detect_language(Path::new(&path)),
+        content: String::from_utf8_lossy(&buf).to_string(),
+        truncated,
+        size: file_size as u64,
+    })
+}
+
 pub fn write_remote_file(
     profile: settings::SSHProfile,
     path: String,

@@ -4,7 +4,7 @@
       <div>
         <div class="page-title">
           <div class="page-title-icon">
-            <svg viewBox="0 0 24 24"><path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/><path d="M14 4l-4 16"/></svg>
+            <Icon :size="18"><ArrowsLeftRight /></Icon>
           </div>
           {{ titleLabel }}
         </div>
@@ -35,37 +35,31 @@
     <div v-if="filteredMappings.length === 0" class="mapping-empty">{{ emptyLabel }}</div>
     <div v-else class="mapping-pairs">
       <div v-for="mapping in filteredMappings" :key="mapping.id" class="mapping-pair">
-        <div class="mapping-pair-row">
-          <div class="mapping-side">
-            <span class="mapping-side-label">{{ t('mapping.trigger') }}</span>
-            <span class="mapping-side-value" :title="mapping.trigger">{{ mapping.trigger }}</span>
+        <div class="mapping-side">
+          <span class="mapping-side-label">{{ t('mapping.trigger') }}</span>
+          <div class="mapping-side-triggers">
+            <span v-for="trigger in mapping.triggers" :key="trigger" class="mapping-trigger-chip" :title="trigger">{{ trigger }}</span>
+            <span v-if="!mapping.triggers || !mapping.triggers.length" class="mapping-side-empty">—</span>
           </div>
-          <div class="mapping-arrow">
-            <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          </div>
-          <div class="mapping-side">
-            <span class="mapping-side-label">{{ t('mapping.realCommand') }}</span>
-            <span class="mapping-side-value code" v-html="renderCommand(mapping.command)"></span>
-          </div>
-          <button class="icon-btn mapping-copy-btn" :title="t('mapping.copy')" @click="copyCommand(mapping.command)">
-            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          </button>
         </div>
-
-        <div v-if="mapping.description" class="mapping-pair-desc">{{ mapping.description }}</div>
-
-        <div class="mapping-pair-foot">
-          <div class="mapping-pair-tags">
-            <span v-for="tag in mapping.tags" :key="tag" class="tag tag-accent">{{ tag }}</span>
-            <span v-if="mapping.sourceType === 'builtin'" class="tag tag-muted">{{ builtinLabel }}</span>
-          </div>
+        <div class="mapping-arrow">
+          <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mapping-side">
+          <span class="mapping-side-label">{{ t('mapping.realCommand') }}</span>
+          <span class="mapping-side-value code" v-html="renderCommand(mapping.command)"></span>
+        </div>
+        <div class="mapping-tail">
+          <div
+            class="mapping-toggle"
+            :class="{ on: mapping.enabled }"
+            :title="t('mapping.toggle')"
+            @click="toggleMapping(mapping)"
+          ></div>
           <div class="mapping-pair-actions">
-            <div
-              class="mapping-toggle"
-              :class="{ on: mapping.enabled }"
-              :title="t('mapping.toggle')"
-              @click="toggleMapping(mapping)"
-            ></div>
+            <button class="icon-btn mapping-copy-btn" :title="t('mapping.copy')" @click="copyCommand(mapping.command)">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            </button>
             <button class="icon-btn" :title="t('mapping.edit')" @click="editMapping(mapping)">
               <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
@@ -79,6 +73,7 @@
             </button>
           </div>
         </div>
+        <div v-if="mapping.description" class="mapping-pair-desc">{{ mapping.description }}</div>
       </div>
     </div>
 

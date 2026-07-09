@@ -178,6 +178,10 @@ export interface CommandHistoryEntry {
   timestamp: number;
   count: number;
   variants: CommandHistoryVariant[];
+  /** 命令来源终端类型：本地 / SSH */
+  mode?: 'local' | 'ssh';
+  /** SSH 终端对应的配置名称（仅 mode === 'ssh' 时有值） */
+  profileName?: string;
 }
 
 export interface CommandHistoryVariant {
@@ -188,7 +192,8 @@ export interface CommandHistoryVariant {
 
 export interface CommandMapping {
   id: string;
-  trigger: string;
+  /** 多触发短语：任一短语命中即映射到 command */
+  triggers: string[];
   command: string;
   description: string;
   tags: string[];

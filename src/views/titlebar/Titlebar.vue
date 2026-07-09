@@ -2,8 +2,9 @@
   <div id="app-titlebar">
     <div class="app-titlebar-drag">
       <span class="app-title">
-        <img src="/src/assets/app-icon.svg" alt="Easy Terminal" />
-        Easy Terminal
+        <span class="app-mark" aria-hidden="true">E</span>
+        <span class="app-title-text">Easy Terminal</span>
+        <span class="app-version">{{ versionLabel }}</span>
       </span>
     </div>
     <div class="app-titlebar-actions">

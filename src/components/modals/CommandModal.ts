@@ -1,5 +1,7 @@
 import { defineComponent, reactive, computed, watch } from 'vue';
 import AppModal from '../AppModal.vue';
+import AppSelect from '../AppSelect.vue';
+import type { SelectOption } from '../AppSelect';
 import { showMessage } from '../../composables/useAppMessage';
 import { t } from '../../i18n';
 import type { CommandEntry } from '../../types';
@@ -18,7 +20,7 @@ interface CommandFormState {
 
 export default defineComponent({
   name: 'CommandModal',
-  components: { AppModal },
+  components: { AppModal, AppSelect },
   props: {
     open: { type: Boolean, default: false },
     /** 编辑时传入已有命令；新建时传 null */
@@ -56,6 +58,12 @@ export default defineComponent({
       if (form.category) set.add(form.category);
       return [...set].sort();
     });
+
+    // AppSelect 所需的 options：固定“我的收藏”置顶 + 动态分类
+    const categorySelectOptions = computed<SelectOption[]>(() => [
+      { label: '我的收藏', value: '' },
+      ...categoryOptions.value.map((name) => ({ label: name, value: name })),
+    ]);
 
     function resetForm() {
       form.id = undefined;
@@ -121,6 +129,16 @@ export default defineComponent({
       }
     }
 
+    // AppSelect 值回调（模板中无法使用 as 类型断言，故在此做类型收窄）
+    function onCategoryChange(value: unknown) {
+      form.category = String(value ?? '');
+    }
+
+    function onScopeChange(value: unknown) {
+      const next = value as CommandFormState['scope'];
+      if (next === 'both' || next === 'local' || next === 'ssh') form.scope = next;
+    }
+
     function buildEntry(): CommandEntry {
       return {
         id: form.id,
@@ -153,8 +171,11 @@ export default defineComponent({
       subtitle,
       scopeOptions,
       categoryOptions,
+      categorySelectOptions,
       close,
       onUpdateOpen,
+      onCategoryChange,
+      onScopeChange,
       addTag,
       removeTag,
       onTagKeydown,

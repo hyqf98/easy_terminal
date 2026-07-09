@@ -20,12 +20,11 @@
       </div>
       <div class="field">
         <div class="field-label">分组</div>
-        <select class="select" v-model="form.group">
-          <option value="">未分组</option>
-          <option v-for="groupName in groupOptions" :key="groupName" :value="groupName">
-            {{ groupName }}
-          </option>
-        </select>
+        <AppSelect
+          :model-value="form.group"
+          :options="groupSelectOptions"
+          @update:model-value="onGroupChange"
+        />
       </div>
     </div>
     <div class="field-row-3">
@@ -99,16 +98,11 @@
     <div class="section-label">跳板机 (ProxyJump)</div>
     <div class="field">
       <div class="field-label">跳板主机</div>
-      <select class="select" v-model="form.jumpProfileId">
-        <option value="">不使用跳板</option>
-        <option
-          v-for="candidate in jumpCandidates"
-          :key="candidate.id"
-          :value="candidate.id"
-        >
-          {{ candidate.name }} ({{ candidate.user }}@{{ candidate.host }})
-        </option>
-      </select>
+      <AppSelect
+        :model-value="form.jumpProfileId"
+        :options="jumpSelectOptions"
+        @update:model-value="onJumpProfileChange"
+      />
     </div>
     <div class="field">
       <div class="field-label">备注</div>

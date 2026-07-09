@@ -1,5 +1,7 @@
 import { defineComponent, ref, computed, onMounted, onUnmounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { Icon } from '@vicons/utils';
+import { Keyboard } from '@vicons/tabler';
 import { t, onLangChange } from '../../i18n';
 import { showMessage } from '../../composables/useAppMessage';
 import type { ShortcutBinding } from '../../types';
@@ -110,9 +112,23 @@ function actionIcon(binding: ShortcutBinding): string {
   return '<svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
 }
 
+/** 平台图标（对照 mockup 平台 tab 内的 SVG） */
+const PLATFORM_ICONS: Record<ShortcutField, string> = {
+  darwin:
+    '<svg viewBox="0 0 24 24"><path d="M17.05 20.28c-.98.95-2.05.86-3.08.43-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.43C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>',
+  windows:
+    '<svg viewBox="0 0 24 24"><path d="M3 5l8-1v8H3zM12 4l9-1v10h-9zM3 12h8v8l-8-1zM12 12h9v9l-9-1z"/></svg>',
+  linux:
+    '<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2c1.5 0 3 .5 4 1.5l-1 1c-.7-.7-1.8-1-3-1v-1.5zm-4 2c1-.5 2.5-1 4-1v1.5c-1.2 0-2.3.3-3 1l-1-1zm-3 4c.3-1.2 1-2.3 2-3l1 1c-.7.7-1 1.8-1 3h-2zm0 4c0 1.2.3 2.3 1 3l-1 1c-1-1-1.7-2-2-3.5l2-.5z"/></svg>',
+};
+
+function platformIconSvg(field: ShortcutField): string {
+  return PLATFORM_ICONS[field];
+}
+
 export default defineComponent({
   name: 'ShortcutPanel',
-  components: { ShortcutRecordModal },
+  components: { ShortcutRecordModal, Icon, Keyboard },
   setup() {
     const draftBindings = ref<ShortcutBinding[]>([]);
     const recording = ref<{ bindingId: string; field: ShortcutField } | null>(null);
@@ -180,6 +196,11 @@ export default defineComponent({
       if (field === 'linux') return platform.includes('linux');
       return !platform.includes('mac') && !platform.includes('linux');
     }
+
+    /** 当前选中的平台 tab（默认聚焦本机平台） */
+    const selectedPlatform = ref<ShortcutField>(
+      FIELD_ORDER.find((field) => isCurrentPlatform(field)) || 'darwin'
+    );
 
     function getFieldValue(binding: ShortcutBinding, field: ShortcutField): string {
       return binding[field] || '';
@@ -268,6 +289,7 @@ export default defineComponent({
       modalAction,
       modalPlatform,
       recording,
+      selectedPlatform,
       grouped,
       categoryLabel,
       isCurrentPlatform,
@@ -280,6 +302,7 @@ export default defineComponent({
       clearField,
       resetDefaults,
       actionIcon,
+      platformIconSvg,
     };
   },
 });

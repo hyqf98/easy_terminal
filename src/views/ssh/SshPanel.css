@@ -10,16 +10,11 @@
   flex-direction: column;
   overflow: hidden;
 }
-.ssh-page .page-header {
-  padding: 20px 24px 14px;
-  margin-bottom: 0;
-  flex-shrink: 0;
-}
 
-/* 主体 master-detail 布局 */
+/* 主体 master-detail 布局（对照 mockup .ssh-layout grid 320px 1fr） */
 .ssh-layout {
   display: grid;
-  grid-template-columns: 300px 1fr;
+  grid-template-columns: 320px 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -50,6 +45,35 @@
 .ssh-list-head h3 svg {
   stroke: var(--text-sub);
   fill: none;
+}
+.ssh-count-tag {
+  margin-left: auto;
+}
+.ssh-add-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  flex-shrink: 0;
+}
+.ssh-add-btn:hover {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.ssh-add-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 .ssh-list-body {
   flex: 1;

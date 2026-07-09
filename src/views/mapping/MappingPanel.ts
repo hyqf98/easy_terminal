@@ -1,5 +1,7 @@
 import { defineComponent, ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
+import { Icon } from '@vicons/utils';
+import { ArrowsLeftRight } from '@vicons/tabler';
 import { t } from '../../i18n';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
@@ -41,7 +43,7 @@ function tokenizeCommand(command: string): string {
 
 export default defineComponent({
   name: 'MappingPanel',
-  components: { MappingModal },
+  components: { MappingModal, Icon, ArrowsLeftRight },
   emits: ['mappings-changed'],
   setup(_, { emit }) {
     const mappings = ref<CommandMapping[]>([]);
@@ -63,7 +65,7 @@ export default defineComponent({
       if (!keywordValue) return mappings.value;
       return mappings.value.filter((mapping) => {
         return (
-          mapping.trigger.toLowerCase().includes(keywordValue) ||
+          mapping.triggers.some((trigger) => trigger.toLowerCase().includes(keywordValue)) ||
           mapping.command.toLowerCase().includes(keywordValue) ||
           mapping.description.toLowerCase().includes(keywordValue) ||
           mapping.tags.some((tag) => tag.toLowerCase().includes(keywordValue))

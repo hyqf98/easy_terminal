@@ -31,7 +31,17 @@ export class LocalFileStrategy implements IFileOperationStrategy {
     await fsService.deleteEntries(paths);
   }
 
+  async moveEntries(sources: string[], destDir: string): Promise<void> {
+    await fsService.moveEntries(sources, destDir);
+  }
+
   async getHomePath(): Promise<string> {
     return invoke<string>('get_home_dir');
+  }
+
+  // Windows 多盘符：调用后端 list_drives，返回盘符根路径数组
+  async listDrives(): Promise<string[]> {
+    const entries = await invoke<{ path: string }[]>('list_drives');
+    return entries.map((entry) => entry.path);
   }
 }

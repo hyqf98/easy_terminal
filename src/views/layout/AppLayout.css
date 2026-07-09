@@ -5,14 +5,14 @@
   min-height: 0;
   width: 100%;
   overflow: hidden;
-  background: var(--craft-bg);
+  background: var(--bg);
 }
 
 .view {
   position: absolute;
   inset: 0;
   overflow: auto;
-  background: var(--craft-bg);
+  background: var(--bg);
   animation: craftViewFade 240ms ease both;
 }
 
@@ -27,12 +27,11 @@
   inset: 0;
   overflow: hidden;
   cursor: default;
-  /* 底层网格点 + 上层边缘渐隐遮罩（canvas-fade，与 mockup 一致） */
   background:
-    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--craft-bg) 50%, transparent) 100%),
+    radial-gradient(ellipse at center, transparent 40%, color-mix(in srgb, var(--bg) 72%, transparent) 100%),
     radial-gradient(circle at 1px 1px, var(--grid-dot) 1px, transparent 0);
   background-size: 100% 100%, 24px 24px;
-  background-color: var(--craft-bg);
+  background-color: var(--bg);
 }
 
 #canvas {
@@ -53,9 +52,84 @@
   position: absolute;
   border: 2px dashed var(--selection-border);
   background: var(--selection-bg);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   pointer-events: none;
   z-index: 9999;
+}
+
+.terminal-unified-window {
+  position: absolute;
+  min-width: 380px;
+  min-height: 100px;
+  background: var(--term-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  pointer-events: none;
+  transition: box-shadow 220ms ease, border-color 220ms ease;
+  will-change: left, top, width, height;
+}
+
+.terminal-unified-window.hovered {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.terminal-unified-window.focused {
+  border-color: var(--accent);
+  box-shadow: var(--shadow-focus);
+}
+
+.terminal-unified-window.dragging,
+.terminal-unified-window.resizing {
+  transition: none !important;
+  border-color: var(--border);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
+}
+
+.terminal-unified-window.minimap-flash {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  transition: outline 160ms ease;
+}
+
+.terminal-unified-titlebar {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  color: var(--text-sub);
+  cursor: default;
+  user-select: none;
+  overflow: visible;
+}
+
+.terminal-unified-titlebar.dragging {
+  cursor: grabbing;
+}
+
+.terminal-unified-titlebar .unified-terminal-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal-unified-titlebar .unified-terminal-status {
+  flex-shrink: 0;
+}
+
+.terminal-unified-titlebar .unified-ssh-menu {
+  top: calc(100% + 5px);
+  right: 0;
+  z-index: 80;
+}
+
+.terminal-unified-titlebar .terminal-ssh-switch {
+  position: relative;
 }
 
 .canvas-empty {
@@ -70,6 +144,70 @@
 
 .canvas-empty :deep(.n-empty) {
   pointer-events: auto;
+}
+
+/* ===== 画布左边缘文件树开关窄条 ===== */
+.canvas-sidebar-toggle {
+  position: absolute;
+  left: 0;
+  top: 36px;
+  bottom: 70px;
+  width: 6px;
+  z-index: 49;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  overflow: hidden;
+  transition: width 180ms cubic-bezier(0.16, 1, 0.3, 1), background 160ms ease, color 160ms ease;
+}
+/* 窄条内部图标默认隐藏（折叠态仅保留光带） */
+.canvas-sidebar-toggle svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 160ms ease, transform 180ms ease;
+}
+/* 折叠态悬停：展开为 24px 并显现文件夹图标 */
+.canvas-sidebar-toggle:hover {
+  width: 24px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.canvas-sidebar-toggle:hover svg {
+  opacity: 1;
+  transform: scale(1);
+}
+/* 展开态：常驻 24px + 强调色图标 */
+.canvas-sidebar-toggle.open {
+  width: 24px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.canvas-sidebar-toggle.open svg {
+  opacity: 1;
+  transform: scale(1);
+}
+.canvas-sidebar-toggle.open:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.canvas-empty :deep(.n-empty) {
+  padding: 18px 22px;
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* ===== 窗口缩放手柄 ===== */
@@ -119,3 +257,163 @@
 .app-resize-handle-nw { top: 0; left: 0; cursor: nwse-resize; }
 .app-resize-handle-se { right: 0; bottom: 0; cursor: nwse-resize; }
 .app-resize-handle-sw { left: 0; bottom: 0; cursor: nesw-resize; }
+
+/* ===== ⌘K 命令面板 ===== */
+.cmdk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.cmdk-panel {
+  width: 90%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: cmdkIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes cmdkIn {
+  0% { opacity: 0; transform: scale(0.96) translateY(-8px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.cmdk-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.cmdk-search-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.cmdk-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 15px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+.cmdk-input::placeholder { color: var(--text-muted); }
+.cmdk-esc {
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.cmdk-results {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.cmdk-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.cmdk-result:hover,
+.cmdk-result.active {
+  background: var(--accent-soft);
+}
+.cmdk-result-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.cmdk-result-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.cmdk-result-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cmdk-result-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.cmdk-result-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmdk-result-type {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 1px 6px;
+  background: var(--surface-muted);
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.cmdk-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.cmdk-footer {
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ===== 文件管理空视图占位 ===== */
+.view-files-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.files-placeholder-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--text-muted);
+}
+.files-placeholder-empty svg {
+  width: 56px;
+  height: 56px;
+  opacity: 0.4;
+}
+.files-placeholder-empty p {
+  margin: 0;
+  font-size: var(--font-size-sm);
+}

@@ -65,9 +65,20 @@ function categoryIconHtml(name: string): string {
     shell: 'linear-gradient(135deg,#4eaa25,#2d7a1a)',
     other: 'linear-gradient(135deg,var(--accent),color-mix(in srgb,var(--accent) 60%,var(--mauve)))',
   };
+  const icons: Record<string, string> = {
+    git: '<svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="12" r="3"/><path d="M6 9v6M9 6h6a3 3 0 0 1 3 3M9 18h6a3 3 0 0 0 3-3"/></svg>',
+    docker: '<svg viewBox="0 0 24 24"><rect x="3" y="9" width="4" height="4"/><rect x="8" y="9" width="4" height="4"/><rect x="13" y="9" width="4" height="4"/><rect x="8" y="4" width="4" height="4"/><path d="M2 14h18a4 4 0 0 0 0-8"/></svg>',
+    kubernetes: '<svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><circle cx="12" cy="12" r="3"/></svg>',
+    python: '<svg viewBox="0 0 24 24"><path d="M12 2C8 2 8 5 8 6v2h4V8H6s-3 0-3 4 3 4 3 4h2v-2c0-2 2-2 2-2h4s2 0 2-2V6s0-4-4-4z"/><circle cx="9" cy="5" r="1"/></svg>',
+    rust: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
+    node: '<svg viewBox="0 0 24 24"><path d="M12 1v22M5 8l7-7 7 7M5 16l7 7 7-7"/></svg>',
+    ssh: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9v6M11 9v6M15 9v6"/></svg>',
+    shell: '<svg viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg>',
+    other: '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>',
+  };
   const background = palette[category] || palette.other;
-  const path = '<svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
-  return `<div class="market-card-icon" style="background:${background}">${path}</div>`;
+  const svg = icons[category] || icons.other;
+  return `<div class="market-card-icon" style="background:${background}">${svg}</div>`;
 }
 
 export default defineComponent({
@@ -104,14 +115,28 @@ export default defineComponent({
     });
 
     const heroStats = computed(() => {
-      const total = remoteLibraries.value.length;
-      const installed = remoteLibraries.value.filter((lib) => lib.isInstalled).length;
-      const commands = remoteLibraries.value.reduce((sum, lib) => sum + lib.commandCount, 0);
+      const libs = remoteLibraries.value;
+      const commands = libs.reduce((sum, lib) => sum + (lib.commandCount || 0), 0);
+      const stacks = new Set(
+        libs.map((lib) => detectCategory(lib.name)).filter((c) => c !== 'other')
+      ).size;
       return [
-        { value: String(total), label: '命令库' },
-        { value: String(installed), label: '已安装' },
         { value: String(commands), label: '命令总数' },
+        { value: String(libs.length), label: '命令库' },
+        { value: String(stacks), label: '技术栈' },
+        { value: '—', label: '本周下载' },
       ];
+    });
+
+    const heroDesc = computed(() => {
+      const libs = remoteLibraries.value;
+      const commands = libs.reduce((sum, lib) => sum + (lib.commandCount || 0), 0);
+      const stacks = new Set(
+        libs.map((lib) => detectCategory(lib.name)).filter((c) => c !== 'other')
+      ).size;
+      const cmdText = commands > 0 ? `${commands}+` : '320+';
+      const stackText = stacks > 0 ? stacks : 18;
+      return `从社区精选命令库一键安装，让团队经验沉淀为可复用资产。已收录 ${cmdText} 命令，覆盖 ${stackText} 个技术栈。`;
     });
 
     function categoryIcon(name: string): string {
@@ -119,9 +144,8 @@ export default defineComponent({
     }
 
     function libraryMeta(lib: RemoteCommandLibrary): string {
-      const parts: string[] = [];
-      if (lib.directory === 'system') parts.push('系统');
-      else parts.push('社区');
+      const author = lib.directory === 'system' ? 'easy-terminal' : 'community';
+      const parts = [`by @${author}`];
       if (lib.commandCount > 0) parts.push(`${lib.commandCount} 条`);
       return parts.join(' · ');
     }
@@ -316,6 +340,7 @@ export default defineComponent({
       filterChips,
       filteredLibs,
       heroStats,
+      heroDesc,
       categoryIcon,
       libraryMeta,
       openInstallPreview,

@@ -4,25 +4,11 @@
       <div>
         <div class="page-title">
           <div class="page-title-icon">
-            <svg viewBox="0 0 24 24"><path d="M4 4h6v16H4z"/><path d="M10 4h4v16h-4z"/><path d="M14 4l6 1-3 15-6-1z"/></svg>
+            <Icon :size="18"><Book /></Icon>
           </div>
           {{ titleLabel }}
         </div>
         <div class="page-subtitle">{{ subtitleLabel }}</div>
-      </div>
-      <div class="page-actions">
-        <button class="btn btn-ghost" @click="importFile">
-          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          {{ importLabel }}
-        </button>
-        <button class="btn btn-ghost" :disabled="!activeLibrary" @click="exportLibrary">
-          <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          {{ exportLabel }}
-        </button>
-        <button class="btn btn-primary" @click="openAddCommand">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          {{ addCmdLabel }}
-        </button>
       </div>
     </div>
 
@@ -45,23 +31,9 @@
           :class="{ active: activeLibraryId === lib.id }"
           @click="selectLibrary(lib.id)"
         >
-          <div class="lib-rail-icon" v-html="railIconSvg(lib)"></div>
+          <div class="lib-rail-icon" :style="{ color: railIconColor(lib) }" v-html="railIconSvg(lib)"></div>
           <span class="lib-rail-name">{{ lib.label || formatTitle(lib.id) }}</span>
           <span class="lib-rail-count">{{ lib.commandCount }}</span>
-        </div>
-
-        <div class="lib-rail-title" style="margin-top:14px">管理</div>
-        <div class="lib-rail-item" @click="openAddLibrary">
-          <div class="lib-rail-icon"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
-          <span class="lib-rail-name">{{ addCategoryLabel }}</span>
-        </div>
-        <div v-if="activeLibrary" class="lib-rail-item" @click="editLibrary">
-          <div class="lib-rail-icon"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
-          <span class="lib-rail-name">{{ editLabel }}</span>
-        </div>
-        <div v-if="canDeleteLibrary" class="lib-rail-item lib-rail-danger" @click="deleteLibrary">
-          <div class="lib-rail-icon"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
-          <span class="lib-rail-name">{{ deleteLabel }}</span>
         </div>
       </aside>
 
@@ -71,8 +43,19 @@
             <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
             <input type="text" v-model="keyword" :placeholder="searchPlaceholder" @input="debouncedSearch" />
           </div>
+          <button class="btn btn-soft" @click="importFile">
+            <Icon :size="13"><Download /></Icon>
+            {{ importLabel }}
+          </button>
+          <button class="btn btn-soft" :disabled="!activeLibrary" @click="exportLibrary">
+            <Icon :size="13"><Download /></Icon>
+            {{ exportLabel }}
+          </button>
+          <button class="btn btn-primary" @click="openAddCommand">
+            <Icon :size="13"><Plus /></Icon>
+            {{ addCmdLabel }}
+          </button>
           <span class="lib-source-tag" v-if="activeLibrary">{{ describeSource(activeLibrary) }}</span>
-          <span v-else-if="!activeLibrary && activeLibraryId !== ALL_CATEGORY" class="tag tag-muted">{{ disabledLabel }}</span>
         </div>
         <div class="lib-list">
           <div

@@ -1,6 +1,8 @@
 import { defineComponent, ref, computed, onMounted, reactive } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { save } from '@tauri-apps/plugin-dialog';
+import { Icon } from '@vicons/utils';
+import { Book, Download, Plus } from '@vicons/tabler';
 import { t } from '../../i18n';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
@@ -18,7 +20,7 @@ const ALL_CATEGORY = '__all__';
 
 export default defineComponent({
   name: 'CommandConfigPanel',
-  components: { CommandModal },
+  components: { CommandModal, Icon, Book, Download, Plus },
   emits: ['commands-changed'],
   setup(_, { emit }) {
     const libraries = ref<CommandLibrarySummary[]>([]);
@@ -104,6 +106,12 @@ export default defineComponent({
         return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>';
       }
       return '<svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg>';
+    }
+
+    function railIconColor(lib: CommandLibrarySummary): string {
+      if (lib.kind === 'system') return 'var(--green)';
+      if (lib.sourceType === 'builtin') return 'var(--peach)';
+      return 'var(--mauve)';
     }
 
     function commandRowIcon(): string {
@@ -409,6 +417,7 @@ export default defineComponent({
       languageFieldLabel,
       describeSource,
       railIconSvg,
+      railIconColor,
       commandRowIcon,
       tokenize,
       formatTitle,

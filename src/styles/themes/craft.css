@@ -1,6 +1,10 @@
 /* Craft 温暖工艺主题 — 亮色 */
 :root,
 [data-theme="craft-light"] {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-muted: #f0ebe3;
+  --term-bg: #f5f0e8;
   --craft-bg: #faf7f2;
   --craft-surface: #ffffff;
   --craft-surface-muted: #f0ebe3;
@@ -9,6 +13,7 @@
   --craft-accent-hover: #a86b47;
   --craft-accent-soft: #e8d5c4;
   --craft-text: #3d3832;
+  --craft-text-sub: #5c554c;
   --craft-text-muted: #9a8f82;
   --craft-term-bg: #f5f0e8;
   --craft-shadow: 0 2px 12px rgba(61, 56, 50, 0.08);
@@ -30,10 +35,11 @@
   --bg-surface2: #d4ccc0;
   --bg-overlay0: #9a8f82;
   --text: var(--craft-text);
-  --text-sub: #5c554c;
+  --text-sub: var(--craft-text-sub);
   --text-muted: var(--craft-text-muted);
   --accent: var(--craft-accent);
   --accent-hover: var(--craft-accent-hover);
+  --accent-soft: var(--craft-accent-soft);
   --green: #6b9e5a;
   --yellow: #d4a24a;
   --red: #c45c5c;
@@ -44,8 +50,8 @@
   --border: var(--craft-border);
   --border-sub: var(--craft-surface-muted);
   --shadow: rgba(61, 56, 50, 0.12);
-  --scrollbar: rgba(154, 143, 130, 0.35);
-  --scrollbar-hover: rgba(154, 143, 130, 0.55);
+  --scrollbar: rgba(193, 127, 89, 0.3);
+  --scrollbar-hover: rgba(193, 127, 89, 0.5);
   --selection-bg: rgba(193, 127, 89, 0.1);
   --selection-border: rgba(193, 127, 89, 0.6);
   --sidebar-bg: var(--craft-surface-muted);
@@ -53,15 +59,23 @@
   --sidebar-active: var(--craft-surface);
   --sidebar-border: var(--craft-border);
   --tree-indent: var(--craft-border);
-  --term-token-command: #7a6b9e;
-  --term-token-flag: #9a7ab8;
+  --term-token-command: var(--mauve);
+  --term-token-flag: var(--peach);
   --term-token-argument: var(--craft-text);
-  --term-token-path: #6b9e5a;
-  --term-token-operator: #d4845a;
+  --term-token-path: var(--green);
+  --term-token-operator: var(--peach);
+  --term-token-string: var(--teal);
+  --term-token-success: var(--green);
+  --term-token-warning: var(--yellow);
+  --term-token-error: var(--red);
 }
 
 /* Craft 暗色 */
 [data-theme="craft-dark"] {
+  --bg: #1e1c1a;
+  --surface: #2a2724;
+  --surface-muted: #332f2b;
+  --term-bg: #252220;
   --craft-bg: #1e1c1a;
   --craft-surface: #2a2724;
   --craft-surface-muted: #332f2b;
@@ -70,6 +84,7 @@
   --craft-accent-hover: #e8a87a;
   --craft-accent-soft: #4a3f35;
   --craft-text: #e8e0d4;
+  --craft-text-sub: #c4bcb0;
   --craft-text-muted: #9a8f82;
   --craft-term-bg: #252220;
   --craft-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
@@ -91,10 +106,11 @@
   --bg-surface2: #4a4540;
   --bg-overlay0: #6b6560;
   --text: var(--craft-text);
-  --text-sub: #c4bcb0;
+  --text-sub: var(--craft-text-sub);
   --text-muted: var(--craft-text-muted);
   --accent: var(--craft-accent);
   --accent-hover: var(--craft-accent-hover);
+  --accent-soft: var(--craft-accent-soft);
   --green: #7ab86a;
   --yellow: #d4a24a;
   --red: #e07070;
@@ -105,8 +121,8 @@
   --border: var(--craft-border);
   --border-sub: var(--craft-surface-muted);
   --shadow: rgba(0, 0, 0, 0.4);
-  --scrollbar: rgba(154, 143, 130, 0.3);
-  --scrollbar-hover: rgba(154, 143, 130, 0.5);
+  --scrollbar: rgba(193, 127, 89, 0.35);
+  --scrollbar-hover: rgba(193, 127, 89, 0.55);
   --selection-bg: rgba(212, 149, 106, 0.12);
   --selection-border: rgba(212, 149, 106, 0.65);
   --sidebar-bg: var(--craft-bg);
@@ -114,11 +130,15 @@
   --sidebar-active: var(--craft-surface);
   --sidebar-border: var(--craft-border);
   --tree-indent: var(--craft-border);
-  --term-token-command: #a89ad0;
-  --term-token-flag: #b09ad0;
+  --term-token-command: var(--mauve);
+  --term-token-flag: var(--peach);
   --term-token-argument: var(--craft-text);
-  --term-token-path: #7ab86a;
-  --term-token-operator: #e8a070;
+  --term-token-path: var(--green);
+  --term-token-operator: var(--peach);
+  --term-token-string: var(--teal);
+  --term-token-success: var(--green);
+  --term-token-warning: var(--yellow);
+  --term-token-error: var(--red);
 }
 
 /* 旧主题别名迁移 */

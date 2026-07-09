@@ -481,7 +481,7 @@ fn save_ssh_profiles(entries: Vec<settings::SSHProfile>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn test_ssh_connection(
+async fn test_ssh_connection(
     host: String,
     port: u16,
     user: String,
@@ -491,103 +491,146 @@ fn test_ssh_connection(
     jump_profile_id: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<String, String> {
-    ssh::test_connection(
-        host,
-        port,
-        user,
-        auth_type,
-        password,
-        private_key_path,
-        jump_profile_id,
-        profiles,
-    )
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::test_connection(
+            host,
+            port,
+            user,
+            auth_type,
+            password,
+            private_key_path,
+            jump_profile_id,
+            profiles,
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn get_remote_home(
+async fn get_remote_home(
     profile: settings::SSHProfile,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<String, String> {
-    ssh::get_remote_home(profile, profiles)
+    tauri::async_runtime::spawn_blocking(move || ssh::get_remote_home(profile, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn read_remote_dir(
+async fn read_remote_dir(
     profile: settings::SSHProfile,
     path: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<Vec<fs::FileEntry>, String> {
-    ssh::read_remote_dir(profile, path, profiles)
+    tauri::async_runtime::spawn_blocking(move || ssh::read_remote_dir(profile, path, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn download_remote_entries(
+async fn download_remote_entries(
     app_handle: tauri::AppHandle,
     profile: settings::SSHProfile,
     remote_paths: Vec<String>,
     local_dir: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::download_remote_entries(app_handle, profile, remote_paths, local_dir, profiles)
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::download_remote_entries(app_handle, profile, remote_paths, local_dir, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn upload_local_entries(
+async fn upload_local_entries(
     app_handle: tauri::AppHandle,
     profile: settings::SSHProfile,
     local_paths: Vec<String>,
     remote_dir: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::upload_local_entries(app_handle, profile, local_paths, remote_dir, profiles)
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::upload_local_entries(app_handle, profile, local_paths, remote_dir, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn rename_remote_entry(
+async fn rename_remote_entry(
     profile: settings::SSHProfile,
     old_path: String,
     new_path: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::rename_remote_entry(profile, old_path, new_path, profiles)
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::rename_remote_entry(profile, old_path, new_path, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn move_remote_entries(
+async fn move_remote_entries(
     profile: settings::SSHProfile,
     sources: Vec<String>,
     dest_dir: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::move_remote_entries(profile, sources, dest_dir, profiles)
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::move_remote_entries(profile, sources, dest_dir, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn delete_remote_entries(
+async fn delete_remote_entries(
     profile: settings::SSHProfile,
     paths: Vec<String>,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::delete_remote_entries(profile, paths, profiles)
+    tauri::async_runtime::spawn_blocking(move || ssh::delete_remote_entries(profile, paths, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn read_remote_file(
+async fn read_remote_file(
     profile: settings::SSHProfile,
     path: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<fs::FilePreviewData, String> {
-    ssh::read_remote_file(profile, path, profiles)
+    tauri::async_runtime::spawn_blocking(move || ssh::read_remote_file(profile, path, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
-fn write_remote_file(
+async fn read_remote_file_preview(
+    profile: settings::SSHProfile,
+    path: String,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<fs::FilePreviewData, String> {
+    tauri::async_runtime::spawn_blocking(move || ssh::read_remote_file_preview(profile, path, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+async fn write_remote_file(
     profile: settings::SSHProfile,
     path: String,
     content: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    ssh::write_remote_file(profile, path, content, profiles)
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::write_remote_file(profile, path, content, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -606,8 +649,10 @@ fn load_default_shortcuts() -> Vec<settings::ShortcutBinding> {
 }
 
 #[tauri::command]
-fn prepare_ssh_key(private_key_path: String) -> Result<String, String> {
-    ssh::prepare_ssh_key(private_key_path)
+async fn prepare_ssh_key(private_key_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || ssh::prepare_ssh_key(private_key_path))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -787,6 +832,7 @@ pub fn run() {
             move_remote_entries,
             delete_remote_entries,
             read_remote_file,
+            read_remote_file_preview,
             write_remote_file,
             load_shortcuts,
             save_shortcuts,

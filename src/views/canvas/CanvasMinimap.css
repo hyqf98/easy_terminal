@@ -1,17 +1,26 @@
 .minimap {
   position: absolute;
   right: 16px;
-  bottom: 88px;
+  /* 对齐 Dock 顶部边缘 */
+  bottom: 70px;
   width: 180px;
   height: 120px;
-  background: var(--craft-surface);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   z-index: 20;
-  pointer-events: none;
+  /* 启用交互（点击导航 / 悬停高亮）：整体作为控件捕获事件，阻止冒泡到画布触发框选 */
+  cursor: default;
   -webkit-app-region: no-drag;
+}
+
+/* 纯装饰层不拦截指针事件，保证点击穿透到下方的 .minimap-term */
+.minimap-grid,
+.minimap-label,
+.minimap-viewport {
+  pointer-events: none;
 }
 
 .minimap-grid {
@@ -38,13 +47,31 @@
   position: absolute;
   border-radius: 1.5px;
   background: var(--text-muted);
-  opacity: 0.55;
   z-index: 1;
+  /* 启用点击 / 悬停交互 */
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .minimap-term.focused {
   background: var(--accent);
-  opacity: 0.9;
+}
+
+/* 悬停高亮：accent 边框 + 微微提亮，提示可点击跳转 */
+.minimap-term.hovered {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 22%, var(--text-muted));
+}
+
+/* 点击跳转后短暂高亮目标终端（DOM 节点），便于用户定位 */
+.terminal-window.minimap-flash,
+.terminal-unified-window.minimap-flash {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  transition: outline 160ms ease;
 }
 
 .minimap-viewport {
