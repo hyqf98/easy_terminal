@@ -40,15 +40,6 @@
           </n-empty>
         </div>
         <div id="canvas" ref="canvasRef">
-          <div
-            v-if="filePanelTerminal"
-            :key="`unified-shell-${filePanelTerminal.id}`"
-            class="terminal-unified-window"
-            :class="getUnifiedWindowClasses(filePanelTerminal)"
-            :style="getUnifiedWindowStyle(filePanelTerminal)"
-            :data-unified-terminal-id="filePanelTerminal.id"
-            aria-hidden="true"
-          ></div>
           <TerminalWindow
             v-for="terminal in terminals"
             :key="`terminal-${terminal.id}`"
@@ -87,7 +78,12 @@
             :style="getUnifiedTitlebarStyle(filePanelTerminal)"
             :data-unified-terminal-id="filePanelTerminal.id"
             @mousedown.prevent="(event) => onUnifiedTitleDrag(filePanelTerminal.id, event)"
+            @mouseenter="onUnifiedPointerEnter(filePanelTerminal.id)"
+            @mouseleave="(event) => onUnifiedPointerLeave(filePanelTerminal.id, event)"
           >
+            <span class="resize-handle resize-n unified-title-resize-handle" aria-hidden="true"></span>
+            <span class="resize-handle resize-nw unified-title-resize-handle" aria-hidden="true"></span>
+            <span class="resize-handle resize-ne unified-title-resize-handle" aria-hidden="true"></span>
             <div class="terminal-dots unified-terminal-dots">
               <button class="terminal-dot dot-close" title="关闭" @mousedown.stop @click.stop="onUnifiedClose(filePanelTerminal.id)"></button>
               <button class="terminal-dot dot-minimize" title="最小化" @mousedown.stop @click.stop="onUnifiedMinimize(filePanelTerminal.id)"></button>
@@ -143,6 +139,24 @@
             @cd-to="onPanelCdTo"
             @panel-resize-start="onPanelResizeStart"
           />
+          <div
+            v-if="filePanelTerminal"
+            :key="`unified-shell-${filePanelTerminal.id}`"
+            class="terminal-unified-window"
+            :class="getUnifiedWindowClasses(filePanelTerminal)"
+            :style="getUnifiedWindowStyle(filePanelTerminal)"
+            :data-unified-terminal-id="filePanelTerminal.id"
+            aria-hidden="true"
+          >
+            <span class="resize-handle resize-n"></span>
+            <span class="resize-handle resize-s"></span>
+            <span class="resize-handle resize-e"></span>
+            <span class="resize-handle resize-w"></span>
+            <span class="resize-handle resize-ne"></span>
+            <span class="resize-handle resize-nw"></span>
+            <span class="resize-handle resize-se"></span>
+            <span class="resize-handle resize-sw"></span>
+          </div>
           <div id="selection-rect"></div>
         </div>
 

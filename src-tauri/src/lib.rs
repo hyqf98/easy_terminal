@@ -3,6 +3,7 @@ mod db;
 mod fs;
 mod pty;
 mod settings;
+mod shell_setup;
 mod ssh;
 
 use pty::PtyManager;
@@ -320,6 +321,18 @@ fn resize_pty(
 fn kill_pty(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
     manager.kill(&session_id)
+}
+
+// === Shell Setup Commands ===
+
+#[tauri::command]
+fn check_shell_setup() -> shell_setup::ShellSetupStatus {
+    shell_setup::check_setup_status()
+}
+
+#[tauri::command]
+fn run_shell_setup() -> shell_setup::SetupResult {
+    shell_setup::run_setup()
 }
 
 // === File System Commands ===
@@ -798,6 +811,8 @@ pub fn run() {
             write_pty,
             resize_pty,
             kill_pty,
+            check_shell_setup,
+            run_shell_setup,
             read_dir,
             create_file,
             create_dir,

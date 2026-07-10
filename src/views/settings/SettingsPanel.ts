@@ -6,6 +6,7 @@ import { showMessage } from '../../composables/useAppMessage';
 import { AppUpdater, type UpdateState } from './appUpdate';
 import AppSelect from '../../components/AppSelect.vue';
 import type { SelectOption } from '../../components/AppSelect';
+import { shellSetupService, type ShellSetupStatus } from '../terminal/shellSetupService';
 
 interface AppSettings {
   theme: string;
@@ -77,6 +78,9 @@ export default defineComponent({
     const restoreSession = ref(true);
     const uiFontSize = ref(13);
     const termFontSize = ref(13);
+    // Shell 美化组件安装状态
+    const shellStatus = ref<ShellSetupStatus | null>(null);
+    const shellInstalling = ref(false);
     const updateState = ref<UpdateState>(updater.getState());
     const langTick = ref(0);
     const activeSection = ref<SettingsSection>('appearance');
@@ -235,11 +239,40 @@ export default defineComponent({
     function onTermFontFamilyChange(value: string | number) {
       termFontFamily.value = String(value);
       onLocalFlagChange();
+      // 派发字体族变化事件，供终端窗口实时更新
+      window.dispatchEvent(new CustomEvent('term-font-family-change', { detail: String(value) }));
     }
 
     function onRadiusStyleChange(value: string | number) {
       radiusStyle.value = String(value);
       onLocalFlagChange();
+    }
+
+    // ===== Shell 美化：检测/安装 =====
+    async function refreshShellStatus() {
+      try {
+        shellStatus.value = await shellSetupService.check();
+      } catch {
+        shellStatus.value = null;
+      }
+    }
+
+    async function installShellEnhancements() {
+      if (shellInstalling.value) return;
+      shellInstalling.value = true;
+      try {
+        const result = await shellSetupService.setup();
+        await refreshShellStatus();
+        if (result.success) {
+          showMessage('终端美化组件安装成功，新开终端即可生效', 'success');
+        } else if (result.errors.length > 0) {
+          showMessage(`部分组件安装失败: ${result.errors.join('; ')}`, 'warning');
+        }
+      } catch (err) {
+        showMessage(`安装失败: ${err}`, 'error');
+      } finally {
+        shellInstalling.value = false;
+      }
     }
 
     function onLanguageChange(value: string | number) {
@@ -326,6 +359,8 @@ export default defineComponent({
       } catch {
         applyCraftTheme('craft-light');
       }
+      // 检测 Shell 美化组件安装状态
+      void refreshShellStatus();
       unsubUpdater = updater.onChange((state) => {
         updateState.value = state;
       });
@@ -355,6 +390,8 @@ export default defineComponent({
       uiFontFamily,
       termFontFamily,
       radiusStyle,
+      shellStatus,
+      shellInstalling,
       uiFontOptions,
       termFontOptions,
       uiFontSizeOptions,
@@ -394,6 +431,8 @@ export default defineComponent({
       onUiFontFamilyChange,
       onTermFontFamilyChange,
       onRadiusStyleChange,
+      refreshShellStatus,
+      installShellEnhancements,
       onLanguageChange,
       applyFontSize,
       applyTermFontSize,

@@ -60,6 +60,7 @@
     <!-- 补全弹窗 Teleport 到 body 并使用 position:fixed，避免被 .terminal-window 的 overflow:hidden 裁剪 -->
     <Teleport to="body">
       <div class="completion-popup" v-if="suggestVisible && suggestItems.length > 0"
+        :class="`selection-mode-${suggestSelectionMode}`"
         :style="suggestStyle">
         <div class="completion-header">
           <span>{{ suggestHeaderText }}</span>
@@ -71,7 +72,7 @@
             :key="item.id"
             :class="['completion-item', { selected: suggestIndex === idx }]"
             @click="selectSuggestion(item)"
-            @mouseenter="suggestIndex = idx"
+            @mousemove="(event) => selectSuggestionByMouse(idx, event)"
           >
             <span class="completion-icon" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + suggestIconSvg(item) + '</svg>'"></span>
             <div class="completion-body">

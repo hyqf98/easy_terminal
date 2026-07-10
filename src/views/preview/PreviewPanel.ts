@@ -1,8 +1,8 @@
-import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { defineComponent, ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import type { PropType } from 'vue';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { Icon } from '@vicons/utils';
-import { X, Edit, Check, DeviceFloppy } from '@vicons/tabler';
+import { X, Edit, DeviceFloppy } from '@vicons/tabler';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { marked } from 'marked';
@@ -32,6 +32,7 @@ import type { IFileOperationStrategy } from '../filetree/strategies/FileOperatio
 
 // 可识别的文件类型分类
 type PreviewKind = 'markdown' | 'image' | 'video' | 'code' | 'binary';
+type PanelStyle = Record<string, string>;
 
 // 预览数据（来自后端 read_file_preview）
 interface FilePreviewData {
@@ -70,9 +71,22 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}G`;
 }
 
+function detectVideoMime(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = {
+    mp4: 'video/mp4',
+    m4v: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    mkv: 'video/x-matroska',
+  };
+  return map[ext] || 'video/mp4';
+}
+
 export default defineComponent({
   name: 'PreviewPanel',
-  components: { Icon, X, Edit, Check, DeviceFloppy },
+  components: { Icon, X, Edit, DeviceFloppy },
   props: {
     filePath: { type: String, default: '' },
     // 文件操作策略：非空时走远程（SSH）策略读取/写入，跳过本地 invoke 与 convertFileSrc
@@ -86,6 +100,15 @@ export default defineComponent({
     const truncated = ref(false);
     const fileSize = ref(0);
     const loading = ref(false);
+    const PANEL_WIDTH_KEY = 'easy_terminal_preview_panel_width';
+    const PANEL_MIN_W = 360;
+    const PANEL_MAX_W = 960;
+    const panelWidth = ref<number>((() => {
+      const raw = localStorage.getItem(PANEL_WIDTH_KEY);
+      const parsed = raw ? parseInt(raw, 10) : NaN;
+      return Number.isFinite(parsed) ? Math.max(PANEL_MIN_W, Math.min(PANEL_MAX_W, parsed)) : 520;
+    })());
+    const panelStyle = computed<PanelStyle>(() => ({ width: `${panelWidth.value}px` }));
 
     // Markdown 预览/源码切换
     const mdMode = ref<'preview' | 'source'>('preview');
@@ -285,7 +308,7 @@ export default defineComponent({
 
     // 初始化 video.js 播放器
     function initPlayer() {
-      if (kind.value !== 'video' || !videoRef.value) return;
+      if (kind.value !== 'video' || !videoRef.value || !mediaUrl.value) return;
       // 销毁旧实例，避免重复初始化
       if (player) {
         player.dispose();
@@ -295,8 +318,11 @@ export default defineComponent({
         controls: true,
         autoplay: false,
         preload: 'metadata',
-        fluid: true,
+        fill: true,
+        responsive: true,
       });
+      player.src({ src: mediaUrl.value, type: detectVideoMime(props.filePath) });
+      player.load();
     }
 
     // 切换图片缩放
@@ -308,10 +334,37 @@ export default defineComponent({
       emit('close');
     }
 
+    function startResize(e: MouseEvent) {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = panelWidth.value;
+      function onMove(ev: MouseEvent) {
+        const next = startWidth + (startX - ev.clientX);
+        panelWidth.value = Math.max(PANEL_MIN_W, Math.min(PANEL_MAX_W, next));
+      }
+      function onUp() {
+        localStorage.setItem(PANEL_WIDTH_KEY, String(panelWidth.value));
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.body.style.cursor = 'ew-resize';
+      document.body.style.userSelect = 'none';
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    }
+
     // 文件路径变化时重新加载
     watch(
       () => props.filePath,
       () => {
+        if (player) {
+          player.dispose();
+          player = null;
+        }
+        mediaUrl.value = '';
         rawContent.value = '';
         imgZoomed.value = false;
         void loadFile();
@@ -329,10 +382,6 @@ export default defineComponent({
         }
       }
     );
-
-    onMounted(() => {
-      void loadFile();
-    });
 
     onBeforeUnmount(() => {
       // 释放 video.js 播放器资源
@@ -354,6 +403,7 @@ export default defineComponent({
       truncated,
       fileSize,
       loading,
+      panelStyle,
       mdMode,
       imgZoomed,
       mediaUrl,
@@ -367,6 +417,7 @@ export default defineComponent({
       renderedMarkdown,
       headings,
       toggleZoom,
+      startResize,
       close,
       formatSize,
       // 编辑模式

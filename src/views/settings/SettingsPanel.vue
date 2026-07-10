@@ -199,6 +199,40 @@
             </div>
           </div>
         </div>
+
+        <!-- 终端美化：zsh 插件 + starship 自动配置 -->
+        <div class="settings-card">
+          <div class="settings-row">
+            <div class="settings-row-info">
+              <div class="settings-row-label">终端美化</div>
+              <div class="settings-row-desc">命令高亮、自动建议、Starship Prompt — 一键安装 zsh 插件</div>
+            </div>
+            <div class="settings-control">
+              <button
+                class="shell-setup-btn"
+                :disabled="shellInstalling"
+                @click="installShellEnhancements"
+              >{{ shellInstalling ? '安装中…' : (shellStatus && shellStatus.syntaxHighlighting && shellStatus.autosuggestions && shellStatus.starship ? '已安装 ✓' : '一键安装') }}</button>
+            </div>
+          </div>
+          <div v-if="shellStatus" class="shell-status-list">
+            <div class="shell-status-item" :class="{ ok: shellStatus.syntaxHighlighting }">
+              <span class="shell-status-dot"></span>
+              <span>命令语法高亮</span>
+              <span class="shell-status-state">{{ shellStatus.syntaxHighlighting ? '已安装' : '未安装' }}</span>
+            </div>
+            <div class="shell-status-item" :class="{ ok: shellStatus.autosuggestions }">
+              <span class="shell-status-dot"></span>
+              <span>自动建议 (Ghost Text)</span>
+              <span class="shell-status-state">{{ shellStatus.autosuggestions ? '已安装' : '未安装' }}</span>
+            </div>
+            <div class="shell-status-item" :class="{ ok: shellStatus.starship }">
+              <span class="shell-status-dot"></span>
+              <span>Starship Prompt</span>
+              <span class="shell-status-state">{{ shellStatus.starship ? '已安装' : '未安装' }}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 会话恢复 -->

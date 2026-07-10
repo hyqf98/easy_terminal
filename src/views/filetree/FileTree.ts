@@ -1,4 +1,4 @@
-import { defineComponent, ref, reactive, computed, onMounted, onBeforeUnmount, shallowRef } from 'vue';
+import { defineComponent, ref, reactive, computed, onMounted, onBeforeUnmount, shallowRef, nextTick, watch } from 'vue';
 import { Icon } from '@vicons/utils';
 import { Refresh, Target } from '@vicons/tabler';
 import { invoke } from '@tauri-apps/api/core';
@@ -56,6 +56,14 @@ export default defineComponent({
     const currentPath = ref('');
     const selectedPath = ref('');
     const favorites = ref<FavoriteItem[]>([]);
+    const favCardsRowRef = ref<HTMLDivElement | null>(null);
+    const showFavoriteScrollControls = ref(false);
+    const canScrollFavoritesPrev = ref(false);
+    const canScrollFavoritesNext = ref(false);
+    const treeListRef = ref<HTMLDivElement | null>(null);
+    const showCustomTreeScrollbar = ref(false);
+    const treeScrollbarTop = ref(0);
+    const treeScrollbarHeight = ref(24);
     // 收藏夹区块始终可见（标题栏星标开关已移除）
     const showFavorites = ref(true);
     const fileModalOpen = ref(false);
@@ -303,6 +311,117 @@ export default defineComponent({
       });
     }
 
+    function updateFavoriteScrollState() {
+      const row = favCardsRowRef.value;
+      if (!row) return;
+      const maxScroll = Math.max(0, row.scrollWidth - row.clientWidth);
+      showFavoriteScrollControls.value = maxScroll > 1;
+      canScrollFavoritesPrev.value = row.scrollLeft > 2;
+      canScrollFavoritesNext.value = row.scrollLeft < maxScroll - 2;
+    }
+
+    function scheduleFavoriteScrollStateUpdate() {
+      void nextTick(updateFavoriteScrollState);
+    }
+
+    function scrollFavoritesPrev() {
+      const row = favCardsRowRef.value;
+      if (!row) return;
+      const next = row.scrollLeft - Math.max(90, row.clientWidth * 0.72);
+      row.scrollTo({
+        left: Math.max(0, next),
+        behavior: 'smooth',
+      });
+      window.setTimeout(updateFavoriteScrollState, 220);
+    }
+
+    function scrollFavoritesNext() {
+      const row = favCardsRowRef.value;
+      if (!row) return;
+      const maxScroll = Math.max(0, row.scrollWidth - row.clientWidth);
+      if (maxScroll <= 0) return;
+      const next = row.scrollLeft + Math.max(90, row.clientWidth * 0.72);
+      row.scrollTo({
+        left: Math.min(maxScroll, next),
+        behavior: 'smooth',
+      });
+      window.setTimeout(updateFavoriteScrollState, 220);
+    }
+
+    function updateTreeScrollbar() {
+      const list = treeListRef.value;
+      if (!list) return;
+      const scrollable = list.scrollHeight > list.clientHeight + 1;
+      showCustomTreeScrollbar.value = scrollable;
+      if (!scrollable) {
+        treeScrollbarTop.value = 0;
+        return;
+      }
+
+      const trackPadding = 6;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const thumbHeight = Math.max(24, Math.round((list.clientHeight / list.scrollHeight) * trackHeight));
+      const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+      const maxScroll = Math.max(1, list.scrollHeight - list.clientHeight);
+      treeScrollbarHeight.value = thumbHeight;
+      treeScrollbarTop.value = trackPadding + Math.round((list.scrollTop / maxScroll) * maxThumbTop);
+    }
+
+    function scrollTreeToThumbClientY(clientY: number) {
+      const list = treeListRef.value;
+      if (!list) return;
+      const trackPadding = 6;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const maxThumbTop = Math.max(0, trackHeight - treeScrollbarHeight.value);
+      if (maxThumbTop <= 0) return;
+      const rect = list.getBoundingClientRect();
+      const relative = Math.max(0, Math.min(maxThumbTop, clientY - rect.top - trackPadding - treeScrollbarHeight.value / 2));
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      list.scrollTop = (relative / maxThumbTop) * maxScroll;
+      updateTreeScrollbar();
+    }
+
+    function onTreeScrollbarTrackMouseDown(event: MouseEvent) {
+      scrollTreeToThumbClientY(event.clientY);
+    }
+
+    let treeScrollbarDragStartY = 0;
+    let treeScrollbarDragStartScrollTop = 0;
+    let favCardsResizeObserver: ResizeObserver | null = null;
+    let treeListResizeObserver: ResizeObserver | null = null;
+
+    function onTreeScrollbarDragMove(event: MouseEvent) {
+      const list = treeListRef.value;
+      if (!list) return;
+      const trackPadding = 6;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const maxThumbTop = Math.max(1, trackHeight - treeScrollbarHeight.value);
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      const delta = event.clientY - treeScrollbarDragStartY;
+      list.scrollTop = treeScrollbarDragStartScrollTop + (delta / maxThumbTop) * maxScroll;
+      updateTreeScrollbar();
+    }
+
+    function onTreeScrollbarDragEnd() {
+      document.body.classList.remove('tree-scrollbar-dragging');
+      window.removeEventListener('mousemove', onTreeScrollbarDragMove);
+      window.removeEventListener('mouseup', onTreeScrollbarDragEnd);
+    }
+
+    function onTreeScrollbarThumbMouseDown(event: MouseEvent) {
+      const list = treeListRef.value;
+      if (!list) return;
+      treeScrollbarDragStartY = event.clientY;
+      treeScrollbarDragStartScrollTop = list.scrollTop;
+      document.body.classList.add('tree-scrollbar-dragging');
+      window.addEventListener('mousemove', onTreeScrollbarDragMove);
+      window.addEventListener('mouseup', onTreeScrollbarDragEnd);
+    }
+
+    function scheduleTreeScrollbarUpdate() {
+      void nextTick(updateTreeScrollbar);
+    }
+
     // ===== 目录加载 =====
     async function loadChildren(node: TreeNode) {
       const entries = await strategy.value.readDir(node.entry.path);
@@ -341,6 +460,7 @@ export default defineComponent({
         tree.roots = entries.map(toTreeNode);
         sortNodes(tree.roots);
         loadFavorites();
+        scheduleTreeScrollbarUpdate();
       } catch (err) {
         showMessage(`初始化文件树失败: ${err}`, 'error');
       }
@@ -371,6 +491,7 @@ export default defineComponent({
             await loadChildren(node);
           }
         }
+        scheduleTreeScrollbarUpdate();
       } catch (err) {
         showMessage(`刷新失败: ${err}`, 'error');
       }
@@ -383,6 +504,7 @@ export default defineComponent({
         tree.roots = entries.map(toTreeNode);
         sortNodes(tree.roots);
         selectedPath.value = '';
+        scheduleTreeScrollbarUpdate();
       } catch (err) {
         showMessage(`打开目录失败: ${err}`, 'error');
       }
@@ -394,11 +516,13 @@ export default defineComponent({
       if (!node.loaded) {
         try {
           await loadChildren(node);
+          scheduleTreeScrollbarUpdate();
         } catch (err) {
           showMessage(`加载目录失败: ${err}`, 'error');
         }
       } else {
         node.expanded = !node.expanded;
+        scheduleTreeScrollbarUpdate();
       }
     }
 
@@ -570,12 +694,34 @@ export default defineComponent({
       void init();
       document.addEventListener('click', onGlobalClick);
       document.addEventListener('keydown', onKeydown, true);
+      window.addEventListener('resize', updateTreeScrollbar);
+      void nextTick(() => {
+        if (!treeListRef.value) return;
+        treeListResizeObserver = new ResizeObserver(updateTreeScrollbar);
+        treeListResizeObserver.observe(treeListRef.value);
+        updateTreeScrollbar();
+      });
+      void nextTick(() => {
+        if (!favCardsRowRef.value) return;
+        favCardsResizeObserver = new ResizeObserver(updateFavoriteScrollState);
+        favCardsResizeObserver.observe(favCardsRowRef.value);
+        updateFavoriteScrollState();
+      });
     });
 
     onBeforeUnmount(() => {
       document.removeEventListener('click', onGlobalClick);
       document.removeEventListener('keydown', onKeydown, true);
+      window.removeEventListener('resize', updateTreeScrollbar);
+      favCardsResizeObserver?.disconnect();
+      favCardsResizeObserver = null;
+      treeListResizeObserver?.disconnect();
+      treeListResizeObserver = null;
+      onTreeScrollbarDragEnd();
     });
+
+    watch(visibleNodes, scheduleTreeScrollbarUpdate, { flush: 'post' });
+    watch(favorites, scheduleFavoriteScrollStateUpdate, { flush: 'post', deep: true });
 
     // ===== 列宽缩放（localStorage 持久化） =====
     const PANEL_WIDTH_KEY = 'easy_terminal_filetree_width';
@@ -661,7 +807,9 @@ export default defineComponent({
     return {
       // 状态
       filterText, sortKey, sortDir, selectedPath,
-      favorites, showFavorites,
+      favorites, showFavorites, favCardsRowRef, showFavoriteScrollControls,
+      canScrollFavoritesPrev, canScrollFavoritesNext, treeListRef,
+      showCustomTreeScrollbar, treeScrollbarTop, treeScrollbarHeight,
       fileModalOpen, fileModalParent, fileModalMode,
       renamingPath, renamingValue, contextMenu,
       // 计算属性
@@ -676,6 +824,8 @@ export default defineComponent({
       // 收藏夹编辑
       FAVORITE_ICONS, favEditOpen, favEditName, favEditIcon, favIconSvg, favIconColor,
       openFavEditor, saveFavEdit, favContextMenu, onFavContext, copyFavPath,
+      updateFavoriteScrollState, scrollFavoritesPrev, scrollFavoritesNext,
+      updateTreeScrollbar, onTreeScrollbarTrackMouseDown, onTreeScrollbarThumbMouseDown,
       onSortKeyChange,
       toggleSortDir,
       onNodeClick, onNodeContext, toggleNode,

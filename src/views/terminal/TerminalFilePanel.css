@@ -59,34 +59,64 @@
     var(--term-bg);
 }
 
+.terminal-file-panel :deep(.fav-cards-shell) {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 26%, transparent);
+  background: color-mix(in srgb, var(--term-bg) 90%, var(--surface-muted));
+}
+
 .terminal-file-panel :deep(.fav-cards-row) {
   display: flex;
   gap: 4px;
-  padding: 7px 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 26%, transparent);
-  background: color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted));
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 62%, transparent) var(--term-bg);
+  padding: 7px 34px 7px 8px;
+  background: transparent;
+  scrollbar-width: none;
   overflow-x: auto;
   overflow-y: hidden;
 }
+.terminal-file-panel :deep(.fav-cards-shell.has-prev .fav-cards-row) {
+  padding-left: 34px;
+}
 .terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar) {
-  display: block !important;
-  width: 2px !important;
-  height: 2px !important;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 .terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-track) {
   background: var(--term-bg) !important;
 }
-.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-thumb) {
-  background: color-mix(in srgb, var(--accent) 62%, transparent) !important;
-  border-radius: 999px;
-}
-.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-thumb:hover) {
-  background: var(--accent) !important;
-}
 .terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-corner) {
   background: var(--term-bg) !important;
+}
+
+.terminal-file-panel :deep(.fav-scroll-btn) {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border-color: color-mix(in srgb, var(--border) 38%, transparent);
+  background: color-mix(in srgb, var(--term-bg) 78%, var(--surface));
+  color: var(--text-muted);
+}
+
+.terminal-file-panel :deep(.fav-scroll-prev) {
+  left: 6px;
+}
+
+.terminal-file-panel :deep(.fav-scroll-next) {
+  right: 6px;
+}
+
+.terminal-file-panel :deep(.fav-scroll-prev::before) {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted)) 48%, transparent);
+}
+
+.terminal-file-panel :deep(.fav-scroll-next::before) {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted)) 48%);
+}
+
+.terminal-file-panel :deep(.fav-scroll-btn:hover:not(:disabled)) {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--term-bg));
+  color: var(--accent);
 }
 
 .terminal-file-panel :deep(.fav-card) {
@@ -227,8 +257,30 @@
 
 .terminal-file-panel :deep(.tree-list) {
   padding: 8px 6px 10px;
-  background: transparent;
+  background: var(--term-bg);
   min-height: 0;
+}
+
+.terminal-file-panel :deep(.tree-list-shell) {
+  background: var(--term-bg);
+}
+
+.terminal-file-panel :deep(.tree-scrollbar-track) {
+  background: transparent;
+}
+
+.terminal-file-panel :deep(.tree-scrollbar-thumb) {
+  width: 2px;
+  right: 2px;
+  background: color-mix(in srgb, var(--accent) 62%, transparent);
+  opacity: 0.72;
+}
+
+.terminal-file-panel :deep(.tree-list-shell:hover .tree-scrollbar-thumb),
+.terminal-file-panel :deep(.tree-scrollbar-thumb:hover) {
+  width: 3px;
+  background: var(--accent);
+  opacity: 1;
 }
 
 .terminal-file-panel :deep(.tree-node) {
@@ -260,23 +312,11 @@
 
 /* 滚动条与主题一致 */
 .terminal-file-panel :deep(.tree-list) {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--accent) 62%, transparent) var(--term-bg);
+  scrollbar-width: none;
+  background: var(--term-bg) !important;
 }
 .terminal-file-panel :deep(.tree-list::-webkit-scrollbar) {
-  width: 2px !important;
-  height: 2px !important;
-}
-.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-track) {
-  background: var(--term-bg) !important;
-}
-.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-thumb) {
-  background: color-mix(in srgb, var(--accent) 62%, transparent) !important;
-  border-radius: 999px;
-}
-.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-thumb:hover) {
-  background: var(--accent) !important;
-}
-.terminal-file-panel :deep(.tree-list::-webkit-scrollbar-corner) {
-  background: var(--term-bg) !important;
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }

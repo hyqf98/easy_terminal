@@ -804,8 +804,6 @@ const DEFAULT_HINTS: Record<ReturnType<typeof getLang>, Record<string, string>> 
     conda: 'activate 激活环境 create 创建环境 env list 查看环境',
     java: '-jar 运行 Jar -version 查看版本',
     docker: 'ps 查看容器 run 启动镜像 exec 进入容器',
-    codex: '--sandbox danger-full-access --full-auto --no-alt-screen',
-    claude: '--dangerously-skip-permissions --tmux',
   },
   'en-US': {
     rm: '-r recursive -f force -i confirm before delete',
@@ -821,7 +819,5 @@ const DEFAULT_HINTS: Record<ReturnType<typeof getLang>, Record<string, string>> 
     conda: 'activate env create env env list show environments',
     java: '-jar run jar -version show version',
     docker: 'ps list containers run start image exec open shell',
-    codex: '--sandbox danger-full-access --full-auto --no-alt-screen',
-    claude: '--dangerously-skip-permissions --tmux',
   },
 };

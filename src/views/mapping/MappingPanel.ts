@@ -5,41 +5,9 @@ import { ArrowsLeftRight } from '@vicons/tabler';
 import { t } from '../../i18n';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
+import { tokenizeCommandHtml } from '../command/tokenize';
 import MappingModal from '../../components/modals/MappingModal.vue';
 import type { CommandMapping } from '../../types';
-
-/** HTML 转义 */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-/** 命令高亮：复用全局 tok-* 样式 */
-function tokenizeCommand(command: string): string {
-  const tokens = command.match(/(\s+|[^\s]+)/g) || [];
-  let commandWordIndex = 0;
-  return tokens
-    .map((token) => {
-      if (/^\s+$/.test(token)) return escapeHtml(token);
-      let cls = '';
-      if (/^--?[\w-]+/.test(token)) {
-        cls = 'tok-flag';
-      } else if (/["'`]/.test(token)) {
-        cls = 'tok-string';
-      } else if (/[{]/.test(token) && /[}]/.test(token)) {
-        cls = 'tok-path';
-      } else if ((/[\/\\.]/.test(token) && /\w/.test(token)) || /^[~.]/.test(token)) {
-        cls = 'tok-path';
-      } else if (commandWordIndex < 2) {
-        cls = 'tok-command';
-        commandWordIndex += 1;
-      }
-      return cls ? `<span class="${cls}">${escapeHtml(token)}</span>` : escapeHtml(token);
-    })
-    .join('');
-}
 
 export default defineComponent({
   name: 'MappingPanel',
@@ -147,7 +115,7 @@ export default defineComponent({
     }
 
     function renderCommand(command: string): string {
-      return tokenizeCommand(command);
+      return tokenizeCommandHtml(command);
     }
 
     void reload();

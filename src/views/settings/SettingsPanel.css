@@ -210,3 +210,54 @@
 .settings-progress {
   padding: 4px 0 12px;
 }
+
+/* ===== Shell 美化安装 ===== */
+.shell-setup-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 6px);
+  background: var(--accent);
+  color: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 140ms ease, background 140ms ease;
+  white-space: nowrap;
+}
+.shell-setup-btn:hover:not(:disabled) { opacity: 0.88; }
+.shell-setup-btn:disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.shell-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.shell-status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.shell-status-item .shell-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.shell-status-item.ok .shell-status-dot { background: var(--green); }
+.shell-status-item.ok { color: var(--text-sub); }
+.shell-status-item .shell-status-state {
+  margin-left: auto;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}

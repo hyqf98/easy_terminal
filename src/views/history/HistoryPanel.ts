@@ -5,6 +5,7 @@ import { t } from '../../i18n';
 import { invoke } from '@tauri-apps/api/core';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
+import { tokenizeCommandHtml } from '../command/tokenize';
 import type { CommandHistoryEntry } from '../../types';
 
 interface RailItem {
@@ -15,37 +16,6 @@ interface RailItem {
 
 /** 历史分组：全部 / 本地终端 / SSH 终端 */
 type HistoryGroup = 'all' | 'local' | 'ssh';
-
-/** HTML 转义，防止命令文本注入 */
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
-
-/** 将命令行切分为带语法高亮的 span 片段 */
-function tokenizeCommand(command: string): string {
-  const tokens = command.match(/(\s+|[^\s]+)/g) || [];
-  let commandWordIndex = 0;
-  return tokens
-    .map((token) => {
-      if (/^\s+$/.test(token)) return escapeHtml(token);
-      let cls = '';
-      if (/^--?[\w-]+/.test(token)) {
-        cls = 'tok-flag';
-      } else if (/^["'`]/.test(token) || /["'`]/.test(token)) {
-        cls = 'tok-string';
-      } else if ((/[\/\\.]/.test(token) && /\w/.test(token)) || /^[~.]/.test(token)) {
-        cls = 'tok-path';
-      } else if (commandWordIndex < 2) {
-        cls = 'tok-command';
-        commandWordIndex += 1;
-      }
-      return cls ? `<span class="${cls}">${escapeHtml(token)}</span>` : escapeHtml(token);
-    })
-    .join('');
-}
 
 export default defineComponent({
   name: 'HistoryPanel',
@@ -106,7 +76,7 @@ export default defineComponent({
     }
 
     function renderCommand(command: string): string {
-      return tokenizeCommand(command);
+      return tokenizeCommandHtml(command);
     }
 
     async function loadHistory() {

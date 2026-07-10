@@ -1,5 +1,5 @@
 export interface CommandToken {
-  type: 'command' | 'flag' | 'argument' | 'path' | 'operator';
+  type: 'command' | 'flag' | 'argument' | 'path' | 'operator' | 'string' | 'variable' | 'number';
   start: number;
   end: number;
   text: string;
@@ -8,6 +8,9 @@ export interface CommandToken {
 const SHELL_OPERATORS = ['|', '&&', '||', '>', '>>', '<', '<<', ';&', '&', ';'];
 const PATH_PATTERN = /^(?:\.\/|\.\\|\/|\\|[A-Za-z]:\\)/;
 const PATH_CHARS = /[\/\\]/;
+// 匹配 shell 变量：$VAR、${VAR}、$?
+const VAR_PATTERN = /^\$\{?\w*[\}?]/;
+const NUMBER_PATTERN = /^\d+(?:\.\d+)?$/;
 
 export function tokenizeCommand(input: string): CommandToken[] {
   const tokens: CommandToken[] = [];
@@ -33,7 +36,67 @@ export function tokenizeCommand(input: string): CommandToken[] {
       continue;
     }
 
-    // Read a word (respecting quotes and escapes)
+    // Check for shell variable at the start of a word: $VAR, ${VAR}, $?
+    const remaining = trimmed.substring(i);
+    const varMatch = remaining.match(VAR_PATTERN);
+    if (varMatch && !trimmed[i].match(/["']/)) {
+      // Read the full word including the variable (e.g. $HOME/path)
+      let text = '';
+      let hasPathChar = false;
+      let j = i;
+      while (j < trimmed.length && !/\s/.test(trimmed[j])) {
+        const nextOp = matchOperator(trimmed, j);
+        if (nextOp) break;
+        if (trimmed[j] === '\\') {
+          j++;
+          if (j < trimmed.length) { text += trimmed[j]; j++; }
+          continue;
+        }
+        if (PATH_CHARS.test(trimmed[j])) hasPathChar = true;
+        text += trimmed[j];
+        j++;
+      }
+      if (!text) continue;
+      const type = hasPathChar ? 'path' : 'variable';
+      tokens.push({ type, start, end: j, text });
+      i = j;
+      if (isFirstToken) isFirstToken = false;
+      continue;
+    }
+
+    // Check for quoted strings
+    if (trimmed[i] === '"' || trimmed[i] === "'") {
+      const quote = trimmed[i];
+      let text = quote;
+      let j = i + 1;
+      while (j < trimmed.length && trimmed[j] !== quote) {
+        if (trimmed[j] === '\\') {
+          text += trimmed[j];
+          j++;
+          if (j < trimmed.length) { text += trimmed[j]; j++; }
+          continue;
+        }
+        text += trimmed[j];
+        j++;
+      }
+      if (j < trimmed.length) { text += trimmed[j]; j++; } // closing quote
+      // If followed by more non-whitespace (e.g. "abc"def), keep reading
+      while (j < trimmed.length && !/\s/.test(trimmed[j])) {
+        const nextOp = matchOperator(trimmed, j);
+        if (nextOp) break;
+        if (PATH_CHARS.test(trimmed[j])) { /* hasPathChar=true */ }
+        text += trimmed[j];
+        j++;
+      }
+      if (text) {
+        tokens.push({ type: 'string', start, end: i + text.length, text });
+        i += text.length;
+        if (isFirstToken) isFirstToken = false;
+      }
+      continue;
+    }
+
+    // Read a word (respecting escapes)
     let text = '';
     let hasPathChar = false;
     while (i < trimmed.length && !/\s/.test(trimmed[i])) {
@@ -47,17 +110,6 @@ export function tokenizeCommand(input: string): CommandToken[] {
           text += trimmed[i];
           i++;
         }
-        continue;
-      }
-
-      if (trimmed[i] === '"' || trimmed[i] === "'") {
-        const quote = trimmed[i];
-        i++;
-        while (i < trimmed.length && trimmed[i] !== quote) {
-          text += trimmed[i];
-          i++;
-        }
-        if (i < trimmed.length) i++; // skip closing quote
         continue;
       }
 
@@ -79,6 +131,8 @@ export function tokenizeCommand(input: string): CommandToken[] {
       isFirstToken = false;
     } else if (text.startsWith('--') || text.startsWith('-')) {
       type = 'flag';
+    } else if (NUMBER_PATTERN.test(text)) {
+      type = 'number';
     } else if (hasPathChar || PATH_PATTERN.test(text) || text.includes('.')) {
       type = 'path';
     } else {

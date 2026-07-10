@@ -261,38 +261,44 @@ fn ensure_easy_terminal_zdotdir() -> Result<PathBuf, String> {
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     let zshrc = dir.join(".zshrc");
-    let content = r#"
-export EASY_TERMINAL=1
+    let shell_dir = home.join(".easy-terminal").join("shell");
 
-if [ -f "$HOME/.zshrc" ]; then
-  source "$HOME/.zshrc"
-fi
+    // 动态生成 .zshrc：检测插件是否存在，存在则 source
+    let syntax_path = shell_dir.join("zsh-syntax-highlighting/zsh-syntax-highlighting.zsh");
+    let auto_path = shell_dir.join("zsh-autosuggestions/zsh-autosuggestions.zsh");
 
-if typeset -f autosuggest-disable >/dev/null 2>&1; then
-  autosuggest-disable >/dev/null 2>&1
-fi
-if typeset -f _zsh_autosuggest_clear >/dev/null 2>&1; then
-  _zsh_autosuggest_clear >/dev/null 2>&1
-fi
-typeset -g ZSH_AUTOSUGGEST_DISABLED=1
-typeset -ga ZSH_AUTOSUGGEST_STRATEGY
-ZSH_AUTOSUGGEST_STRATEGY=()
-POSTDISPLAY=
-ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+    let mut content = String::new();
+    content.push_str("\nexport EASY_TERMINAL=1\n\n");
 
-autoload -Uz add-zsh-hook >/dev/null 2>&1 || true
+    // 先 source 用户自己的 .zshrc（保留个性化配置）
+    content.push_str("if [ -f \"$HOME/.zshrc\" ]; then\n  source \"$HOME/.zshrc\"\nfi\n\n");
+
+    // zsh-syntax-highlighting：命令实时语法高亮
+    content.push_str(&format!(
+        "if [ -f \"{syntax}\" ]; then\n  source \"{syntax}\"\nfi\n\n",
+        syntax = syntax_path.display()
+    ));
+
+    // zsh-autosuggestions：基于历史的灰色 ghost 建议
+    content.push_str(&format!(
+        "if [ -f \"{auto}\" ]; then\n  source \"{auto}\"\n  ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'\n  ZSH_AUTOSUGGEST_STRATEGY=(history completion)\nfi\n\n",
+        auto = auto_path.display()
+    ));
+
+    // starship：现代跨 shell prompt
+    let starship_local = shell_dir.join("starship");
+    content.push_str(&format!(
+        "if command -v starship &>/dev/null; then\n  eval \"$(starship init zsh)\"\nelif [ -x \"{star}\" ]; then\n  eval \"$({star} init zsh)\"\nfi\n\n",
+        star = starship_local.display()
+    ));
+
+    // OSC 0 标题序列：设置终端标题为当前目录
+    content.push_str(r#"autoload -Uz add-zsh-hook >/dev/null 2>&1 || true
 if typeset -f add-zsh-hook >/dev/null 2>&1; then
   _easy_terminal_precmd() { print -Pn "\e]0;%~\a" }
   add-zsh-hook precmd _easy_terminal_precmd
 fi
-
-autoload -Uz add-zle-hook-widget >/dev/null 2>&1 || true
-if typeset -f add-zle-hook-widget >/dev/null 2>&1; then
-  _easy_terminal_clear_postdisplay() { POSTDISPLAY= }
-  add-zle-hook-widget line-init _easy_terminal_clear_postdisplay >/dev/null 2>&1 || true
-  add-zle-hook-widget keymap-select _easy_terminal_clear_postdisplay >/dev/null 2>&1 || true
-fi
-"#;
+"#);
 
     fs::write(zshrc, content).map_err(|e| e.to_string())?;
     Ok(dir)

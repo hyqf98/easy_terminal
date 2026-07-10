@@ -11,18 +11,42 @@
     <!-- 左侧文件树（唯一内容，预览已迁移至独立 PreviewPanel） -->
     <aside class="files-tree">
       <!-- 收藏夹卡片：置顶横向排列，右键可编辑名称和图标 -->
-      <div v-if="favorites.length > 0" class="fav-cards-row">
-        <div
-          v-for="fav in favorites"
-          :key="fav.path"
-          class="fav-card"
-          :title="fav.path"
-          @click="navigateTo(fav.path)"
-          @contextmenu="onFavContext($event, fav)"
-        >
-          <span class="fav-card-icon" :style="{ color: fav.color || favIconColor(fav.icon) }" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + favIconSvg(fav.icon) + '</svg>'"></span>
-          <span class="fav-card-name">{{ fav.name }}</span>
+      <div
+        v-if="favorites.length > 0"
+        class="fav-cards-shell"
+        :class="{ 'has-prev': canScrollFavoritesPrev }"
+      >
+        <div ref="favCardsRowRef" class="fav-cards-row" @scroll.passive="updateFavoriteScrollState">
+          <div
+            v-for="fav in favorites"
+            :key="fav.path"
+            class="fav-card"
+            :title="fav.path"
+            @click="navigateTo(fav.path)"
+            @contextmenu="onFavContext($event, fav)"
+          >
+            <span class="fav-card-icon" :style="{ color: fav.color || favIconColor(fav.icon) }" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + favIconSvg(fav.icon) + '</svg>'"></span>
+            <span class="fav-card-name">{{ fav.name }}</span>
+          </div>
         </div>
+        <button
+          v-if="showFavoriteScrollControls"
+          class="fav-scroll-btn fav-scroll-prev"
+          :disabled="!canScrollFavoritesPrev"
+          title="查看更多收藏夹"
+          @click="scrollFavoritesPrev"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18" /></svg>
+        </button>
+        <button
+          v-if="showFavoriteScrollControls"
+          class="fav-scroll-btn fav-scroll-next"
+          :disabled="!canScrollFavoritesNext"
+          title="查看更多收藏夹"
+          @click="scrollFavoritesNext"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
+        </button>
       </div>
 
       <!-- 筛选 / 排序行：紧凑单行，方向切换按钮紧跟排序框 -->
@@ -63,57 +87,70 @@
         </button>
       </div>
 
-      <div class="tree-list">
-        <div
-          v-for="item in visibleNodes"
-          :key="item.node.entry.path"
-          class="tree-node"
-          :class="{
-            selected: selectedPath === item.node.entry.path,
-            collapsed: item.node.entry.is_dir && !item.node.expanded,
-            'is-dir': item.node.entry.is_dir,
-            'is-file': !item.node.entry.is_dir,
-            renaming: renamingPath === item.node.entry.path,
-          }"
-          :style="{ paddingLeft: 8 + item.depth * 14 + 'px' }"
-          draggable="true"
-          @click="onNodeClick(item.node)"
-          @contextmenu="onNodeContext($event, item.node)"
-          @dragstart="onDragStart($event, item.node)"
-          @dragover="onDragOver($event, item.node)"
-          @drop="onDrop($event, item.node)"
-        >
-          <span class="tree-chevron" @click.stop="toggleNode(item.node)">
-            <svg v-if="item.node.entry.is_dir" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
-          </span>
-          <span class="tree-icon" :class="iconClass(item.node.entry)">
-            <svg v-if="item.node.entry.is_dir" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-            <svg v-else viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
-          </span>
+      <div class="tree-list-shell">
+        <div ref="treeListRef" class="tree-list" @scroll.passive="updateTreeScrollbar">
+          <div
+            v-for="item in visibleNodes"
+            :key="item.node.entry.path"
+            class="tree-node"
+            :class="{
+              selected: selectedPath === item.node.entry.path,
+              collapsed: item.node.entry.is_dir && !item.node.expanded,
+              'is-dir': item.node.entry.is_dir,
+              'is-file': !item.node.entry.is_dir,
+              renaming: renamingPath === item.node.entry.path,
+            }"
+            :style="{ paddingLeft: 8 + item.depth * 14 + 'px' }"
+            draggable="true"
+            @click="onNodeClick(item.node)"
+            @contextmenu="onNodeContext($event, item.node)"
+            @dragstart="onDragStart($event, item.node)"
+            @dragover="onDragOver($event, item.node)"
+            @drop="onDrop($event, item.node)"
+          >
+            <span class="tree-chevron" @click.stop="toggleNode(item.node)">
+              <svg v-if="item.node.entry.is_dir" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" /></svg>
+            </span>
+            <span class="tree-icon" :class="iconClass(item.node.entry)">
+              <svg v-if="item.node.entry.is_dir" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+              <svg v-else viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /></svg>
+            </span>
 
-          <template v-if="renamingPath === item.node.entry.path">
-            <input
-              class="tree-rename-input"
-              v-model="renamingValue"
-              @click.stop
-              @keydown.enter.prevent="commitRename(item.node)"
-              @keydown.esc.prevent="cancelRename"
-            />
-          </template>
-          <template v-else>
-            <span class="tree-name">{{ item.node.entry.name }}</span>
-            <svg
-              v-if="item.node.entry.is_dir && isFavorite(item.node.entry.path)"
-              class="tree-fav"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              @click.stop="toggleFavorite(item.node)"
-            ><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" /></svg>
-            <span v-else-if="!item.node.entry.is_dir" class="tree-meta">{{ formatSize(item.node.entry.size) }}</span>
-          </template>
+            <template v-if="renamingPath === item.node.entry.path">
+              <input
+                class="tree-rename-input"
+                v-model="renamingValue"
+                @click.stop
+                @keydown.enter.prevent="commitRename(item.node)"
+                @keydown.esc.prevent="cancelRename"
+              />
+            </template>
+            <template v-else>
+              <span class="tree-name">{{ item.node.entry.name }}</span>
+              <svg
+                v-if="item.node.entry.is_dir && isFavorite(item.node.entry.path)"
+                class="tree-fav"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                @click.stop="toggleFavorite(item.node)"
+              ><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" /></svg>
+              <span v-else-if="!item.node.entry.is_dir" class="tree-meta">{{ formatSize(item.node.entry.size) }}</span>
+            </template>
+          </div>
+
+          <div v-if="visibleNodes.length === 0" class="tree-empty">{{ emptyLabel }}</div>
         </div>
-
-        <div v-if="visibleNodes.length === 0" class="tree-empty">{{ emptyLabel }}</div>
+        <div
+          v-if="showCustomTreeScrollbar"
+          class="tree-scrollbar-track"
+          @mousedown.stop.prevent="onTreeScrollbarTrackMouseDown"
+        >
+          <div
+            class="tree-scrollbar-thumb"
+            :style="{ height: treeScrollbarHeight + 'px', transform: 'translateY(' + treeScrollbarTop + 'px)' }"
+            @mousedown.stop.prevent="onTreeScrollbarThumbMouseDown"
+          ></div>
+        </div>
       </div>
     </aside>
 

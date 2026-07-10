@@ -130,24 +130,63 @@ body.files-resizing * {
   height: 12px;
 }
 
-.tree-list {
+.tree-list-shell {
   flex: 1;
+  position: relative;
+  min-height: 0;
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+  overflow: hidden;
+}
+
+.tree-list {
+  height: 100%;
   overflow-y: auto;
   overflow-x: auto;
-  padding: 6px 4px;
+  padding: 6px 10px 6px 4px;
   min-height: 0;
-  /* 滚动条：与主题一致，避免白色突兀 */
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar) transparent;
+  scrollbar-width: none;
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
 }
-.tree-list::-webkit-scrollbar { width: 6px; height: 6px; }
-.tree-list::-webkit-scrollbar-track { background: transparent; }
-.tree-list::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 3px;
+.tree-list::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
-.tree-list::-webkit-scrollbar-thumb:hover {
+
+.tree-scrollbar-track {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 7px;
+  z-index: 5;
+  cursor: pointer;
+}
+
+.tree-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 3px;
+  min-height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--scrollbar) 85%, transparent);
+  opacity: 0.72;
+  transition: width 120ms ease, opacity 120ms ease, background 120ms ease;
+  cursor: grab;
+}
+
+.tree-list-shell:hover .tree-scrollbar-thumb,
+.tree-scrollbar-thumb:hover,
+:global(body.tree-scrollbar-dragging) .tree-scrollbar-thumb {
+  width: 4px;
+  opacity: 1;
   background: var(--scrollbar-hover);
+}
+
+:global(body.tree-scrollbar-dragging) {
+  user-select: none !important;
+  cursor: grabbing !important;
 }
 
 .tree-node {
@@ -406,21 +445,85 @@ body.files-resizing * {
 }
 
 /* ===== 收藏夹卡片（顶部横向排列） ===== */
+.fav-cards-shell {
+  position: relative;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+}
+
 .fav-cards-row {
   display: flex;
   gap: 5px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
+  padding: 6px 34px 6px 8px;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar) transparent;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
 }
-.fav-cards-row::-webkit-scrollbar { width: 3px; height: 3px; }
-.fav-cards-row::-webkit-scrollbar-track { background: transparent; }
-.fav-cards-row::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 2px;
+.fav-cards-row::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.fav-cards-shell.has-prev .fav-cards-row {
+  padding-left: 34px;
+}
+
+.fav-scroll-btn {
+  position: absolute;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.fav-scroll-prev {
+  left: 5px;
+}
+.fav-scroll-next {
+  right: 5px;
+}
+.fav-scroll-btn::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  bottom: -7px;
+  width: 36px;
+  z-index: -1;
+  pointer-events: none;
+}
+.fav-scroll-prev::before {
+  left: -5px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 92%, var(--bg)) 45%, transparent);
+}
+.fav-scroll-next::before {
+  right: -5px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 92%, var(--bg)) 45%);
+}
+.fav-scroll-btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+}
+.fav-scroll-btn:disabled {
+  opacity: 0;
+  cursor: default;
+  pointer-events: none;
+}
+.fav-scroll-btn svg {
+  width: 13px;
+  height: 13px;
 }
 
 .fav-card {

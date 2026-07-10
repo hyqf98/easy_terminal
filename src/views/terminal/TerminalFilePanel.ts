@@ -21,6 +21,12 @@ function joinFsPath(base: string, child: string): string {
   return `${normalizedBase}/${normalizedChild.replace(/^\/+/, '')}`;
 }
 
+function extractPathFromShellTitle(raw: string): string {
+  const trimmed = raw.trim();
+  const promptMatch = trimmed.match(/^[^@\s:]+@[^:\s]+:(.+)$/);
+  return (promptMatch ? promptMatch[1] : trimmed).trim();
+}
+
 /**
  * 终端文件面板：作为画布上独立元素渲染（拼接在终端左侧），
  * 复用 FileTree 组件，自动跟随绑定终端的 CWD。
@@ -81,10 +87,11 @@ export default defineComponent({
      */
     async function expandPath(raw: string): Promise<string> {
       if (!raw) return '';
+      const titlePath = extractPathFromShellTitle(raw);
       // SSH 终端的 cwd 来自远程 shell，直接交给远程策略处理
-      if (props.launchOptions.mode === 'ssh') return raw;
+      if (props.launchOptions.mode === 'ssh') return titlePath;
       // 前端安全的轻量规范化：Windows 反斜杠转正斜杠、去多余分隔符。
-      const normalizedPath = normalizeFsPath(raw);
+      const normalizedPath = normalizeFsPath(titlePath);
       // 展开 ~ 前缀
       if (normalizedPath === '~' || normalizedPath.startsWith('~/')) {
         if (!cachedHome) {

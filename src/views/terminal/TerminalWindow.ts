@@ -37,6 +37,23 @@ async function ensureIntel(): Promise<CommandIntelligence> {
 // Regex to detect Shift/Ctrl/Alt modified arrow key sequences: \x1b[1;2D, \x1b[1;5C, etc.
 const MODIFIED_ARROW_RE = /^\x1b\[1;\d+[ABCD]$/;
 
+function normalizeTitleCwd(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return '';
+  const promptMatch = trimmed.match(/^[^@\s:]+@[^:\s]+:(.+)$/);
+  const candidate = (promptMatch ? promptMatch[1] : trimmed).trim();
+  if (
+    candidate === '~' ||
+    candidate.startsWith('~/') ||
+    candidate.startsWith('/') ||
+    /^[A-Za-z]:[\\/]/.test(candidate) ||
+    candidate.startsWith('\\\\')
+  ) {
+    return candidate;
+  }
+  return '';
+}
+
 export default defineComponent({
   name: 'TerminalWindow',
   props: {
@@ -74,6 +91,7 @@ export default defineComponent({
     const suggestVisible = ref(false);
     const suggestItems = ref<SuggestionItem[]>([]);
     const suggestIndex = ref(0);
+    const suggestSelectionMode = ref<'keyboard' | 'mouse'>('keyboard');
     const suggestStyle = ref<Record<string, string>>({});
     // SSH 切换下拉菜单显隐
     const sshMenuOpen = ref(false);
@@ -150,6 +168,14 @@ export default defineComponent({
     let outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
     let outputBuffer = '';
 
+    // 拖动缩放时的 resize 防抖 ID，避免每帧都调用 resize_pty
+    let resizeRafId: number | null = null;
+    // 终端字体实时变化监听句柄
+    let onTermFontSizeChange: (() => void) | null = null;
+    let onTermFontFamilyChange: (() => void) | null = null;
+    let lastSuggestMouseX = Number.NaN;
+    let lastSuggestMouseY = Number.NaN;
+
     // Placeholder navigation state
     let activePlaceholders: import('../../types').PlaceholderInfo[] = [];
     let currentPlaceholderIdx = -1;
@@ -197,11 +223,33 @@ export default defineComponent({
       return Math.round(Math.max(12, Math.min(16, 12 + (minDim - 300) / 250)));
     }
 
+    // 从 localStorage 读取终端字体族设置（与 SettingsPanel 的 FLAGS_STORAGE_KEY 一致）
+    function getTermFontFamily(): string {
+      try {
+        const raw = localStorage.getItem('et:settings:flags');
+        if (raw) {
+          const flags = JSON.parse(raw);
+          if (flags.termFontFamily) {
+            // 用户选定的字体 + 合理的 fallback 链
+            return `"${flags.termFontFamily}", "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace`;
+          }
+        }
+      } catch { /* 静默 */ }
+      return '"JetBrainsMono Nerd Font", "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace';
+    }
+
     function resetLineTracking() {
       currentLine = '';
       cursorPos = 0;
       activePlaceholders = [];
       currentPlaceholderIdx = -1;
+    }
+
+    // 检测当前是否处于 TUI 模式（alternate screen buffer 被激活）。
+    // vim/htop/less/claude/codex 等 TUI 程序进入时会切换到 alternate screen，
+    // 此时所有按键应直接透传给 PTY，不做行编辑/补全/点击移动光标等拦截。
+    function isTuiMode(): boolean {
+      return !!term && term.buffer.active.type === 'alternate';
     }
 
     // 根据当前输入行向命令智能引擎查询并刷新补全建议列表
@@ -220,6 +268,7 @@ export default defineComponent({
         if (results.length > 0) {
           suggestItems.value = results;
           suggestIndex.value = 0;
+          suggestSelectionMode.value = 'keyboard';
           suggestVisible.value = true;
           updateSuggestPosition();
         } else {
@@ -235,7 +284,7 @@ export default defineComponent({
     // 补全弹窗已 Teleport 到 document.body 并使用 position:fixed。
     // 因此定位基于终端根元素在屏幕上的矩形（getBoundingClientRect）+ 光标像素偏移，再按视口边界兜底。
     function updateSuggestPosition() {
-      const fallback = { position: 'fixed', left: '4px', top: '60px', maxHeight: '200px' };
+      const fallback = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
       if (!term || disposed) {
         suggestStyle.value = fallback;
         return;
@@ -256,8 +305,9 @@ export default defineComponent({
       const cellW = (bodyW / term.cols) || 9;
       const cellH = (bodyH / term.rows) || 18;
       const titleBarH = 38;
-      const maxH = 200;
-      const popupMaxW = 420;
+      const maxListH = 232;
+      const popupChromeH = 54;
+      const popupMaxW = 340;
 
       // 光标在终端内的像素偏移 → 转换为屏幕坐标（fixed 定位基准）
       const cursorPxX = cursorX * cellW;
@@ -277,32 +327,49 @@ export default defineComponent({
       const spaceAbove = cursorPxY - titleBarH; // 光标行以上在终端内的可用像素
       let top: number;
       let clampedMaxH: number;
-      if (spaceBelow < maxH + 10 && spaceAbove > maxH) {
+      if (spaceBelow < maxListH + popupChromeH + 10 && spaceAbove > maxListH) {
         // 翻转到上方：弹窗底边贴近光标行上沿
         const cursorLineTopScreenY = rootRect.top + titleBarH + cursorY * cellH;
-        top = cursorLineTopScreenY - cellH * 0.3 - maxH;
+        top = cursorLineTopScreenY - cellH * 0.3 - maxListH - popupChromeH;
         top = Math.max(8, top);
-        clampedMaxH = Math.min(maxH, spaceAbove - 6);
+        clampedMaxH = Math.min(maxListH, spaceAbove - popupChromeH - 6);
       } else {
         top = screenY;
-        clampedMaxH = Math.min(maxH, Math.max(0, spaceBelow - 6));
+        clampedMaxH = Math.min(maxListH, Math.max(0, spaceBelow - popupChromeH - 6));
       }
 
       suggestStyle.value = {
         position: 'fixed',
         left: `${Math.round(left)}px`,
         top: `${Math.round(top)}px`,
-        maxHeight: `${Math.max(80, clampedMaxH)}px`,
+        '--completion-list-max-height': `${Math.max(112, clampedMaxH)}px`,
       };
     }
 
-    function scrollSuggestIntoView() {
+    function scrollSuggestIntoView(index = suggestIndex.value) {
       void nextTick(() => {
-        const container = bodyRef.value?.closest('.terminal-window')
-          ?.querySelector('.completion-list') as HTMLElement | null;
+        // 补全弹窗通过 <Teleport to="body"> 渲染到 document.body，
+        // 已脱离 .terminal-window 层级，必须从 document 全局查询。
+        const container = document.querySelector('.completion-list') as HTMLElement | null;
         const active = container?.querySelector('.completion-item.selected') as HTMLElement | null;
-        if (container && active) {
-          active.scrollIntoView({ block: 'nearest', behavior: 'instant' });
+        if (!container || !active) return;
+        const padding = 6;
+        if (index <= 0) {
+          container.scrollTop = 0;
+          return;
+        }
+        if (index >= suggestItems.value.length - 1) {
+          container.scrollTop = container.scrollHeight - container.clientHeight;
+          return;
+        }
+        const itemTop = active.offsetTop;
+        const itemBottom = itemTop + active.offsetHeight;
+        const viewTop = container.scrollTop;
+        const viewBottom = viewTop + container.clientHeight;
+        if (itemTop < viewTop + padding) {
+          container.scrollTop = Math.max(0, itemTop - padding);
+        } else if (itemBottom > viewBottom - padding) {
+          container.scrollTop = Math.max(0, itemBottom - container.clientHeight + padding);
         }
       });
     }
@@ -324,7 +391,7 @@ export default defineComponent({
       const fontSize = calcFontSize(props.initialWidth, props.initialHeight);
       term = new Terminal({
         theme: getTheme(),
-        fontFamily: '"JetBrainsMono Nerd Font", "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace',
+        fontFamily: getTermFontFamily(),
         fontSize,
         fontWeight: '400',
         fontWeightBold: '600',
@@ -334,6 +401,8 @@ export default defineComponent({
         cursorWidth: 1,
         scrollback: 5000,
         allowProposedApi: true,
+        // 启用自定义字形渲染：改善 box drawing（TUI 边框）和 block element 显示
+        customGlyphs: true,
       });
 
       fitAddon = new FitAddon();
@@ -401,7 +470,7 @@ export default defineComponent({
       });
 
       term.onTitleChange((title: string) => {
-        const cwd = title.trim();
+        const cwd = normalizeTitleCwd(title);
         if (cwd) {
           currentCwd.value = cwd;
           emit('cwd-change', cwd);
@@ -411,6 +480,17 @@ export default defineComponent({
       // Forward terminal input to PTY and track for suggestions
       term.onData((data) => {
         if (!sessionId || disposed) return;
+
+        // TUI 模式（vim/htop/less/claude/codex 等）：所有按键直接透传 PTY，
+        // 不做命令跟踪、补全拦截、占位符跳转等任何行编辑逻辑。
+        if (isTuiMode()) {
+          void invoke('write_pty', { sessionId, data });
+          return;
+        }
+
+        if (suggestVisible.value && suggestItems.value.length > 0 && (data === '\x1b[A' || data === '\x1b[B')) {
+          return;
+        }
 
         if (data === '\r') {
           if (suggestVisible.value && suggestItems.value.length > 0) {
@@ -505,14 +585,20 @@ export default defineComponent({
         if (suggestVisible.value && suggestItems.value.length > 0) {
           if (domEvent.key === 'ArrowDown') {
             domEvent.preventDefault();
+            suggestSelectionMode.value = 'keyboard';
+            lastSuggestMouseX = Number.NaN;
+            lastSuggestMouseY = Number.NaN;
             suggestIndex.value = (suggestIndex.value + 1) % suggestItems.value.length;
-            scrollSuggestIntoView();
+            scrollSuggestIntoView(suggestIndex.value);
             return;
           }
           if (domEvent.key === 'ArrowUp') {
             domEvent.preventDefault();
+            suggestSelectionMode.value = 'keyboard';
+            lastSuggestMouseX = Number.NaN;
+            lastSuggestMouseY = Number.NaN;
             suggestIndex.value = (suggestIndex.value - 1 + suggestItems.value.length) % suggestItems.value.length;
-            scrollSuggestIntoView();
+            scrollSuggestIntoView(suggestIndex.value);
             return;
           }
           if (domEvent.key === 'Escape') {
@@ -539,11 +625,9 @@ export default defineComponent({
           const dx = Math.abs(e.clientX - mouseDownX);
           const dy = Math.abs(e.clientY - mouseDownY);
           const elapsed = e.timeStamp - mouseDownTime;
-          console.log('[click-debug] mouseup dx:', dx, 'dy:', dy, 'elapsed:', elapsed,
-            'currentLine:', JSON.stringify(currentLine), 'cursorPos:', cursorPos);
           // Only treat as click-to-move if it's a simple click (no significant drag)
           if (dx > 6 || dy > 6 || elapsed > 500) return;
-          if (!term || !sessionId || disposed || !currentLine) return;
+          if (!term || !sessionId || disposed || !currentLine || isTuiMode()) return;
 
           handleCursorClick(e);
         });
@@ -627,7 +711,7 @@ export default defineComponent({
     }
 
     function handleCursorClick(e: MouseEvent) {
-      if (!term || !sessionId || disposed || !currentLine) return;
+      if (!term || !sessionId || disposed || !currentLine || isTuiMode()) return;
 
       const buf = term.buffer.active;
       const cursorY = buf.cursorY;
@@ -636,15 +720,9 @@ export default defineComponent({
       // Find the actual rendering canvas — it's the element that maps 1:1 to cells.
       // The WebGL/Canvas renderer creates a canvas inside .xterm-screen.
       const screenEl = bodyRef.value?.querySelector('.xterm-screen') as HTMLElement | null;
-      if (!screenEl) {
-        console.log('[click-debug] no .xterm-screen found');
-        return;
-      }
+      if (!screenEl) return;
 
       const screenRect = screenEl.getBoundingClientRect();
-      console.log('[click-debug] cursorX:', cursorX, 'cursorY:', cursorY,
-        'screenRect:', JSON.stringify({l: Math.round(screenRect.left), t: Math.round(screenRect.top), w: Math.round(screenRect.width), h: Math.round(screenRect.height)}),
-        'clientXY:', Math.round(e.clientX), Math.round(e.clientY));
 
       // Relative position within the screen element
       const relX = e.clientX - screenRect.left;
@@ -658,58 +736,34 @@ export default defineComponent({
         const dims = core._renderService.dimensions.css.cell;
         cellW = dims.width;
         cellH = dims.height;
-        console.log('[click-debug] using core dims: cellW:', cellW, 'cellH:', cellH);
       } else {
         cellW = screenRect.width / term.cols;
         cellH = screenRect.height / term.rows;
-        console.log('[click-debug] using fallback dims: cellW:', cellW, 'cellH:', cellH,
-          'cols:', term.cols, 'rows:', term.rows);
       }
 
-      if (cellW <= 0 || cellH <= 0) {
-        console.log('[click-debug] bad cell dimensions');
-        return;
-      }
+      if (cellW <= 0 || cellH <= 0) return;
 
       // Determine clicked row and column (0-based)
       const clickRow = Math.max(0, Math.min(term.rows - 1, Math.floor(relY / cellH)));
       const clickCol = Math.max(0, Math.min(term.cols - 1, Math.floor(relX / cellW)));
 
-      console.log('[click-debug] clickRow:', clickRow, 'clickCol:', clickCol,
-        'relX:', Math.round(relX), 'relY:', Math.round(relY),
-        'rowMatch:', clickRow === cursorY);
-
-      if (clickRow !== cursorY) {
-        console.log('[click-debug] row mismatch, aborting');
-        return;
-      }
+      if (clickRow !== cursorY) return;
 
       // Prompt starts at: cursorX (absolute buffer column) minus cursorPos (position in tracked line)
       const promptStartCol = cursorX - cursorPos;
-      console.log('[click-debug] promptStartCol:', promptStartCol, '(cursorX:', cursorX, '- cursorPos:', cursorPos, ')');
-      if (promptStartCol < 0) {
-        console.log('[click-debug] negative promptStartCol, aborting');
-        return;
-      }
+      if (promptStartCol < 0) return;
 
       // Target position within the tracked input line
       const targetPos = Math.max(0, Math.min(currentLine.length, clickCol - promptStartCol));
-      console.log('[click-debug] targetPos:', targetPos, '(clickCol:', clickCol, '- promptStartCol:', promptStartCol, ')',
-        'currentLine.length:', currentLine.length, 'diff from cursorPos:', targetPos - cursorPos);
 
-      if (targetPos === cursorPos) {
-        console.log('[click-debug] same position, no move needed');
-        return;
-      }
+      if (targetPos === cursorPos) return;
 
       // Send arrow keys to move cursor
       const diff = targetPos - cursorPos;
       cursorPos = targetPos;
       if (diff < 0) {
-        console.log('[click-debug] sending', -diff, 'left arrows');
         void invoke('write_pty', { sessionId, data: '\x1b[D'.repeat(-diff) });
       } else {
-        console.log('[click-debug] sending', diff, 'right arrows');
         void invoke('write_pty', { sessionId, data: '\x1b[C'.repeat(diff) });
       }
     }
@@ -769,6 +823,18 @@ export default defineComponent({
     // 选中并应用某条建议到命令行（委托给 applySuggestion）
     function selectSuggestion(item: SuggestionItem) {
       applySuggestion(item);
+    }
+
+    function selectSuggestionByMouse(index: number, event: MouseEvent) {
+      const hasPrevious = Number.isFinite(lastSuggestMouseX) && Number.isFinite(lastSuggestMouseY);
+      const moved = hasPrevious
+        ? Math.abs(event.clientX - lastSuggestMouseX) > 1 || Math.abs(event.clientY - lastSuggestMouseY) > 1
+        : Math.abs(event.movementX) > 0 || Math.abs(event.movementY) > 0;
+      lastSuggestMouseX = event.clientX;
+      lastSuggestMouseY = event.clientY;
+      if (!moved) return;
+      suggestSelectionMode.value = 'mouse';
+      suggestIndex.value = index;
     }
 
     function handleResize() {
@@ -885,7 +951,12 @@ export default defineComponent({
           : snappedGroup;
         rectState.value = snapped;
         emit('rect-change', props.terminalId, { x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
-        handleResize();
+        // 用 requestAnimationFrame 节流，避免拖动缩放时每帧都调用 resize_pty（60+次/秒）
+        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+        resizeRafId = requestAnimationFrame(() => {
+          handleResize();
+          resizeRafId = null;
+        });
       }
 
       function onUp() {
@@ -975,6 +1046,10 @@ export default defineComponent({
       themeObserver?.disconnect();
       themeObserver = null;
       window.removeEventListener('resize', handleResize);
+      if (resizeRafId !== null) {
+        cancelAnimationFrame(resizeRafId);
+        resizeRafId = null;
+      }
       if (suggestTimer) {
         clearTimeout(suggestTimer);
         suggestTimer = null;
@@ -984,6 +1059,14 @@ export default defineComponent({
         outputFlushTimer = null;
       }
       outputBuffer = '';
+      if (onTermFontSizeChange) {
+        window.removeEventListener('term-font-size-change', onTermFontSizeChange);
+        onTermFontSizeChange = null;
+      }
+      if (onTermFontFamilyChange) {
+        window.removeEventListener('term-font-family-change', onTermFontFamilyChange);
+        onTermFontFamilyChange = null;
+      }
       unlisten?.();
       unlistenLang?.();
       if (term) {
@@ -1033,6 +1116,20 @@ export default defineComponent({
       themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
       // 监听外部点击以关闭 SSH 切换下拉
       document.addEventListener('click', onSshMenuOutsideClick);
+
+      // 监听设置面板派发的终端字号/字体族变化事件，实时更新 xterm
+      onTermFontSizeChange = () => {
+        if (disposed || !term) return;
+        term.options.fontSize = calcFontSize(rectState.value.w, rectState.value.h);
+        fitAddon?.fit();
+      };
+      onTermFontFamilyChange = () => {
+        if (disposed || !term) return;
+        term.options.fontFamily = getTermFontFamily();
+        fitAddon?.fit();
+      };
+      window.addEventListener('term-font-size-change', onTermFontSizeChange);
+      window.addEventListener('term-font-family-change', onTermFontFamilyChange);
     });
 
     watch(() => props.filePanelOpen, () => {
@@ -1060,6 +1157,7 @@ export default defineComponent({
       suggestVisible,
       suggestItems,
       suggestIndex,
+      suggestSelectionMode,
       suggestStyle,
       containerClasses,
       containerStyle,
@@ -1076,6 +1174,7 @@ export default defineComponent({
       destroy,
       getState,
       selectSuggestion,
+      selectSuggestionByMouse,
       activeSuggestion,
       suggestHeaderText,
       suggestIconSvg,

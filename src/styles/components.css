@@ -759,9 +759,12 @@
 /* ===== 终端 token 高亮（共享） ===== */
 .tok-command { color: var(--term-token-command, var(--mauve)); font-weight: 600; }
 .tok-flag { color: var(--term-token-flag, var(--peach)); }
+.tok-argument { color: var(--term-token-argument, var(--text)); }
 .tok-path { color: var(--term-token-path, var(--green)); }
 .tok-operator { color: var(--term-token-operator, var(--peach)); }
 .tok-string { color: var(--term-token-string, var(--teal)); }
+.tok-variable { color: var(--term-token-variable, var(--yellow)); }
+.tok-number { color: var(--term-token-number, var(--green)); }
 .tok-muted { color: var(--text-muted); }
 .tok-success { color: var(--term-token-success, var(--green)); }
 .tok-warn { color: var(--term-token-warning, var(--yellow)); }

@@ -65,6 +65,8 @@
   --term-token-path: var(--green);
   --term-token-operator: var(--peach);
   --term-token-string: var(--teal);
+  --term-token-variable: var(--yellow);
+  --term-token-number: var(--green);
   --term-token-success: var(--green);
   --term-token-warning: var(--yellow);
   --term-token-error: var(--red);
@@ -136,6 +138,8 @@
   --term-token-path: var(--green);
   --term-token-operator: var(--peach);
   --term-token-string: var(--teal);
+  --term-token-variable: var(--yellow);
+  --term-token-number: var(--green);
   --term-token-success: var(--green);
   --term-token-warning: var(--yellow);
   --term-token-error: var(--red);
