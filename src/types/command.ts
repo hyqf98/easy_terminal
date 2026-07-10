@@ -4,6 +4,8 @@ export interface PlaceholderInfo {
   index: number;
   position: number;
   originalLength: number;
+  /** Length of the placeholder token in insertText (e.g. `<src>` → 5) */
+  length: number;
   label: string;
 }
 

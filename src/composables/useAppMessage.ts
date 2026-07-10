@@ -7,7 +7,7 @@ export function registerMessageApi(api: ReturnType<typeof useMessage>) {
   messageApi = api;
 }
 
-export function showMessage(content: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', duration = 2000) {
+export function showMessage(content: string, type: 'info' | 'success' | 'warning' | 'error' = 'info', duration = 4000) {
   if (messageApi) {
     messageApi[type](content, { duration });
     return;

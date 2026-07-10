@@ -78,8 +78,13 @@ export default defineComponent({
     const visible = ref(true);
     const items = ref<MinimapItem[]>([]);
     const viewportStyle = ref<CSSProperties>({ display: 'none' });
-    // 当前悬停的终端小地图块索引（无 id 可用，使用渲染索引作为悬停标识）
     const hoveredIndex = ref<number | null>(null);
+
+    // 保存最近一次渲染的坐标映射参数，供拖拽视口框时反算世界坐标
+    let lastScale = 1;
+    let lastOffsetX = 0;
+    let lastOffsetY = 0;
+    let lastZoom = 1;
 
     let pollTimer: number | null = null;
     let mutationObserver: MutationObserver | null = null;
@@ -144,6 +149,12 @@ export default defineComponent({
         width: `${Math.max(viewport.w * scale, 4)}px`,
         height: `${Math.max(viewport.h * scale, 4)}px`,
       };
+
+      // 保存映射参数供拖拽反算
+      lastScale = scale;
+      lastOffsetX = offsetX;
+      lastOffsetY = offsetY;
+      lastZoom = transform.zoom || 1;
     }
 
     function onTermEnter(idx: number) {
@@ -210,6 +221,60 @@ export default defineComponent({
       window.setTimeout(() => target.classList.remove('minimap-flash'), 900);
     }
 
+    /** 将 minimap 内坐标反算为画布世界坐标中心点 */
+    function minimapPosToWorld(clientX: number, clientY: number): { x: number; y: number } {
+      const minimapEl = document.querySelector<HTMLElement>('.minimap');
+      if (!minimapEl) return { x: 0, y: 0 };
+      const rect = minimapEl.getBoundingClientRect();
+      const localX = clientX - rect.left;
+      const localY = clientY - rect.top;
+      // 反算：(localX - offsetX) / scale = worldX
+      return {
+        x: (localX - lastOffsetX) / lastScale,
+        y: (localY - lastOffsetY) / lastScale,
+      };
+    }
+
+    /** 将画布视口中心移动到指定世界坐标（保持当前 zoom） */
+    function panToWorldCenter(worldX: number, worldY: number) {
+      const canvas = document.getElementById('canvas');
+      const stage = document.querySelector<HTMLElement>('.canvas-stage');
+      if (!canvas || !stage) return;
+      const zoom = lastZoom || 1;
+      const panX = stage.clientWidth / 2 - worldX * zoom;
+      const panY = stage.clientHeight / 2 - worldY * zoom;
+      canvas.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale(${zoom})`;
+      render();
+    }
+
+    /** 拖拽视口框：移动画布视口到鼠标位置 */
+    function onViewportMouseDown(e: MouseEvent) {
+      e.preventDefault();
+      e.stopPropagation();
+      // 立即跳转到鼠标位置
+      const world = minimapPosToWorld(e.clientX, e.clientY);
+      panToWorldCenter(world.x, world.y);
+
+      function onMove(ev: MouseEvent) {
+        const w = minimapPosToWorld(ev.clientX, ev.clientY);
+        panToWorldCenter(w.x, w.y);
+      }
+      function onUp() {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+      }
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+    }
+
+    /** 点击 minimap 空白区域：移动视口到点击位置 */
+    function onMinimapMouseDown(e: MouseEvent) {
+      // 仅响应 minimap 背景区域点击（非终端块、非视口框）
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('minimap-term') || target.classList.contains('minimap-viewport')) return;
+      onViewportMouseDown(e);
+    }
+
     onMounted(() => {
       render();
       pollTimer = window.setInterval(render, POLL_INTERVAL);
@@ -231,6 +296,6 @@ export default defineComponent({
       }
     });
 
-    return { visible, items, viewportStyle, hoveredIndex, onTermClick, onTermEnter, onTermLeave };
+    return { visible, items, viewportStyle, hoveredIndex, onTermClick, onTermEnter, onTermLeave, onViewportMouseDown, onMinimapMouseDown };
   },
 });

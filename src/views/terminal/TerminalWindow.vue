@@ -4,6 +4,7 @@
     ref="rootRef"
     :class="containerClasses"
     :style="containerStyle"
+    @mouseenter="onActivate"
     @mousedown="onActivate"
   >
     <div class="title-bar" @mousedown.prevent="startDrag">

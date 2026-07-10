@@ -75,6 +75,41 @@
   color: var(--text-muted);
 }
 
+/* ===== 仓库地址配置 ===== */
+.market-repo-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.market-repo-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+}
+.market-repo-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.market-repo-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+.market-repo-input::placeholder {
+  color: var(--text-muted);
+}
+
 /* ===== 筛选 chip ===== */
 .market-filter {
   display: flex;

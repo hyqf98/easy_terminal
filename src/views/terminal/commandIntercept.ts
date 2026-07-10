@@ -1,5 +1,6 @@
 import type { SSHProfile } from '../../types';
 import { parseCommandLine } from '../../utils/shellParse';
+import { resolvePath } from '../../utils/path';
 import { invoke } from '@tauri-apps/api/core';
 
 const PREVIEW_COMMANDS = new Set(['cat', 'type', 'more', 'less', 'bat', 'vim', 'nvim', 'vi']);
@@ -94,24 +95,8 @@ export function buildSshPasswordSequence(profile: SSHProfile, profiles: SSHProfi
   return queue;
 }
 
-function resolvePath(cwd: string, input: string): string {
-  if (isAbsolutePath(input)) return normalizeSlashes(input);
-  const base = normalizeSlashes(cwd || '');
-  if (!base) return normalizeSlashes(input);
-  const separator = /[A-Za-z]:\//.test(base) ? '/' : '/';
-  return normalizeSlashes(`${base.replace(/[\\/]+$/, '')}${separator}${input}`);
-}
-
-function isAbsolutePath(value: string): boolean {
-  return /^[a-zA-Z]:[\\/]/.test(value) || value.startsWith('/') || value.startsWith('\\\\');
-}
-
 function isRemoteTarget(value: string): boolean {
   return /^[\w.-]+@[\w.-]+:/.test(value);
-}
-
-function normalizeSlashes(value: string): string {
-  return value.replace(/\\/g, '/');
 }
 
 function resolveJumpChain(profile: SSHProfile, profiles: SSHProfile[]): string[] {

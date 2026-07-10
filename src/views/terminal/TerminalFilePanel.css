@@ -64,105 +64,57 @@
   background: color-mix(in srgb, var(--term-bg) 90%, var(--surface-muted));
 }
 
-.terminal-file-panel :deep(.fav-cards-row) {
-  display: flex;
-  gap: 4px;
-  padding: 7px 34px 7px 8px;
-  background: transparent;
-  scrollbar-width: none;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-.terminal-file-panel :deep(.fav-cards-shell.has-prev .fav-cards-row) {
-  padding-left: 34px;
-}
-.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar) {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-}
-.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-track) {
-  background: var(--term-bg) !important;
-}
-.terminal-file-panel :deep(.fav-cards-row::-webkit-scrollbar-corner) {
-  background: var(--term-bg) !important;
-}
-
-.terminal-file-panel :deep(.fav-scroll-btn) {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border-color: color-mix(in srgb, var(--border) 38%, transparent);
-  background: color-mix(in srgb, var(--term-bg) 78%, var(--surface));
-  color: var(--text-muted);
-}
-
-.terminal-file-panel :deep(.fav-scroll-prev) {
-  left: 6px;
-}
-
-.terminal-file-panel :deep(.fav-scroll-next) {
-  right: 6px;
-}
-
-.terminal-file-panel :deep(.fav-scroll-prev::before) {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted)) 48%, transparent);
-}
-
-.terminal-file-panel :deep(.fav-scroll-next::before) {
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--term-bg) 86%, var(--surface-muted)) 48%);
-}
-
-.terminal-file-panel :deep(.fav-scroll-btn:hover:not(:disabled)) {
-  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--term-bg));
-  color: var(--accent);
-}
-
+/* 收藏卡片：正方形，图标在上名称在下（覆盖 FileTree 默认样式适配终端面板） */
 .terminal-file-panel :deep(.fav-card) {
-  min-width: 74px;
-  max-width: 128px;
-  height: 26px;
-  flex-direction: row;
-  justify-content: flex-start;
+  aspect-ratio: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 0 7px;
-  border-radius: 5px;
-  background: transparent;
-  border: 1px solid transparent;
+  padding: 8px 4px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 6%, var(--surface)));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
   box-shadow: none;
   transform: none;
+  min-width: 0;
+  max-width: none;
+  height: auto;
 }
 
 .terminal-file-panel :deep(.fav-card:hover) {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, var(--term-bg));
-  box-shadow: none;
-  transform: none;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
 }
 
 .terminal-file-panel :deep(.fav-card-icon) {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  background: transparent;
-  opacity: 0.9;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  opacity: 1;
 }
 
 .terminal-file-panel :deep(.fav-card-icon svg) {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 .terminal-file-panel :deep(.fav-card-name) {
-  flex: 1;
-  min-width: 0;
-  max-width: none;
-  text-align: left;
+  text-align: center;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-sub);
-  letter-spacing: 0;
+  flex: none;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
 }
 
 .terminal-file-panel :deep(.tree-search-row) {
@@ -255,14 +207,22 @@
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border)) !important;
 }
 
-.terminal-file-panel :deep(.tree-list) {
-  padding: 8px 6px 10px;
-  background: var(--term-bg);
-  min-height: 0;
-}
-
+/* tree-list 占满剩余空间并在内部滚动（收藏夹展开时文件列表自动收缩+滚动） */
 .terminal-file-panel :deep(.tree-list-shell) {
   background: var(--term-bg);
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow: hidden;
+}
+.terminal-file-panel :deep(.tree-list) {
+  /* 隐藏原生滚动条：使用自定义 .tree-scrollbar-thumb 浮层替代 */
+  scrollbar-width: none;
+  background: var(--term-bg) !important;
+}
+.terminal-file-panel :deep(.tree-list::-webkit-scrollbar) {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 .terminal-file-panel :deep(.tree-scrollbar-track) {
@@ -308,15 +268,4 @@
 /* 嵌入时隐藏 FileTree 自带的右侧列宽手柄（宽度改由面板左下角手柄控制） */
 .terminal-file-panel :deep(.files-resizer) {
   display: none !important;
-}
-
-/* 滚动条与主题一致 */
-.terminal-file-panel :deep(.tree-list) {
-  scrollbar-width: none;
-  background: var(--term-bg) !important;
-}
-.terminal-file-panel :deep(.tree-list::-webkit-scrollbar) {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
 }

@@ -282,8 +282,8 @@
   height: 36px;
   border: none;
   border-radius: 0 6px 6px 0;
-  background: var(--surface);
-  color: var(--text-muted);
+  background: var(--craft-surface-muted, var(--surface-muted));
+  color: var(--text-sub);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -306,7 +306,7 @@
 /* hover：把手宽度展开，露出箭头 */
 .terminal-window .terminal-file-tab:hover {
   width: 20px;
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 14%, var(--craft-surface-muted, var(--surface-muted)));
   color: var(--accent);
 }
 .terminal-window .terminal-file-tab:hover svg {
@@ -316,8 +316,8 @@
 /* 面板已展开：只保持常驻宽度与箭头方向，颜色与收起态一致 */
 .terminal-window .terminal-file-tab.expanded {
   width: 20px;
-  background: var(--surface);
-  color: var(--text-muted);
+  background: var(--craft-surface-muted, var(--surface-muted));
+  color: var(--text-sub);
 }
 .terminal-window .terminal-file-tab.expanded svg {
   width: 12px;
@@ -327,7 +327,7 @@
   transform: translateY(calc(-50% - 14px));
 }
 .terminal-window .terminal-file-tab.expanded:hover {
-  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  background: color-mix(in srgb, var(--accent) 14%, var(--craft-surface-muted, var(--surface-muted)));
   color: var(--accent);
 }
 

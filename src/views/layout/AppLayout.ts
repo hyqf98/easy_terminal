@@ -9,12 +9,10 @@ import Titlebar from '../titlebar/Titlebar.vue';
 import Dock from '../../components/Dock.vue';
 import CanvasMinimap from '../canvas/CanvasMinimap.vue';
 import TerminalModal from '../../components/modals/TerminalModal.vue';
-import FileTree from '../filetree/FileTree.vue';
 import PreviewPanel from '../preview/PreviewPanel.vue';
 import CommandConfigPanel from '../command/CommandConfigPanel.vue';
 import CommandMarketPanel from '../command/CommandMarketPanel.vue';
 import HistoryPanel from '../history/HistoryPanel.vue';
-import MappingPanel from '../mapping/MappingPanel.vue';
 import SshPanel from '../ssh/SshPanel.vue';
 import ShortcutPanel from '../shortcut/ShortcutPanel.vue';
 import SettingsPanel from '../settings/SettingsPanel.vue';
@@ -27,7 +25,7 @@ import type { SSHProfile, TerminalLaunchOptions, WorkspaceState, SnapTarget, Rec
 import type { IFileOperationStrategy } from '../filetree/strategies/FileOperationStrategy';
 import { Perf } from '../../utils/perf';
 
-type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'mappings' | 'ssh' | 'shortcuts' | 'settings';
+type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'ssh' | 'shortcuts' | 'settings';
 
 interface TerminalEntry {
   id: string;
@@ -46,7 +44,6 @@ const SHORTCUT_VIEW_MAP: Record<string, ViewId> = {
   'sidebar.files': 'files',
   'sidebar.commands': 'commands',
   'sidebar.history': 'history',
-  'sidebar.mappings': 'mappings',
   'sidebar.ssh': 'ssh',
   'sidebar.shortcuts': 'shortcuts',
   'sidebar.settings': 'settings',
@@ -58,15 +55,14 @@ export default defineComponent({
   name: 'AppLayout',
   components: {
     Titlebar, Dock, CanvasMinimap, TerminalModal,
-    FileTree, PreviewPanel, CommandConfigPanel, CommandMarketPanel,
-    HistoryPanel, MappingPanel, SshPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel,
+    PreviewPanel, CommandConfigPanel, CommandMarketPanel,
+    HistoryPanel, SshPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel,
   },
   setup() {
     useAppMessage();
     useAppDialog();
     const { setTheme: setCraftTheme } = useCraftTheme();
 
-    const fileTreeRef = ref<InstanceType<typeof FileTree> | null>(null);
     const settingsRef = ref<InstanceType<typeof SettingsPanel> | null>(null);
     const sshPanelRef = ref<InstanceType<typeof SshPanel> | null>(null);
     const marketRef = ref<InstanceType<typeof CommandMarketPanel> | null>(null);
@@ -74,8 +70,6 @@ export default defineComponent({
     const canvasRef = ref<HTMLDivElement | null>(null);
 
     const activeView = ref<ViewId>('canvas');
-    // 文件树浮层显隐：点击 Dock「文件」即切换，始终叠加在画布之上
-    const filesPanelVisible = ref(false);
     // 当前预览文件路径：非空则弹出右侧 PreviewPanel
     const previewPath = ref('');
     const showHint = ref(true);
@@ -134,8 +128,6 @@ export default defineComponent({
 
     function onViewChange(view: string) {
       const next = view as ViewId;
-      // 切换视图前关闭文件树浮层（文件树浮层仅由画布左边缘 toggle 控制）
-      filesPanelVisible.value = false;
       activeView.value = next;
       if (next === 'market' && marketRef.value) {
         // @ts-expect-error exposed component method
@@ -165,7 +157,24 @@ export default defineComponent({
       terminals.value.push(entry);
       activeTerminalId.value = id;
       showHint.value = false;
+      // 首个终端创建后：智能调整视口缩放让终端以合理大小居中显示
+      // 避免在极小 zoom 下终端内容看不清（非框选入口：Dock新建、SSH连接等）
+      if (terminals.value.length === 1) {
+        void nextTick(() => fitTerminalToViewport(x, y, w, h));
+      }
       return id;
+    }
+
+    /** 调整画布视口让指定终端以约 70% 占比居中显示 */
+    function fitTerminalToViewport(x: number, y: number, w: number, h: number) {
+      const vp = viewportRef.value;
+      if (!vp || !canvas) return;
+      const targetZoomW = (vp.clientWidth * 0.7) / w;
+      const targetZoomH = (vp.clientHeight * 0.7) / h;
+      const targetZoom = Math.min(targetZoomW, targetZoomH, 1.5);
+      const panX = vp.clientWidth / 2 - (x + w / 2) * targetZoom;
+      const panY = vp.clientHeight / 2 - (y + h / 2) * targetZoom;
+      canvas.setState({ panX, panY, zoom: targetZoom });
     }
 
     // 在指定位置创建 SSH 终端（复用 SSH 启动命令与密码序列逻辑）
@@ -265,13 +274,13 @@ export default defineComponent({
 
     /** 文件面板宽度（可拖拽调整，localStorage 持久化） */
     const FILEPANEL_WIDTH_KEY = 'easy_terminal_filepanel_width';
-    const FILEPANEL_MIN = 240;
-    const FILEPANEL_MAX = 520;
+    const FILEPANEL_MIN = 200;
+    const FILEPANEL_MAX = 480;
     const UNIFIED_TITLEBAR_H = 28;
     const filePanelWidth = ref<number>((() => {
       const raw = localStorage.getItem(FILEPANEL_WIDTH_KEY);
       const n = raw ? parseInt(raw, 10) : NaN;
-      return Number.isFinite(n) && n >= FILEPANEL_MIN && n <= FILEPANEL_MAX ? n : 280;
+      return Number.isFinite(n) && n >= FILEPANEL_MIN && n <= FILEPANEL_MAX ? n : 220;
     })());
 
     function getUnifiedRect(term: TerminalEntry): Rect {
@@ -415,32 +424,6 @@ export default defineComponent({
       if (terminalId === activeTerminalId.value) activeTerminalCwd.value = cwd;
     }
 
-    // 定位当前终端工作目录：仅对本地终端生效（远程 CWD 不适用于本地面板）
-    function onLocateCwd() {
-      const entry = terminals.value.find((t) => t.id === activeTerminalId.value);
-      const isLocal = !entry || entry.launchOptions.mode !== 'ssh';
-      if (isLocal && activeTerminalCwd.value) {
-        // @ts-expect-error exposed component method
-        fileTreeRef.value?.locateToCwd?.(activeTerminalCwd.value);
-      }
-    }
-
-    // 在当前激活终端执行 cd 到指定目录（通过 ref 写入 PTY）
-    function onCdTo(path: string) {
-      const term = terminalInstanceMap.get(activeTerminalId.value);
-      term?.writeToTerminal?.(`cd "${path}"\n`);
-    }
-
-    /** FileTree 就绪回调：底部面板固定本地策略，无需随终端切换 */
-    function onFileTreeReady() {
-      // 底部文件管理固定为本地浏览，不随 SSH 终端切换策略
-    }
-
-    /** FileTree 策略变更回调：更新 PreviewPanel 的 strategy prop */
-    function onStrategyChange(strategy: IFileOperationStrategy | null) {
-      currentFileStrategy.value = strategy;
-    }
-
     async function onSshConnect(profile: SSHProfile, _profiles: SSHProfile[]) {
       activeView.value = 'canvas';
       createSshTerminal(profile, { x: 80, y: 80, w: 700, h: 450 });
@@ -448,8 +431,6 @@ export default defineComponent({
 
     function onSshProfilesChange(profiles: SSHProfile[]) {
       sshProfiles.value = profiles;
-      // @ts-expect-error exposed component method
-      fileTreeRef.value?.setSshProfiles?.(profiles);
     }
 
     function onSshSelectionChange(_profile: SSHProfile | null, _profiles: SSHProfile[]) { /* track */ }
@@ -613,6 +594,11 @@ export default defineComponent({
       };
       canvas.onTerminalCreate = (x, y, w, h) => {
         createTerminal(x, y, w, h);
+        // 首个终端创建后：智能调整 zoom 让终端在视口中以合理大小居中显示
+        // 保持框选尺寸不变，只调整视口缩放——避免极小 zoom 下终端内容看不清
+        if (terminals.value.length === 1) {
+          void nextTick(() => fitTerminalToViewport(x, y, w, h));
+        }
       };
       canvas.onCanvasContextMenu = (cvs, clientX, clientY) => {
         const items: Array<{ label: string; action: () => void }> = [];
@@ -651,6 +637,14 @@ export default defineComponent({
           event.stopPropagation();
           createTerminal(entry.x + 30, entry.y + 30, entry.w, entry.h, { ...entry.launchOptions });
           showMessage(t('terminal.copied'), 'success');
+          return;
+        }
+
+        // Delete 键：关闭当前激活的终端
+        if (event.key === 'Delete' && activeTerminalId.value) {
+          event.preventDefault();
+          event.stopPropagation();
+          onTerminalClose(activeTerminalId.value);
           return;
         }
 
@@ -729,7 +723,6 @@ export default defineComponent({
         { id: 'commands', label: '命令库', icon: '<path d="M4 4h6v16H4z"/><path d="M10 4h4v16h-4z"/><path d="M14 4l6 1-3 15-6-1z"/>' },
         { id: 'market', label: '命令市场', icon: '<path d="M3 9l1.5-5h15L21 9"/><path d="M3 9v11h18V9"/>' },
         { id: 'history', label: '历史命令', icon: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>' },
-        { id: 'mappings', label: '命令映射', icon: '<path d="M7 8l-4 4 4 4"/><path d="M17 8l4 4-4 4"/>' },
         { id: 'ssh', label: 'SSH 连接', icon: '<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>' },
         { id: 'shortcuts', label: '快捷键', icon: '<rect x="3" y="6" width="18" height="12" rx="2"/>' },
         { id: 'settings', label: '设置', icon: '<circle cx="12" cy="12" r="3"/>' },
@@ -767,16 +760,16 @@ export default defineComponent({
     }
 
     return {
-      fileTreeRef, settingsRef, sshPanelRef, marketRef,
+      settingsRef, sshPanelRef, marketRef,
       viewportRef, canvasRef,
-      activeView, filesPanelVisible, previewPath, showHint, hintLabel, canvasHintLabel, newTerminalLabel, filesPlaceholderLabel,
+      activeView, previewPath, showHint, hintLabel, canvasHintLabel, newTerminalLabel, filesPlaceholderLabel,
       terminals, activeTerminalId, activeTerminalCwd, setTerminalRef,
       onMinimize, onMaximize, onClose, onViewChange,
       onToolbarNewTerminal, onToolbarResetView, openTerminalModal,
       terminalModalOpen,
       onTerminalActivate, onTerminalClose,
       onTerminalInteractionStart, onTerminalInteractionEnd,
-      onCommandExecuted, onOpenTerminalAt, onTerminalPanelPreview, onLocateCwd, onCdTo, onFileTreeReady, onStrategyChange, onSshConnect,
+      onCommandExecuted, onOpenTerminalAt, onTerminalPanelPreview, onSshConnect,
       onSshProfilesChange, onSshSelectionChange, onThemeChange,
       onCommandsChanged, onSendCommand, onSwitchSsh,
       onToggleFilePanel, onPanelCdTo, onTerminalRectChange, onTerminalCwdChange, terminalCwds,

@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::path_util;
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
@@ -15,6 +17,12 @@ pub struct AppSettings {
     pub restore_session: bool,
     #[serde(default)]
     pub last_update_check: String,
+    #[serde(default = "default_market_repo_url")]
+    pub market_repo_url: String,
+}
+
+fn default_market_repo_url() -> String {
+    "https://github.com/hyqf98/easy_terminal".to_string()
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -70,18 +78,40 @@ impl Default for AppSettings {
             auto_check_update: default_auto_check_update(),
             restore_session: default_restore_session(),
             last_update_check: String::new(),
+            market_repo_url: default_market_repo_url(),
         }
     }
 }
 
 fn settings_path() -> Result<PathBuf, String> {
-    let base = dirs::config_dir().ok_or("Cannot determine config directory")?;
-    let dir = base.join("easy-terminal");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("settings.json"))
+    Ok(path_util::app_data_dir()?.join("settings.json"))
+}
+
+/// 从旧版存储位置迁移 settings.json。
+///
+/// 旧版将 settings.json 存放在 `dirs::config_dir()/easy-terminal/`（如 macOS 的
+/// `~/Library/Application Support/easy-terminal/`），与其他数据在 `~/.easy-terminal/`
+/// 不一致。此函数在加载前检查旧路径，若新路径不存在则自动迁移。
+fn migrate_legacy_settings() {
+    let new_path = match settings_path() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    if new_path.exists() {
+        return;
+    }
+
+    let legacy_path = match dirs::config_dir() {
+        Some(base) => base.join("easy-terminal").join("settings.json"),
+        None => return,
+    };
+    if legacy_path.exists() {
+        let _ = fs::rename(&legacy_path, &new_path);
+    }
 }
 
 pub fn load_settings() -> Result<AppSettings, String> {
+    migrate_legacy_settings();
     let path = settings_path()?;
     if !path.exists() {
         return Ok(AppSettings::default());
@@ -157,17 +187,11 @@ pub struct WorkspaceState {
 }
 
 fn terminal_state_path() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let dir = home.join(".easy-terminal");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("terminals.json"))
+    Ok(path_util::app_data_dir()?.join("terminals.json"))
 }
 
 fn app_state_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let dir = home.join(".easy-terminal");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir)
+    path_util::app_data_dir()
 }
 
 fn workspace_state_path() -> Result<PathBuf, String> {

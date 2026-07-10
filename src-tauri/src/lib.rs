@@ -1,6 +1,7 @@
 mod commands;
 mod db;
 mod fs;
+mod path_util;
 mod pty;
 mod settings;
 mod shell_setup;
@@ -296,6 +297,14 @@ fn create_pty(
     rows: u16,
     cwd: Option<String>,
 ) -> Result<String, String> {
+    // 在 Unix 上自动确保语法高亮和自动建议插件已安装（幂等，已安装则仅做文件存在检查）。
+    // 在锁定 PTY 互斥锁之前执行，避免阻塞其他终端的读写操作。
+    // 安装失败不阻塞终端创建 —— .zshrc 会在运行时检测插件是否存在，缺失则跳过 source。
+    if !cfg!(target_os = "windows") {
+        let _ = shell_setup::ensure_zsh_syntax_highlighting();
+        let _ = shell_setup::ensure_zsh_autosuggestions();
+    }
+
     let mut manager = state.pty_manager.lock().map_err(|e| e.to_string())?;
     manager.create(app_handle, cols, rows, cwd)
 }

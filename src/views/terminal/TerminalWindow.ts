@@ -10,6 +10,7 @@ import { t, onLangChange } from '../../i18n';
 import { getTerminalThemeStrategy } from './strategies/terminalIndex';
 import { CommandIntelligence } from './commandIntelligence';
 import { Perf } from '../../utils/perf';
+import { normalizeTitleCwd } from '../../utils/path';
 import type { TerminalLaunchOptions, SuggestionItem, Rect, SnapOptions } from '../../types';
 import type { SSHProfile } from '../../types/ssh';
 
@@ -37,22 +38,7 @@ async function ensureIntel(): Promise<CommandIntelligence> {
 // Regex to detect Shift/Ctrl/Alt modified arrow key sequences: \x1b[1;2D, \x1b[1;5C, etc.
 const MODIFIED_ARROW_RE = /^\x1b\[1;\d+[ABCD]$/;
 
-function normalizeTitleCwd(title: string): string {
-  const trimmed = title.trim();
-  if (!trimmed) return '';
-  const promptMatch = trimmed.match(/^[^@\s:]+@[^:\s]+:(.+)$/);
-  const candidate = (promptMatch ? promptMatch[1] : trimmed).trim();
-  if (
-    candidate === '~' ||
-    candidate.startsWith('~/') ||
-    candidate.startsWith('/') ||
-    /^[A-Za-z]:[\\/]/.test(candidate) ||
-    candidate.startsWith('\\\\')
-  ) {
-    return candidate;
-  }
-  return '';
-}
+// normalizeTitleCwd 已抽取到 utils/path.ts
 
 export default defineComponent({
   name: 'TerminalWindow',
@@ -157,6 +143,9 @@ export default defineComponent({
     let unlisten: UnlistenFn | null = null;
     let unlistenLang: (() => void) | null = null;
     let sessionId = '';
+    // IME 组合输入状态：composition 期间禁止退格等编辑键干扰，结束后短暂锁定等 shell 回显
+    let imeComposing = false;
+    let imeJustFinished = 0;
     let disposed = false;
     // 监听 data-theme 属性变化，联动重应用 xterm 主题
     let themeObserver: MutationObserver | null = null;
@@ -173,6 +162,8 @@ export default defineComponent({
     // 终端字体实时变化监听句柄
     let onTermFontSizeChange: (() => void) | null = null;
     let onTermFontFamilyChange: (() => void) | null = null;
+    // 设置面板标志变化监听句柄（命令补全 / Ghost Text 等开关）
+    let onTermFlagsChange: (() => void) | null = null;
     let lastSuggestMouseX = Number.NaN;
     let lastSuggestMouseY = Number.NaN;
 
@@ -238,6 +229,26 @@ export default defineComponent({
       return '"JetBrainsMono Nerd Font", "JetBrains Mono", "Cascadia Code", "Fira Code", Consolas, monospace';
     }
 
+    // 从 localStorage 读取本地偏好标志（与 SettingsPanel 的 FLAGS_STORAGE_KEY 一致）
+    function getLocalFlags() {
+      const fallback = {
+        commandSuggest: true,
+        ghostText: true,
+        alignGuides: true,
+        autoInstall: false,
+        uiFontFamily: 'Manrope',
+        termFontFamily: 'JetBrains Mono Nerd Font',
+        radiusStyle: '8',
+      };
+      try {
+        const raw = localStorage.getItem('et:settings:flags');
+        if (!raw) return fallback;
+        return { ...fallback, ...JSON.parse(raw) };
+      } catch {
+        return fallback;
+      }
+    }
+
     function resetLineTracking() {
       currentLine = '';
       cursorPos = 0;
@@ -254,6 +265,12 @@ export default defineComponent({
 
     // 根据当前输入行向命令智能引擎查询并刷新补全建议列表
     async function updateSuggestions(input: string) {
+      // 设置中关闭了命令智能补全时不显示建议弹窗
+      if (!getLocalFlags().commandSuggest) {
+        suggestVisible.value = false;
+        suggestItems.value = [];
+        return;
+      }
       const intel = getCommandIntel();
       const trimmed = input.trimStart();
       if (!intel || !trimmed || trimmed.length < 1) {
@@ -282,59 +299,87 @@ export default defineComponent({
     }
 
     // 补全弹窗已 Teleport 到 document.body 并使用 position:fixed。
-    // 因此定位基于终端根元素在屏幕上的矩形（getBoundingClientRect）+ 光标像素偏移，再按视口边界兜底。
+    // 定位基于 .xterm-screen 渲染画布的屏幕矩形 + xterm 渲染器单元格尺寸，
+    // 自动计入标题栏高度与 body padding，再按视口边界兜底。
     function updateSuggestPosition() {
-      const fallback = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
       if (!term || disposed) {
-        suggestStyle.value = fallback;
+        suggestStyle.value = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
         return;
       }
 
       const rootRect = rootRef.value?.getBoundingClientRect();
       if (!rootRect) {
-        suggestStyle.value = fallback;
+        suggestStyle.value = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
         return;
       }
 
       const buf = term.buffer.active;
       const cursorY = buf.cursorY;
       const cursorX = buf.cursorX;
-      const bodyH = bodyRef.value?.clientHeight ?? rectState.value.h - 38;
-      const bodyW = bodyRef.value?.clientWidth ?? rectState.value.w;
 
-      const cellW = (bodyW / term.cols) || 9;
-      const cellH = (bodyH / term.rows) || 18;
-      const titleBarH = 38;
+      // 从 xterm 内部渲染器获取精确的单元格尺寸（与 handleCursorClick 一致）
+      const core = (term as any)._core;
+      let cellW: number;
+      let cellH: number;
+      if (core?._renderService?.dimensions?.css?.cell) {
+        const dims = core._renderService.dimensions.css.cell;
+        cellW = dims.width;
+        cellH = dims.height;
+      } else {
+        // 兜底：用 body 尺寸粗估（含 padding，精度较低）
+        const bodyH = bodyRef.value?.clientHeight ?? rectState.value.h - UNIFIED_TITLEBAR_H;
+        const bodyW = bodyRef.value?.clientWidth ?? rectState.value.w;
+        cellW = (bodyW / term.cols) || 9;
+        cellH = (bodyH / term.rows) || 18;
+      }
+
+      // .xterm-screen 是实际渲染画布，与单元格 1:1 映射。
+      // 使用其 getBoundingClientRect 可自动计入标题栏高度与 body padding，无需手动估算。
+      const screenEl = bodyRef.value?.querySelector('.xterm-screen') as HTMLElement | null;
+      const screenRect = screenEl?.getBoundingClientRect() ?? null;
+
+      // 光标行在屏幕坐标系中的上沿与下沿（弹窗应出现在下沿以下）
+      let cursorTopScreenY: number;
+      let cursorBottomScreenY: number;
+      let cursorScreenX: number;
+
+      if (screenRect) {
+        // 精确路径：.xterm-screen rect + 渲染器单元格尺寸
+        cursorTopScreenY = screenRect.top + cursorY * cellH;
+        cursorBottomScreenY = screenRect.top + (cursorY + 1) * cellH;
+        cursorScreenX = screenRect.left + cursorX * cellW;
+      } else {
+        // 兜底路径：rootRect + 标题栏高度 + body padding 估算
+        const titleBarH = props.filePanelOpen ? 0 : UNIFIED_TITLEBAR_H;
+        const bodyPadTop = 10;   // .terminal-body { padding: 10px 12px }
+        const bodyPadLeft = 12;
+        cursorTopScreenY = rootRect.top + titleBarH + bodyPadTop + cursorY * cellH;
+        cursorBottomScreenY = rootRect.top + titleBarH + bodyPadTop + (cursorY + 1) * cellH;
+        cursorScreenX = rootRect.left + bodyPadLeft + cursorX * cellW;
+      }
+
       const maxListH = 232;
       const popupChromeH = 54;
       const popupMaxW = 340;
-
-      // 光标在终端内的像素偏移 → 转换为屏幕坐标（fixed 定位基准）
-      const cursorPxX = cursorX * cellW;
-      const cursorPxY = titleBarH + (cursorY + 1) * cellH;
-      const screenX = rootRect.left + cursorPxX;
-      const screenY = rootRect.top + cursorPxY;
-
       const vw = window.innerWidth;
       const vh = window.innerHeight;
 
       // 水平：贴光标列，右溢出回缩，左边界兜底
-      let left = screenX;
+      let left = cursorScreenX;
       if (left + popupMaxW > vw - 8) left = Math.max(8, vw - 8 - popupMaxW);
 
-      // 垂直：默认落在光标下方；下方空间不足且上方足够时翻转到光标上方
-      const spaceBelow = vh - screenY;
-      const spaceAbove = cursorPxY - titleBarH; // 光标行以上在终端内的可用像素
+      // 垂直：默认落在光标行下方；下方空间不足且上方足够时翻转到光标上方
+      const spaceBelow = vh - cursorBottomScreenY;
+      const spaceAbove = cursorTopScreenY - rootRect.top; // 从终端根元素顶部到光标行上沿
       let top: number;
       let clampedMaxH: number;
       if (spaceBelow < maxListH + popupChromeH + 10 && spaceAbove > maxListH) {
         // 翻转到上方：弹窗底边贴近光标行上沿
-        const cursorLineTopScreenY = rootRect.top + titleBarH + cursorY * cellH;
-        top = cursorLineTopScreenY - cellH * 0.3 - maxListH - popupChromeH;
-        top = Math.max(8, top);
-        clampedMaxH = Math.min(maxListH, spaceAbove - popupChromeH - 6);
+        top = Math.max(8, cursorTopScreenY - maxListH - popupChromeH);
+        clampedMaxH = Math.min(maxListH, Math.max(0, spaceAbove - popupChromeH - 6));
       } else {
-        top = screenY;
+        // 下方：弹窗顶边贴光标行下沿
+        top = cursorBottomScreenY;
         clampedMaxH = Math.min(maxListH, Math.max(0, spaceBelow - popupChromeH - 6));
       }
 
@@ -437,6 +482,17 @@ export default defineComponent({
 
       fitAddon.fit();
 
+      // 监听 IME 组合输入状态：composition 期间标记，结束后短暂锁定退格等编辑键
+      // 避免 shell 回显中文前退格先到 PTY 导致"最后一个字符删不掉"
+      const imeTextarea = bodyRef.value.querySelector('.xterm-helper-textarea') as HTMLElement | null;
+      if (imeTextarea) {
+        imeTextarea.addEventListener('compositionstart', () => { imeComposing = true; });
+        imeTextarea.addEventListener('compositionend', () => {
+          imeComposing = false;
+          imeJustFinished = Date.now();
+        });
+      }
+
       let cols = term.cols;
       let rows = term.rows;
       if (!cols || cols <= 0 || !Number.isFinite(cols)) cols = 80;
@@ -477,6 +533,15 @@ export default defineComponent({
         }
       });
 
+      // 选中空白内容时自动清除选择：终端空白区域是空格字符填充的单元格，
+      // 框选时会选中空格，这里在选中内容全为空白时清空，避免"选中了空内容"
+      term.onSelectionChange(() => {
+        const sel = term?.getSelection();
+        if (sel && sel.trim().length === 0) {
+          term?.clearSelection();
+        }
+      });
+
       // Forward terminal input to PTY and track for suggestions
       term.onData((data) => {
         if (!sessionId || disposed) return;
@@ -500,6 +565,25 @@ export default defineComponent({
               return;
             }
           }
+          // Placeholder jump: Enter advances to next placeholder;
+          // on the last placeholder, Enter executes the command
+          if (activePlaceholders.length > 0 && currentPlaceholderIdx >= 0) {
+            const isLast = currentPlaceholderIdx >= activePlaceholders.length - 1;
+            if (!isLast) {
+              jumpToNextPlaceholder();
+              return;
+            }
+            // Last placeholder — delete remaining placeholder text if still present,
+            // then execute the command
+            const lastPh = activePlaceholders[currentPlaceholderIdx];
+            const phText = currentLine.slice(lastPh.position, lastPh.position + lastPh.length);
+            if (/^<[^>]*>$|^\[%s[^\]]*\]$|^\{[^}]*\}$/.test(phText)) {
+              // Delete the placeholder text via forward-delete
+              const deleteSeq = '\x1b[3~'.repeat(lastPh.length);
+              void invoke('write_pty', { sessionId, data: deleteSeq });
+              currentLine = currentLine.slice(0, lastPh.position) + currentLine.slice(lastPh.position + lastPh.length);
+            }
+          }
           const command = currentLine.trim();
           resetLineTracking();
           suggestVisible.value = false;
@@ -508,9 +592,23 @@ export default defineComponent({
           }
           void invoke('write_pty', { sessionId, data });
         } else if (data === '\x7f' || data === '\b') {
+          // IME 组合输入中或刚结束（50ms 内）时丢弃退格：
+          // composition 期间退格会被 IME 拦截用于取消候选词，
+          // composition 刚结束时 shell 可能还没回显完中文，提前退格会导致"最后一个字符删不掉"
+          if (imeComposing || (imeJustFinished && Date.now() - imeJustFinished < 50)) {
+            return;
+          }
           if (cursorPos > 0) {
             currentLine = currentLine.slice(0, cursorPos - 1) + currentLine.slice(cursorPos);
             cursorPos--;
+            // Update placeholder positions: shift back placeholders after the deleted char
+            if (activePlaceholders.length > 0) {
+              for (const ph of activePlaceholders) {
+                if (ph.position >= cursorPos) {
+                  ph.position -= 1;
+                }
+              }
+            }
           }
           onInputChanged(currentLine);
           void invoke('write_pty', { sessionId, data });
@@ -561,6 +659,30 @@ export default defineComponent({
         } else if (data.length === 1 && data >= ' ') {
           currentLine = currentLine.slice(0, cursorPos) + data + currentLine.slice(cursorPos);
           cursorPos++;
+          // Update placeholder positions: shift all placeholders at or after cursorPos
+          if (activePlaceholders.length > 0) {
+            for (const ph of activePlaceholders) {
+              if (ph.position >= cursorPos - 1) {
+                ph.position += data.length;
+              }
+            }
+          }
+          onInputChanged(currentLine);
+          void invoke('write_pty', { sessionId, data });
+        } else if (data.length > 1 && !data.startsWith('\x1b') && !data.includes('\r') && !data.includes('\n') && !data.includes('\x7f') && !data.includes('\b')) {
+          // IME 输入（中文/日文等）：onData 收到的是完整输入文本（多字符），
+          // 需要整体插入 currentLine 并更新 cursorPos，否则后续删除会错位。
+          // 排除含控制字符的多字符数据（如粘贴多行文本），交给下方 else 透传
+          currentLine = currentLine.slice(0, cursorPos) + data + currentLine.slice(cursorPos);
+          cursorPos += data.length;
+          // Update placeholder positions for multi-char input
+          if (activePlaceholders.length > 0) {
+            for (const ph of activePlaceholders) {
+              if (ph.position >= cursorPos - data.length) {
+                ph.position += data.length;
+              }
+            }
+          }
           onInputChanged(currentLine);
           void invoke('write_pty', { sessionId, data });
         } else if (data === '\x1b[H' || data === '\x1b[1~') {
@@ -692,15 +814,52 @@ export default defineComponent({
 
     function jumpToNextPlaceholder() {
       if (activePlaceholders.length === 0 || currentPlaceholderIdx < 0 || !sessionId || disposed) return;
-      const nextIdx = (currentPlaceholderIdx + 1) % activePlaceholders.length;
+
+      const currentPh = activePlaceholders[currentPlaceholderIdx];
+      const nextIdx = currentPlaceholderIdx + 1;
+      
+      if (nextIdx >= activePlaceholders.length) {
+        // Already on the last placeholder — don't jump, let Enter execute
+        return;
+      }
+
       const target = activePlaceholders[nextIdx];
+
+      // If the current placeholder text is still present (not yet replaced by user input),
+      // delete it so it doesn't remain in the command line.
+      if (currentPh) {
+        const placeholderText = currentLine.slice(currentPh.position, currentPh.position + currentPh.length);
+        if (/^<[^>]*>$|^\[%s[^\]]*\]$|^\{[^}]*\}$/.test(placeholderText)) {
+          // Move cursor to the start of the placeholder if not already there
+          if (cursorPos !== currentPh.position) {
+            const diff = cursorPos - currentPh.position;
+            if (diff > 0) {
+              cursorPos = currentPh.position;
+              void invoke('write_pty', { sessionId, data: '\x1b[D'.repeat(diff) });
+            } else {
+              cursorPos = currentPh.position;
+              void invoke('write_pty', { sessionId, data: '\x1b[C'.repeat(-diff) });
+            }
+          }
+          // Delete the placeholder text using forward-delete (\x1b[3~)
+          const deleteSeq = '\x1b[3~'.repeat(currentPh.length);
+          void invoke('write_pty', { sessionId, data: deleteSeq });
+          // Update currentLine: remove the placeholder text
+          currentLine = currentLine.slice(0, currentPh.position) + currentLine.slice(currentPh.position + currentPh.length);
+          // Update subsequent placeholder positions
+          for (let i = nextIdx; i < activePlaceholders.length; i++) {
+            activePlaceholders[i].position -= currentPh.length;
+          }
+        }
+      }
+
       currentPlaceholderIdx = nextIdx;
+      
+      // Move cursor to the next placeholder position
       const moveLeft = cursorPos - target.position;
       const moveRight = target.position - cursorPos;
       if (moveLeft > 0) {
         cursorPos = target.position;
-        // Send individual \x1b[D per step — parametrized \x1b[N D is not
-        // supported by zsh's line editor and echoes literal "D"
         const seq = '\x1b[D'.repeat(moveLeft);
         void invoke('write_pty', { sessionId, data: seq });
       } else if (moveRight > 0) {
@@ -773,8 +932,8 @@ export default defineComponent({
 
       const ph = item.placeholders;
       const hasPlaceholders = ph && ph.hasPlaceholders && ph.placeholders.length > 0;
-      // When placeholders exist, use the stripped insertText (placeholders removed).
-      // Otherwise use the raw insertText as-is.
+      // Use the insertText that includes placeholder tokens (e.g. <src>) so
+      // the user can see and replace them. Fall back to raw text if no placeholders.
       const newText = hasPlaceholders ? ph!.insertText : (item.insertText || item.executeText);
 
       suggestVisible.value = false;
@@ -809,11 +968,14 @@ export default defineComponent({
               const moveLeft = cursorPos - targetPos;
               if (moveLeft > 0) {
                 cursorPos = targetPos;
-                // Send individual \x1b[D per step — parametrized \x1b[N D is
-                // not supported by zsh's line editor
                 const seq = '\x1b[D'.repeat(moveLeft);
                 void invoke('write_pty', { sessionId, data: seq });
               }
+              // Cursor is now at the first placeholder position.
+              // The placeholder text (e.g. <src>) is visible in the terminal.
+              // When the user types, characters are inserted at the cursor position.
+              // When they press Tab/Enter, jumpToNextPlaceholder will delete the
+              // remaining placeholder text and move to the next one.
             }, 80);
           }
         });
@@ -1067,6 +1229,10 @@ export default defineComponent({
         window.removeEventListener('term-font-family-change', onTermFontFamilyChange);
         onTermFontFamilyChange = null;
       }
+      if (onTermFlagsChange) {
+        window.removeEventListener('term-flags-change', onTermFlagsChange);
+        onTermFlagsChange = null;
+      }
       unlisten?.();
       unlistenLang?.();
       if (term) {
@@ -1130,6 +1296,17 @@ export default defineComponent({
       };
       window.addEventListener('term-font-size-change', onTermFontSizeChange);
       window.addEventListener('term-font-family-change', onTermFontFamilyChange);
+
+      // 监听设置面板派发的标志变化事件，实时响应命令补全 / Ghost Text 开关
+      onTermFlagsChange = () => {
+        if (disposed) return;
+        // 命令智能补全被关闭时，立即清除已显示的建议弹窗
+        if (!getLocalFlags().commandSuggest) {
+          suggestVisible.value = false;
+          suggestItems.value = [];
+        }
+      };
+      window.addEventListener('term-flags-change', onTermFlagsChange);
     });
 
     watch(() => props.filePanelOpen, () => {

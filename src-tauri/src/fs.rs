@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+
+use crate::path_util;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileEntry {
@@ -48,12 +50,12 @@ fn get_icon(name: &str, is_dir: bool) -> String {
 }
 
 pub fn read_dir_entries(dir_path: &str) -> Result<Vec<FileEntry>, String> {
-    let path = Path::new(dir_path);
+    let path = path_util::expand_path(dir_path);
     if !path.is_dir() {
         return Err(format!("Not a directory: {}", dir_path));
     }
     let mut entries = Vec::new();
-    let read_dir = fs::read_dir(path).map_err(|e| e.to_string())?;
+    let read_dir = fs::read_dir(&path).map_err(|e| e.to_string())?;
     for entry in read_dir {
         let entry = entry.map_err(|e| e.to_string())?;
         let metadata = entry.metadata().map_err(|e| e.to_string())?;
@@ -83,46 +85,47 @@ pub fn read_dir_entries(dir_path: &str) -> Result<Vec<FileEntry>, String> {
 }
 
 pub fn create_file_entry(path: &str) -> Result<(), String> {
-    let p = Path::new(path);
+    let p = path_util::expand_path(path);
     if p.exists() {
         return Err(format!("Already exists: {}", path));
     }
-    fs::File::create(p).map_err(|e| e.to_string())?;
+    fs::File::create(&p).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn create_dir_entry(path: &str) -> Result<(), String> {
-    let p = Path::new(path);
+    let p = path_util::expand_path(path);
     if p.exists() {
         return Err(format!("Already exists: {}", path));
     }
-    fs::create_dir(p).map_err(|e| e.to_string())?;
+    fs::create_dir(&p).map_err(|e| e.to_string())?;
     Ok(())
 }
 
 pub fn write_text_file(path: &str, content: &str) -> Result<(), String> {
-    fs::write(path, content).map_err(|e| e.to_string())
+    let p = path_util::expand_path(path);
+    fs::write(&p, content).map_err(|e| e.to_string())
 }
 
 pub fn rename_entry(old_path: &str, new_path: &str) -> Result<(), String> {
-    let from = Path::new(old_path);
-    let to = Path::new(new_path);
+    let from = path_util::expand_path(old_path);
+    let to = path_util::expand_path(new_path);
     if !from.exists() {
         return Err(format!("Not found: {}", old_path));
     }
     if to.exists() {
         return Err(format!("Already exists: {}", new_path));
     }
-    fs::rename(from, to).map_err(|e| e.to_string())
+    fs::rename(&from, &to).map_err(|e| e.to_string())
 }
 
 pub fn move_entries(sources: Vec<String>, dest_dir: String) -> Result<(), String> {
-    let dest = Path::new(&dest_dir);
+    let dest = path_util::expand_path(&dest_dir);
     if !dest.is_dir() {
         return Err(format!("Destination is not a directory: {}", dest_dir));
     }
     for src in sources {
-        let from = Path::new(&src);
+        let from = path_util::expand_path(&src);
         if !from.exists() {
             continue;
         }
@@ -131,49 +134,55 @@ pub fn move_entries(sources: Vec<String>, dest_dir: String) -> Result<(), String
         if to.exists() {
             continue;
         }
-        fs::rename(from, &to).map_err(|e| e.to_string())?;
+        fs::rename(&from, &to).map_err(|e| e.to_string())?;
     }
     Ok(())
 }
 
 pub fn delete_entries(paths: Vec<String>) -> Result<(), String> {
     for path in paths {
-        let p = Path::new(&path);
+        let p = path_util::expand_path(&path);
         if !p.exists() {
             continue;
         }
         if p.is_dir() {
-            fs::remove_dir_all(p).map_err(|e| e.to_string())?;
+            fs::remove_dir_all(&p).map_err(|e| e.to_string())?;
         } else {
-            fs::remove_file(p).map_err(|e| e.to_string())?;
+            fs::remove_file(&p).map_err(|e| e.to_string())?;
         }
     }
     Ok(())
 }
 
 pub fn get_home_directory() -> Result<String, String> {
-    dirs::home_dir()
-        .or_else(|| Some(PathBuf::from("/")))
-        .and_then(|p| p.to_str().map(|s| s.to_string()))
-        .ok_or("Cannot determine home directory".into())
+    path_util::home_dir_string()
 }
 
 pub fn list_drives() -> Result<Vec<FileEntry>, String> {
-    let mut drives = Vec::new();
-    for letter in b'A'..=b'Z' {
-        let drive = format!("{}:\\", letter as char);
-        if Path::new(&drive).exists() {
-            drives.push(FileEntry {
-                name: format!("{}:", letter as char),
-                path: drive,
-                is_dir: true,
-                size: 0,
-                modified: 0,
-                icon: "drive".to_string(),
-            });
-        }
+    // 盘符枚举仅对 Windows 有意义，非 Windows 平台直接返回空列表
+    #[cfg(not(windows))]
+    {
+        return Ok(Vec::new());
     }
-    Ok(drives)
+
+    #[cfg(windows)]
+    {
+        let mut drives = Vec::new();
+        for letter in b'A'..=b'Z' {
+            let drive = format!("{}:\\", letter as char);
+            if Path::new(&drive).exists() {
+                drives.push(FileEntry {
+                    name: format!("{}:", letter as char),
+                    path: drive,
+                    is_dir: true,
+                    size: 0,
+                    modified: 0,
+                    icon: "drive".to_string(),
+                });
+            }
+        }
+        Ok(drives)
+    }
 }
 
 pub fn get_os_platform() -> String {
@@ -189,7 +198,7 @@ pub fn get_os_platform() -> String {
 pub fn read_file_preview(path: &str) -> Result<FilePreviewData, String> {
     const MAX_PREVIEW_BYTES: usize = 1024 * 1024;
 
-    let file_path = Path::new(path);
+    let file_path = path_util::expand_path(path);
     if !file_path.exists() {
         return Err(format!("File not found: {}", path));
     }
@@ -197,7 +206,7 @@ pub fn read_file_preview(path: &str) -> Result<FilePreviewData, String> {
         return Err(format!("Cannot preview directory: {}", path));
     }
 
-    let bytes = fs::read(file_path).map_err(|e| e.to_string())?;
+    let bytes = fs::read(&file_path).map_err(|e| e.to_string())?;
     if bytes.iter().take(4096).any(|byte| *byte == 0) {
         return Err("Binary files are not supported in preview".to_string());
     }
@@ -211,7 +220,7 @@ pub fn read_file_preview(path: &str) -> Result<FilePreviewData, String> {
 
     Ok(FilePreviewData {
         path: path.to_string(),
-        language: detect_language(file_path),
+        language: detect_language(&file_path),
         content: String::from_utf8_lossy(preview_bytes).to_string(),
         truncated,
         size: bytes.len() as u64,

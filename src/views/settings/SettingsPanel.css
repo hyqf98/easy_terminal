@@ -120,6 +120,11 @@
   gap: 8px;
   flex-shrink: 0;
 }
+/* 统一所有 AppSelect 宽度，避免选中文字长短不一导致宽度不一致；
+   200px 确保 "JetBrains Mono Nerd Font" 等长选项在选中态和下拉菜单中均完整显示 */
+.settings-control .app-select {
+  width: 200px;
+}
 
 /* 开关：36x20 胶囊 + 滑动圆点（.on = accent） */
 .toggle-switch {

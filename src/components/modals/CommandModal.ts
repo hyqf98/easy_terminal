@@ -13,9 +13,10 @@ interface CommandFormState {
   command: string;
   description: string;
   category: string;
-  scope: 'both' | 'local' | 'ssh';
   tags: string[];
   tagInput: string;
+  triggers: string[];
+  triggerInput: string;
 }
 
 export default defineComponent({
@@ -39,19 +40,14 @@ export default defineComponent({
       command: '',
       description: '',
       category: '',
-      scope: 'both',
       tags: [],
       tagInput: '',
+      triggers: [],
+      triggerInput: '',
     });
 
     const modalTitle = computed(() => (props.command ? t('cmd.editCmd') : t('cmd.addCmd')));
     const subtitle = '保存到我的收藏分类';
-
-    const scopeOptions = computed<Array<{ value: CommandFormState['scope']; label: string }>>(() => [
-      { value: 'both', label: '本地 + SSH' },
-      { value: 'local', label: '仅本地' },
-      { value: 'ssh', label: '仅 SSH' },
-    ]);
 
     const categoryOptions = computed(() => {
       const set = new Set<string>(props.categories);
@@ -71,9 +67,10 @@ export default defineComponent({
       form.command = '';
       form.description = '';
       form.category = '';
-      form.scope = 'both';
       form.tags = [];
       form.tagInput = '';
+      form.triggers = [];
+      form.triggerInput = '';
     }
 
     /** 打开时根据 command 初始化表单 */
@@ -87,9 +84,10 @@ export default defineComponent({
           form.command = props.command.command;
           form.description = props.command.description || '';
           form.category = props.command.category || '';
-          form.scope = 'both';
           form.tags = [...(props.command.tags || [])];
           form.tagInput = '';
+          form.triggers = [...(props.command.triggers || [])];
+          form.triggerInput = '';
         } else {
           resetForm();
         }
@@ -129,14 +127,31 @@ export default defineComponent({
       }
     }
 
+    function addTrigger() {
+      const value = form.triggerInput.trim();
+      if (!value) return;
+      if (!form.triggers.includes(value)) {
+        form.triggers.push(value);
+      }
+      form.triggerInput = '';
+    }
+
+    function removeTrigger(index: number) {
+      form.triggers.splice(index, 1);
+    }
+
+    function onTriggerKeydown(event: KeyboardEvent) {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        addTrigger();
+      } else if (event.key === 'Backspace' && !form.triggerInput && form.triggers.length > 0) {
+        form.triggers.pop();
+      }
+    }
+
     // AppSelect 值回调（模板中无法使用 as 类型断言，故在此做类型收窄）
     function onCategoryChange(value: unknown) {
       form.category = String(value ?? '');
-    }
-
-    function onScopeChange(value: unknown) {
-      const next = value as CommandFormState['scope'];
-      if (next === 'both' || next === 'local' || next === 'ssh') form.scope = next;
     }
 
     function buildEntry(): CommandEntry {
@@ -150,6 +165,7 @@ export default defineComponent({
         category: form.category.trim() || '我的收藏',
         alias: [],
         tags: [...form.tags],
+        triggers: [...form.triggers],
         examples: [],
         hint: '',
         enabled: true,
@@ -169,16 +185,17 @@ export default defineComponent({
       form,
       modalTitle,
       subtitle,
-      scopeOptions,
       categoryOptions,
       categorySelectOptions,
       close,
       onUpdateOpen,
       onCategoryChange,
-      onScopeChange,
       addTag,
       removeTag,
       onTagKeydown,
+      addTrigger,
+      removeTrigger,
+      onTriggerKeydown,
       onSave,
     };
   },

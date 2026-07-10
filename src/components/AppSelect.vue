@@ -9,7 +9,7 @@
     :disabled="disabled"
     :theme-overrides="themeOverrides"
     placement="bottom-start"
-    :consistent-menu-width="!fitContent"
+    :consistent-menu-width="false"
     @update:value="onUpdateValue"
   />
 </template>

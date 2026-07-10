@@ -8,6 +8,7 @@ import { createLocalFileStrategy, createRemoteFileStrategy } from './strategies'
 import type { IFileOperationStrategy, FileEntry } from './strategies/FileOperationStrategy';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
+import { expandTilde, joinPath, parentOf, baseName } from '../../utils/path';
 import FileModal from '../../components/modals/FileModal.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import type { SelectOption } from '../../components/AppSelect';
@@ -56,10 +57,21 @@ export default defineComponent({
     const currentPath = ref('');
     const selectedPath = ref('');
     const favorites = ref<FavoriteItem[]>([]);
-    const favCardsRowRef = ref<HTMLDivElement | null>(null);
-    const showFavoriteScrollControls = ref(false);
-    const canScrollFavoritesPrev = ref(false);
-    const canScrollFavoritesNext = ref(false);
+    // 收藏夹网格：默认显示 2 行（每行 3 个 = 6 个），展开时每次 +2 行
+    const FAV_DEFAULT_ROWS = 2;
+    const FAV_COLS = 3;
+    const favExpandedRows = ref(FAV_DEFAULT_ROWS);
+    /** 当前可见的收藏夹列表（按展开行数截断） */
+    const visibleFavorites = computed(() => {
+      const max = favExpandedRows.value * FAV_COLS;
+      return favorites.value.slice(0, max);
+    });
+    function expandFavorites() {
+      favExpandedRows.value += 2;
+    }
+    function collapseFavorites() {
+      favExpandedRows.value = FAV_DEFAULT_ROWS;
+    }
     const treeListRef = ref<HTMLDivElement | null>(null);
     const showCustomTreeScrollbar = ref(false);
     const treeScrollbarTop = ref(0);
@@ -178,21 +190,7 @@ export default defineComponent({
       return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}G`;
     }
 
-    function joinPath(parent: string, name: string): string {
-      if (!parent) return name;
-      return parent.endsWith('/') ? parent + name : parent + '/' + name;
-    }
-
-    function parentOf(path: string): string {
-      const idx = path.replace(/\/+$/, '').lastIndexOf('/');
-      if (idx <= 0) return '/';
-      return path.substring(0, idx);
-    }
-
-    function baseName(path: string): string {
-      const parts = path.split('/').filter(Boolean);
-      return parts[parts.length - 1] || path;
-    }
+    // joinPath / parentOf / baseName 已抽取到 utils/path.ts
 
     // ===== 收藏夹 =====
     function loadFavorites() {
@@ -311,43 +309,6 @@ export default defineComponent({
       });
     }
 
-    function updateFavoriteScrollState() {
-      const row = favCardsRowRef.value;
-      if (!row) return;
-      const maxScroll = Math.max(0, row.scrollWidth - row.clientWidth);
-      showFavoriteScrollControls.value = maxScroll > 1;
-      canScrollFavoritesPrev.value = row.scrollLeft > 2;
-      canScrollFavoritesNext.value = row.scrollLeft < maxScroll - 2;
-    }
-
-    function scheduleFavoriteScrollStateUpdate() {
-      void nextTick(updateFavoriteScrollState);
-    }
-
-    function scrollFavoritesPrev() {
-      const row = favCardsRowRef.value;
-      if (!row) return;
-      const next = row.scrollLeft - Math.max(90, row.clientWidth * 0.72);
-      row.scrollTo({
-        left: Math.max(0, next),
-        behavior: 'smooth',
-      });
-      window.setTimeout(updateFavoriteScrollState, 220);
-    }
-
-    function scrollFavoritesNext() {
-      const row = favCardsRowRef.value;
-      if (!row) return;
-      const maxScroll = Math.max(0, row.scrollWidth - row.clientWidth);
-      if (maxScroll <= 0) return;
-      const next = row.scrollLeft + Math.max(90, row.clientWidth * 0.72);
-      row.scrollTo({
-        left: Math.min(maxScroll, next),
-        behavior: 'smooth',
-      });
-      window.setTimeout(updateFavoriteScrollState, 220);
-    }
-
     function updateTreeScrollbar() {
       const list = treeListRef.value;
       if (!list) return;
@@ -387,7 +348,6 @@ export default defineComponent({
 
     let treeScrollbarDragStartY = 0;
     let treeScrollbarDragStartScrollTop = 0;
-    let favCardsResizeObserver: ResizeObserver | null = null;
     let treeListResizeObserver: ResizeObserver | null = null;
 
     function onTreeScrollbarDragMove(event: MouseEvent) {
@@ -701,32 +661,23 @@ export default defineComponent({
         treeListResizeObserver.observe(treeListRef.value);
         updateTreeScrollbar();
       });
-      void nextTick(() => {
-        if (!favCardsRowRef.value) return;
-        favCardsResizeObserver = new ResizeObserver(updateFavoriteScrollState);
-        favCardsResizeObserver.observe(favCardsRowRef.value);
-        updateFavoriteScrollState();
-      });
     });
 
     onBeforeUnmount(() => {
       document.removeEventListener('click', onGlobalClick);
       document.removeEventListener('keydown', onKeydown, true);
       window.removeEventListener('resize', updateTreeScrollbar);
-      favCardsResizeObserver?.disconnect();
-      favCardsResizeObserver = null;
       treeListResizeObserver?.disconnect();
       treeListResizeObserver = null;
       onTreeScrollbarDragEnd();
     });
 
     watch(visibleNodes, scheduleTreeScrollbarUpdate, { flush: 'post' });
-    watch(favorites, scheduleFavoriteScrollStateUpdate, { flush: 'post', deep: true });
 
     // ===== 列宽缩放（localStorage 持久化） =====
     const PANEL_WIDTH_KEY = 'easy_terminal_filetree_width';
-    const PANEL_MIN = 200;
-    const PANEL_MAX = 520;
+    const PANEL_MIN = 180;
+    const PANEL_MAX = 480;
     const panelWidth = ref<number>(loadPanelWidth());
     const resizing = ref(false);
     let resizeStartX = 0;
@@ -736,7 +687,7 @@ export default defineComponent({
       const raw = localStorage.getItem(PANEL_WIDTH_KEY);
       const n = raw ? parseInt(raw, 10) : NaN;
       if (Number.isFinite(n) && n >= PANEL_MIN && n <= PANEL_MAX) return n;
-      return 280;
+      return 240;
     }
     function persistPanelWidth(w: number) {
       try { localStorage.setItem(PANEL_WIDTH_KEY, String(w)); } catch { /* ignore */ }
@@ -792,13 +743,17 @@ export default defineComponent({
     }
 
     // 定位到指定工作目录（用于「定位当前终端目录」按钮）
-    function locateToCwd(cwd: string) {
-      if (cwd) void navigateTo(cwd);
+    async function locateToCwd(cwd: string) {
+      if (!cwd) return;
+      const expanded = await expandTilde(cwd);
+      void navigateTo(expanded);
     }
 
-    function syncToTerminal(context: { cwd: string }) {
-      if (context.cwd && context.cwd !== currentPath.value) {
-        void navigateTo(context.cwd);
+    async function syncToTerminal(context: { cwd: string }) {
+      if (!context.cwd || context.cwd === currentPath.value) return;
+      const expanded = await expandTilde(context.cwd);
+      if (expanded !== currentPath.value) {
+        void navigateTo(expanded);
       }
     }
 
@@ -807,8 +762,7 @@ export default defineComponent({
     return {
       // 状态
       filterText, sortKey, sortDir, selectedPath,
-      favorites, showFavorites, favCardsRowRef, showFavoriteScrollControls,
-      canScrollFavoritesPrev, canScrollFavoritesNext, treeListRef,
+      favorites, showFavorites, treeListRef,
       showCustomTreeScrollbar, treeScrollbarTop, treeScrollbarHeight,
       fileModalOpen, fileModalParent, fileModalMode,
       renamingPath, renamingValue, contextMenu,
@@ -824,7 +778,8 @@ export default defineComponent({
       // 收藏夹编辑
       FAVORITE_ICONS, favEditOpen, favEditName, favEditIcon, favIconSvg, favIconColor,
       openFavEditor, saveFavEdit, favContextMenu, onFavContext, copyFavPath,
-      updateFavoriteScrollState, scrollFavoritesPrev, scrollFavoritesNext,
+      // 收藏夹网格展开
+      visibleFavorites, favExpandedRows, FAV_DEFAULT_ROWS, expandFavorites, collapseFavorites,
       updateTreeScrollbar, onTreeScrollbarTrackMouseDown, onTreeScrollbarThumbMouseDown,
       onSortKeyChange,
       toggleSortDir,

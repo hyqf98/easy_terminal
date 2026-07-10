@@ -16,11 +16,22 @@ interface InstallPreviewLibrary {
   commands: CommandEntry[];
 }
 
-const REPO_OWNER = 'hyqf98';
-const REPO_NAME = 'easy_terminal';
-const RAW_BASE = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main/src-tauri/commands`;
+/** template.json 索引中的单个库条目 */
+interface TemplateEntry {
+  name: string;
+  file: string;
+  label?: string;
+  description?: string;
+  category?: string;
+  author?: string;
+}
+
+interface TemplateIndex {
+  libraries: TemplateEntry[];
+}
 
 const FILTER_CHIPS = ['全部', 'git', 'docker', 'kubernetes', 'python', 'rust', 'node', 'ssh', 'shell'];
+const DEFAULT_REPO_URL = 'https://github.com/hyqf98/easy_terminal';
 
 function formatTitle(id: string): string {
   const titles: Record<string, string> = {
@@ -28,13 +39,42 @@ function formatTitle(id: string): string {
     linux: 'Linux',
     windows: 'Windows',
     ubuntu: 'Ubuntu',
-    arch: 'Arch Linux',
   };
   return titles[id] || id.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function isDevRuntime(): boolean {
   return /localhost|127\.0\.0\.1/.test(window.location.hostname);
+}
+
+/**
+ * Parse a GitHub URL or "owner/repo" string into raw URL base and API base.
+ * Supports:
+ *   - https://github.com/owner/repo
+ *   - https://github.com/owner/repo/tree/branch
+ *   - owner/repo
+ * Returns { rawBase, branch } where rawBase = https://raw.githubusercontent.com/owner/repo/branch
+ */
+function parseRepoUrl(repoUrl: string): { owner: string; repo: string; branch: string; rawBase: string } | null {
+  const trimmed = repoUrl.trim();
+  if (!trimmed) return null;
+
+  // owner/repo format
+  const shortMatch = trimmed.match(/^([\w.-]+)\/([\w.-]+)$/);
+  if (shortMatch) {
+    const [, owner, repo] = shortMatch;
+    const branch = 'main';
+    return { owner, repo, branch, rawBase: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}` };
+  }
+
+  // Full GitHub URL
+  const urlMatch = trimmed.match(/^https?:\/\/github\.com\/([\w.-]+)\/([\w.-]+)(?:\/tree\/([\w.-]+))?/);
+  if (urlMatch) {
+    const [, owner, repo, branch = 'main'] = urlMatch;
+    return { owner, repo, branch, rawBase: `https://raw.githubusercontent.com/${owner}/${repo}/${branch}` };
+  }
+
+  return null;
 }
 
 /** 根据库名推断分类，用于卡片图标着色与筛选 */
@@ -93,6 +133,11 @@ export default defineComponent({
     const errorMsg = ref('');
     const initialized = ref(false);
 
+    // 仓库地址配置
+    const repoUrlInput = ref('');
+    const savedRepoUrl = ref('');
+    const repoInfo = ref<{ rawBase: string; owner: string; repo: string; branch: string } | null>(null);
+
     // 安装预览弹框状态
     const installModalOpen = ref(false);
     const pendingLibrary = ref<InstallPreviewLibrary | null>(null);
@@ -150,10 +195,53 @@ export default defineComponent({
       return parts.join(' · ');
     }
 
+    async function loadRepoUrl() {
+      try {
+        const settings = await invoke<{ marketRepoUrl?: string } & Record<string, unknown>>('get_settings');
+        const url = settings.marketRepoUrl || DEFAULT_REPO_URL;
+        savedRepoUrl.value = url;
+        repoUrlInput.value = url;
+        const parsed = parseRepoUrl(url);
+        repoInfo.value = parsed;
+        if (!parsed) {
+          errorMsg.value = `无法解析仓库地址: ${url}`;
+        }
+      } catch {
+        // fallback to default
+        savedRepoUrl.value = DEFAULT_REPO_URL;
+        repoUrlInput.value = DEFAULT_REPO_URL;
+        repoInfo.value = parseRepoUrl(DEFAULT_REPO_URL);
+      }
+    }
+
+    async function saveRepoUrl() {
+      const parsed = parseRepoUrl(repoUrlInput.value);
+      if (!parsed) {
+        showMessage('仓库地址格式无效，请使用 https://github.com/owner/repo 或 owner/repo 格式', 'error');
+        return;
+      }
+      try {
+        const settings = await invoke<Record<string, unknown>>('get_settings');
+        settings.marketRepoUrl = repoUrlInput.value.trim();
+        await invoke('save_settings', { settings });
+        savedRepoUrl.value = repoUrlInput.value.trim();
+        repoInfo.value = parsed;
+        showMessage('仓库地址已保存', 'success');
+        // Refresh remote list with new repo
+        initialized.value = false;
+        await init();
+      } catch (error) {
+        showMessage(`保存失败: ${error}`, 'error');
+      }
+    }
+
     async function init() {
       if (initialized.value) return;
       initialized.value = true;
       await reloadLocalLibraries();
+      if (!repoInfo.value) {
+        await loadRepoUrl();
+      }
       await fetchRemoteList();
     }
 
@@ -165,10 +253,13 @@ export default defineComponent({
       loading.value = true;
       errorMsg.value = '';
       try {
-        if (isDevRuntime()) {
+        // In dev runtime, only use local bundled files for the default repo
+        // (hyqf98/easy_terminal). For any other repo URL, always fetch via template.json.
+        const isDefaultRepo = !repoInfo.value || (repoInfo.value.owner === 'hyqf98' && repoInfo.value.repo === 'easy_terminal');
+        if (isDevRuntime() && isDefaultRepo) {
           await fetchLocalList();
         } else {
-          await fetchGithubList();
+          await fetchTemplateIndex();
         }
       } catch (error) {
         remoteLibraries.value = [];
@@ -207,40 +298,50 @@ export default defineComponent({
       remoteLibraries.value = [...systemLibs, ...customLibs];
     }
 
-    async function fetchGithubList() {
-      const base = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/src-tauri/commands`;
-      const [customRes, systemRes] = await Promise.all([fetch(`${base}/custom`), fetch(`${base}/system`)]);
-      const localIds = new Set(localLibraries.value.map((lib) => lib.id));
-      const libs: RemoteCommandLibrary[] = [];
-      for (const res of [systemRes, customRes]) {
-        if (!res.ok) continue;
-        const entries = await res.json();
-        const dir = res === systemRes ? 'system' : 'custom';
-        for (const entry of entries) {
-          if (entry.type !== 'file' || !entry.name.endsWith('.json')) continue;
-          const name = entry.name.replace(/\.json$/, '');
-          libs.push({
-            name,
-            path: entry.path,
-            size: entry.size,
-            sha: entry.sha,
-            downloadUrl: entry.download_url || `${RAW_BASE}/${dir}/${entry.name}`,
-            directory: dir as 'system' | 'custom',
-            isInstalled: localIds.has(name),
-            commandCount: 0,
-            label: formatTitle(name),
-            description: '',
-            loaded: false,
-          });
-        }
+    /** Fetch template.json index from the configured GitHub repo */
+    async function fetchTemplateIndex() {
+      if (!repoInfo.value) {
+        errorMsg.value = '未配置有效的仓库地址';
+        remoteLibraries.value = [];
+        return;
       }
+
+      const { rawBase } = repoInfo.value;
+      const templateUrl = `${rawBase}/template.json`;
+
+      const res = await fetch(templateUrl);
+      if (!res.ok) {
+        throw new Error(`无法加载 template.json (HTTP ${res.status})。请确认仓库为公开且根目录包含 template.json`);
+      }
+
+      const index: TemplateIndex = await res.json();
+      const localIds = new Set(localLibraries.value.map((lib) => lib.id));
+      const libs: RemoteCommandLibrary[] = (index.libraries || []).map((entry) => ({
+        name: entry.name,
+        path: entry.file,
+        size: 0,
+        sha: '',
+        downloadUrl: `${rawBase}/${entry.file}`,
+        directory: 'custom' as const,
+        isInstalled: localIds.has(entry.name),
+        commandCount: 0,
+        label: entry.label || formatTitle(entry.name),
+        description: entry.description || '',
+        loaded: false,
+      }));
       libs.sort((left, right) => left.label.localeCompare(right.label));
       remoteLibraries.value = libs;
     }
 
     async function fetchLibraryJson(lib: RemoteCommandLibrary): Promise<string> {
-      if (isDevRuntime()) return await invoke<string>('read_bundled_command_file', { name: lib.name });
-      const res = await fetch(`${RAW_BASE}/${lib.directory}/${lib.name}.json`);
+      const isDefaultRepo = !repoInfo.value || (repoInfo.value.owner === 'hyqf98' && repoInfo.value.repo === 'easy_terminal');
+      if (isDevRuntime() && isDefaultRepo) {
+        return await invoke<string>('read_bundled_command_file', { name: lib.name });
+      }
+      // Use downloadUrl (constructed from template.json file field + rawBase)
+      const url = lib.downloadUrl || (repoInfo.value ? `${repoInfo.value.rawBase}/${lib.name}.json` : '');
+      if (!url) throw new Error('无法确定文件下载地址');
+      const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.text();
     }
@@ -320,7 +421,10 @@ export default defineComponent({
       await fetchRemoteList();
     }
 
-    onMounted(() => void init());
+    onMounted(async () => {
+      await loadRepoUrl();
+      void init();
+    });
 
     return {
       remoteLibraries,
@@ -329,6 +433,8 @@ export default defineComponent({
       errorMsg,
       installModalOpen,
       pendingLibrary,
+      repoUrlInput,
+      savedRepoUrl,
       titleLabel,
       refreshLabel,
       installLabel,
@@ -349,6 +455,7 @@ export default defineComponent({
       uninstallLib,
       refresh,
       init,
+      saveRepoUrl,
     };
   },
 });

@@ -17,31 +17,39 @@
     <div class="field">
       <div class="field-label">
         命令内容<span class="req">*</span>
-        <span class="field-hint">支持 {占位符} Tab 跳转</span>
+        <span class="field-hint">支持 &lt;占位符&gt; 或 {占位符} Tab/Enter 跳转</span>
       </div>
       <textarea class="textarea" v-model="form.command" rows="4" placeholder="git add -A && git commit -m &quot;{msg}&quot;"></textarea>
+    </div>
+    <div class="field">
+      <div class="field-label">
+        触发词
+        <span class="field-hint">输入自然语言触发此命令，回车添加</span>
+      </div>
+      <div class="tag-input">
+        <span v-for="(trigger, index) in form.triggers" :key="trigger" class="tag-pill">
+          {{ trigger }}
+          <button class="x" type="button" @click="removeTrigger(index)" aria-label="移除触发词">×</button>
+        </span>
+        <input
+          v-model="form.triggerInput"
+          placeholder="例如：提交代码"
+          @keydown="onTriggerKeydown"
+          @blur="addTrigger"
+        />
+      </div>
     </div>
     <div class="field">
       <div class="field-label">描述</div>
       <input class="input" v-model="form.description" placeholder="简要说明命令用途" />
     </div>
-    <div class="field-row">
-      <div class="field">
-        <div class="field-label">分类</div>
-        <AppSelect
-          :model-value="form.category"
-          :options="categorySelectOptions"
-          @update:model-value="onCategoryChange"
-        />
-      </div>
-      <div class="field">
-        <div class="field-label">执行范围</div>
-        <AppSelect
-          :model-value="form.scope"
-          :options="scopeOptions"
-          @update:model-value="onScopeChange"
-        />
-      </div>
+    <div class="field">
+      <div class="field-label">分类</div>
+      <AppSelect
+        :model-value="form.category"
+        :options="categorySelectOptions"
+        @update:model-value="onCategoryChange"
+      />
     </div>
     <div class="field">
       <div class="field-label">标签</div>

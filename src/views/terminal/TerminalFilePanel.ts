@@ -1,31 +1,13 @@
 import { defineComponent, ref, watch, type PropType } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 import FileTree from '../filetree/FileTree.vue';
 import type { TerminalLaunchOptions } from '../../types';
 import type { SSHProfile } from '../../types/ssh';
 import type { IFileOperationStrategy } from '../filetree/strategies/FileOperationStrategy';
-
-function normalizeFsPath(path: string): string {
-  const normalized = path
-    .trim()
-    .replace(/\\/g, '/')
-    .replace(/\/{2,}/g, '/');
-  if (normalized === '/') return normalized;
-  return normalized.replace(/\/$/, '');
-}
-
-function joinFsPath(base: string, child: string): string {
-  const normalizedBase = normalizeFsPath(base);
-  const normalizedChild = normalizeFsPath(child);
-  if (!normalizedChild) return normalizedBase;
-  return `${normalizedBase}/${normalizedChild.replace(/^\/+/, '')}`;
-}
-
-function extractPathFromShellTitle(raw: string): string {
-  const trimmed = raw.trim();
-  const promptMatch = trimmed.match(/^[^@\s:]+@[^:\s]+:(.+)$/);
-  return (promptMatch ? promptMatch[1] : trimmed).trim();
-}
+import {
+  normalizePath,
+  extractPathFromShellTitle,
+  expandTilde,
+} from '../../utils/path';
 
 /**
  * 终端文件面板：作为画布上独立元素渲染（拼接在终端左侧），
@@ -45,8 +27,6 @@ export default defineComponent({
     const fileTreeRef = ref<InstanceType<typeof FileTree> | null>(null);
     const currentStrategy = ref<IFileOperationStrategy | null>(null);
     let strategyInitialized = false;
-    // 缓存的本地家目录（首次 expandPath 时获取）
-    let cachedHome = '';
 
     function onReady() {
       if (strategyInitialized) { syncCwd(); return; }
@@ -79,34 +59,20 @@ export default defineComponent({
 
     /**
      * 将 shell 标题中的路径展开为可被 read_dir 识别的绝对路径。
-     * 使用 upath 统一处理跨平台路径分隔符（Windows \ → /）。
-     * - ~/xxx / ~ → 本地家目录 + 子路径
-     * - ~user/xxx → 交给 read_dir 处理（大多数 shell 不输出此格式）
-     * - 相对路径（不含 / 或 \）→ 忽略，不导航
-     * - 远程（SSH）路径原样返回
+     * - SSH 终端的 cwd 来自远程 shell，直接交给远程策略处理
+     * - `~/xxx` / `~` → 通过 expandTilde 展开为本地家目录 + 子路径
+     * - 不含路径分隔符的（纯文件名、shell 特殊字符串）→ 忽略，不导航
      */
     async function expandPath(raw: string): Promise<string> {
       if (!raw) return '';
       const titlePath = extractPathFromShellTitle(raw);
       // SSH 终端的 cwd 来自远程 shell，直接交给远程策略处理
       if (props.launchOptions.mode === 'ssh') return titlePath;
-      // 前端安全的轻量规范化：Windows 反斜杠转正斜杠、去多余分隔符。
-      const normalizedPath = normalizeFsPath(titlePath);
-      // 展开 ~ 前缀
-      if (normalizedPath === '~' || normalizedPath.startsWith('~/')) {
-        if (!cachedHome) {
-          try {
-            cachedHome = await invoke<string>('get_home_dir');
-          } catch {
-            return '';
-          }
-        }
-        if (cachedHome) {
-          return joinFsPath(cachedHome, normalizedPath.slice(1));
-        }
-      }
+      // 展开 ~ 前缀（expandTilde 内部缓存家目录）
+      const expanded = await expandTilde(titlePath);
+      const normalizedPath = normalizePath(expanded);
       // 不含路径分隔符的（如纯文件名、shell 特殊字符串），不导航
-      if (!normalizedPath.includes('/') && !normalizedPath.includes('\\')) {
+      if (!normalizedPath.includes('/')) {
         return '';
       }
       return normalizedPath;

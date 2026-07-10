@@ -7,10 +7,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::path_util;
+
 /// 插件根目录：`~/.easy-terminal/shell/`
 fn shell_plugins_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let dir = home.join(".easy-terminal").join("shell");
+    let dir = path_util::app_data_dir()?.join("shell");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }

@@ -41,7 +41,7 @@ export default defineComponent({
     const testing = ref(false);
 
     const namePlaceholder = 'prod-web-01';
-    const keyPathPlaceholder = '.ssh/id_ed25519';
+    const keyPathPlaceholder = '~/.ssh/id_ed25519';
     const passwordPlaceholder = 'SSH 登录密码';
     const testLabel = computed(() => t('ssh.testConnection'));
 
@@ -67,18 +67,6 @@ export default defineComponent({
         value: candidate.id,
       })),
     ]);
-
-    /** 密钥路径：UI 上以 ~/ 作前缀装饰，内部存储完整路径 */
-    const privateKeyTail = computed<string>({
-      get() {
-        const path = form.privateKeyPath || '';
-        return path.startsWith('~/') ? path.slice(2) : path;
-      },
-      set(value: string) {
-        const trimmed = value.replace(/^~\//, '').replace(/^\/+/, '');
-        form.privateKeyPath = trimmed ? `~/${trimmed}` : '';
-      },
-    });
 
     function resetForm() {
       form.id = '';
@@ -172,7 +160,6 @@ export default defineComponent({
       groupOptions,
       groupSelectOptions,
       jumpSelectOptions,
-      privateKeyTail,
       close,
       onUpdateOpen,
       onGroupChange,

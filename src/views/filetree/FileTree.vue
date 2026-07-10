@@ -10,15 +10,14 @@
     ></div>
     <!-- 左侧文件树（唯一内容，预览已迁移至独立 PreviewPanel） -->
     <aside class="files-tree">
-      <!-- 收藏夹卡片：置顶横向排列，右键可编辑名称和图标 -->
+      <!-- 收藏夹卡片：网格换行布局（每行3个），默认2行，超出则"更多"展开 -->
       <div
         v-if="favorites.length > 0"
         class="fav-cards-shell"
-        :class="{ 'has-prev': canScrollFavoritesPrev }"
       >
-        <div ref="favCardsRowRef" class="fav-cards-row" @scroll.passive="updateFavoriteScrollState">
+        <div class="fav-cards-grid">
           <div
-            v-for="fav in favorites"
+            v-for="fav in visibleFavorites"
             :key="fav.path"
             class="fav-card"
             :title="fav.path"
@@ -26,26 +25,25 @@
             @contextmenu="onFavContext($event, fav)"
           >
             <span class="fav-card-icon" :style="{ color: fav.color || favIconColor(fav.icon) }" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + favIconSvg(fav.icon) + '</svg>'"></span>
-            <span class="fav-card-name">{{ fav.name }}</span>
+            <span class="fav-card-name" :title="fav.name">{{ fav.name }}</span>
           </div>
         </div>
+        <!-- 更多/收起按钮：收藏数超过当前显示行数时出现 -->
         <button
-          v-if="showFavoriteScrollControls"
-          class="fav-scroll-btn fav-scroll-prev"
-          :disabled="!canScrollFavoritesPrev"
-          title="查看更多收藏夹"
-          @click="scrollFavoritesPrev"
+          v-if="favorites.length > visibleFavorites.length"
+          class="fav-more-btn"
+          @click="expandFavorites"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18" /></svg>
+          更多 {{ favorites.length - visibleFavorites.length }}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
         </button>
         <button
-          v-if="showFavoriteScrollControls"
-          class="fav-scroll-btn fav-scroll-next"
-          :disabled="!canScrollFavoritesNext"
-          title="查看更多收藏夹"
-          @click="scrollFavoritesNext"
+          v-else-if="favExpandedRows > FAV_DEFAULT_ROWS"
+          class="fav-more-btn"
+          @click="collapseFavorites"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18" /></svg>
+          收起
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
         </button>
       </div>
 

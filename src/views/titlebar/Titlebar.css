@@ -101,6 +101,10 @@
 }
 
 #app-titlebar .cmdk {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -116,6 +120,9 @@
   transition: border-color 200ms ease, color 200ms ease;
   max-width: 220px;
   overflow: hidden;
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  z-index: 2;
 }
 #app-titlebar .cmdk:hover {
   border-color: var(--accent);

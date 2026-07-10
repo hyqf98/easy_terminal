@@ -2,6 +2,7 @@ import type { ParsedPlaceholders, PlaceholderInfo } from '../types';
 
 const BRACKET_PLACEHOLDER_RE = /\[%s(?::([^\]]+))?\]/g;
 const ANGLE_PLACEHOLDER_RE = /<(\w[\w.-]*)>/g;
+const CURLY_PLACEHOLDER_RE = /\{(\w[\w.-]*)\}/g;
 
 interface RawMatch {
   index: number;
@@ -15,12 +16,24 @@ function collectMatches(template: string): RawMatch[] {
   BRACKET_PLACEHOLDER_RE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = BRACKET_PLACEHOLDER_RE.exec(template)) !== null) {
-    matches.push({ index: m.index, length: m[0].length, label: m[1] || '' });
+    const label = m[1] || '';
+    matches.push({ index: m.index, length: m[0].length, label });
   }
 
   ANGLE_PLACEHOLDER_RE.lastIndex = 0;
   while ((m = ANGLE_PLACEHOLDER_RE.exec(template)) !== null) {
-    // Skip matches that overlap with already-found bracket placeholders
+    const start = m.index;
+    const end = start + m[0].length;
+    const overlaps = matches.some(
+      (existing) => start < existing.index + existing.length && end > existing.index,
+    );
+    if (!overlaps) {
+      matches.push({ index: m.index, length: m[0].length, label: m[1] });
+    }
+  }
+
+  CURLY_PLACEHOLDER_RE.lastIndex = 0;
+  while ((m = CURLY_PLACEHOLDER_RE.exec(template)) !== null) {
     const start = m.index;
     const end = start + m[0].length;
     const overlaps = matches.some(
@@ -42,7 +55,8 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
 
   const hasBracket = template.includes('[%s');
   const hasAngle = /<\w[\w.-]*>/.test(template);
-  if (!hasBracket && !hasAngle) {
+  const hasCurly = /\{\w[\w.-]*\}/.test(template);
+  if (!hasBracket && !hasAngle && !hasCurly) {
     return { insertText: template, displayParts: [], placeholders: [], hasPlaceholders: false };
   }
 
@@ -53,6 +67,7 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
 
   const placeholders: PlaceholderInfo[] = [];
   const displayParts: Array<{ text: string; isPlaceholder: boolean; label: string }> = [];
+  // Keep the placeholder tokens in insertText so the user can see and replace them
   let insertText = '';
   let lastIndex = 0;
 
@@ -66,13 +81,16 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
     }
 
     const pos = insertText.length;
+    const token = template.slice(raw.index, raw.index + raw.length);
+    insertText += token;
     placeholders.push({
       index: i,
       position: pos,
       originalLength: raw.length,
+      length: raw.length,
       label: raw.label,
     });
-    displayParts.push({ text: '', isPlaceholder: true, label: raw.label });
+    displayParts.push({ text: token, isPlaceholder: true, label: raw.label });
 
     lastIndex = raw.index + raw.length;
   }
@@ -92,5 +110,5 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
 }
 
 export function hasPlaceholder(text: string): boolean {
-  return text != null && (text.includes('[%s') || /<\w[\w.-]*>/.test(text));
+  return text != null && (text.includes('[%s') || /<\w[\w.-]*>/.test(text) || /\{\w[\w.-]*\}/.test(text));
 }

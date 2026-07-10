@@ -18,6 +18,16 @@ export class Canvas implements CanvasController {
   private dragStartX = 0;
   private dragStartY = 0;
 
+  // 空格键平移模式：按住空格时拖拽画布移动而非框选
+  private isSpacePanning = false;
+  private isPanning = false;
+  private panStartClientX = 0;
+  private panStartClientY = 0;
+  private panStartPanX = 0;
+  private panStartPanY = 0;
+  private boundOnKeyDown: (e: KeyboardEvent) => void;
+  private boundOnKeyUp: (e: KeyboardEvent) => void;
+
   private snapCache: { excludeId?: string; targets: SnapTarget[]; vertical: number[]; horizontal: number[] } | null = null;
 
   public onTerminalCreate?: (x: number, y: number, w: number, h: number) => void;
@@ -51,6 +61,8 @@ export class Canvas implements CanvasController {
     this.boundOnMouseMove = this.onMouseMove.bind(this);
     this.boundOnMouseUp = this.onMouseUp.bind(this);
     this.boundOnContextMenu = this.onContextMenu.bind(this);
+    this.boundOnKeyDown = this.onKeyDown.bind(this);
+    this.boundOnKeyUp = this.onKeyUp.bind(this);
     this.boundOnDocumentClick = (ev: MouseEvent) => {
       if (!(ev.target as HTMLElement).closest('.canvas-context-menu')) {
         this.closeCanvasMenu();
@@ -66,6 +78,8 @@ export class Canvas implements CanvasController {
     this.viewport.removeEventListener('contextmenu', this.boundOnContextMenu);
     window.removeEventListener('mousemove', this.boundOnMouseMove);
     window.removeEventListener('mouseup', this.boundOnMouseUp);
+    window.removeEventListener('keydown', this.boundOnKeyDown);
+    window.removeEventListener('keyup', this.boundOnKeyUp);
     document.removeEventListener('click', this.boundOnDocumentClick);
     this.closeCanvasMenu();
   }
@@ -193,6 +207,8 @@ export class Canvas implements CanvasController {
     this.viewport.addEventListener('contextmenu', this.boundOnContextMenu);
     window.addEventListener('mousemove', this.boundOnMouseMove);
     window.addEventListener('mouseup', this.boundOnMouseUp);
+    window.addEventListener('keydown', this.boundOnKeyDown);
+    window.addEventListener('keyup', this.boundOnKeyUp);
     document.addEventListener('click', this.boundOnDocumentClick);
   }
 
@@ -261,10 +277,43 @@ export class Canvas implements CanvasController {
     Perf.end('canvas.handleZoomAtMouse');
   }
 
+  /** 空格键按下：进入平移模式，光标变 grab */
+  private onKeyDown(e: KeyboardEvent) {
+    if (e.code !== 'Space') return;
+    // 输入框中不触发
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.classList.contains('xterm-helper-textarea'))) return;
+    if (this.isSpacePanning) return;
+    this.isSpacePanning = true;
+    this.viewport.style.cursor = 'grab';
+    e.preventDefault();
+  }
+
+  /** 空格键释放：退出平移模式，恢复光标 */
+  private onKeyUp(e: KeyboardEvent) {
+    if (e.code !== 'Space') return;
+    this.isSpacePanning = false;
+    if (!this.isPanning) {
+      this.viewport.style.cursor = '';
+    }
+  }
+
   private onMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
     if (this.isTerminalInteractionTarget(e.target as HTMLElement)) return;
     this.closeCanvasMenu();
+
+    // 空格键平移模式：拖拽移动画布而非框选
+    if (this.isSpacePanning) {
+      this.isPanning = true;
+      this.panStartClientX = e.clientX;
+      this.panStartClientY = e.clientY;
+      this.panStartPanX = this.panX;
+      this.panStartPanY = this.panY;
+      this.viewport.style.cursor = 'grabbing';
+      e.preventDefault();
+      return;
+    }
 
     this.isDragging = true;
     const rect = this.viewport.getBoundingClientRect();
@@ -276,6 +325,15 @@ export class Canvas implements CanvasController {
   }
 
   private onMouseMove(e: MouseEvent) {
+    // 空格平移模式：移动画布
+    if (this.isPanning) {
+      const dx = e.clientX - this.panStartClientX;
+      const dy = e.clientY - this.panStartClientY;
+      this.panX = this.panStartPanX + dx;
+      this.panY = this.panStartPanY + dy;
+      this.applyTransform();
+      return;
+    }
     if (!this.isDragging) return;
     Perf.frameStart('canvas.onMouseMove');
     const rect = this.viewport.getBoundingClientRect();
@@ -293,6 +351,12 @@ export class Canvas implements CanvasController {
   }
 
   private onMouseUp(e: MouseEvent) {
+    // 空格平移模式结束
+    if (this.isPanning) {
+      this.isPanning = false;
+      this.viewport.style.cursor = this.isSpacePanning ? 'grab' : '';
+      return;
+    }
     if (!this.isDragging) return;
     this.isDragging = false;
     this.selectionRect.style.display = 'none';

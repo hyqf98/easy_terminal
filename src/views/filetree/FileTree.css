@@ -7,7 +7,7 @@
   flex-shrink: 0;
   height: 100%;
   /* 宽度由 CSS 变量驱动：默认 280px（画布浮层），TerminalFilePanel 嵌入时覆盖为 100% */
-  width: var(--filetree-width, 280px);
+  width: var(--filetree-width, 240px);
   background: transparent;
   /* 极淡分隔线，仅作视觉引导，不打断统一窗口感 */
   border-right: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
@@ -144,6 +144,7 @@ body.files-resizing * {
   overflow-x: auto;
   padding: 6px 10px 6px 4px;
   min-height: 0;
+  /* 隐藏原生滚动条：使用自定义 .tree-scrollbar-thumb 浮层替代 */
   scrollbar-width: none;
   background: color-mix(in srgb, var(--surface) 88%, var(--bg));
 }
@@ -444,130 +445,96 @@ body.files-resizing * {
   background: color-mix(in srgb, var(--red) 10%, transparent);
 }
 
-/* ===== 收藏夹卡片（顶部横向排列） ===== */
+/* ===== 收藏夹卡片（网格换行布局，每行3个） ===== */
 .fav-cards-shell {
-  position: relative;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+  padding: 6px 8px 4px;
 }
 
-.fav-cards-row {
-  display: flex;
-  gap: 5px;
-  padding: 6px 34px 6px 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-  scroll-behavior: smooth;
-}
-.fav-cards-row::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
-
-.fav-cards-shell.has-prev .fav-cards-row {
-  padding-left: 34px;
-}
-
-.fav-scroll-btn {
-  position: absolute;
-  top: 50%;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 92%, var(--bg));
-  color: var(--text-muted);
+.fav-cards-grid {
   display: grid;
-  place-items: center;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+/* 更多/收起按钮 */
+.fav-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 5px;
+  padding: 5px 0;
+  border: none;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-sans);
   cursor: pointer;
-  transform: translateY(-50%);
-  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
-.fav-scroll-prev {
-  left: 5px;
-}
-.fav-scroll-next {
-  right: 5px;
-}
-.fav-scroll-btn::before {
-  content: '';
-  position: absolute;
-  top: -7px;
-  bottom: -7px;
-  width: 36px;
-  z-index: -1;
-  pointer-events: none;
-}
-.fav-scroll-prev::before {
-  left: -5px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--surface) 92%, var(--bg)) 45%, transparent);
-}
-.fav-scroll-next::before {
-  right: -5px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface) 92%, var(--bg)) 45%);
-}
-.fav-scroll-btn:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+.fav-more-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
 }
-.fav-scroll-btn:disabled {
-  opacity: 0;
-  cursor: default;
-  pointer-events: none;
-}
-.fav-scroll-btn svg {
-  width: 13px;
-  height: 13px;
+.fav-more-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
+/* 收藏卡片：正方形，图标居上、名称居下 */
 .fav-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 5px 6px;
-  min-width: 42px;
-  max-width: 56px;
-  border-radius: 6px;
+  justify-content: center;
+  gap: 6px;
+  aspect-ratio: 1;
+  padding: 8px 4px;
+  border-radius: 8px;
   background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent) 6%, var(--surface)));
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--border));
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 100ms ease;
-  flex-shrink: 0;
+  overflow: hidden;
 }
 .fav-card:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 .fav-card:active {
   transform: translateY(0);
 }
+
+/* 图标：居上方，圆形背景容器 */
 .fav-card-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   background: var(--surface);
   display: grid;
   place-items: center;
   color: var(--accent);
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 .fav-card-icon svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
+
+/* 名称：居下方，单行省略 */
 .fav-card-name {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 500;
   color: var(--text-sub);
   text-align: center;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

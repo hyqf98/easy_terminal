@@ -75,14 +75,11 @@
     </div>
     <div v-if="form.authType === 'key'" class="field">
       <div class="field-label">密钥文件路径</div>
-      <div class="field-with-prefix">
-        <span class="field-prefix">~/</span>
-        <input
-          class="input code with-prefix"
-          v-model="privateKeyTail"
-          :placeholder="keyPathPlaceholder"
-        />
-      </div>
+      <input
+        class="input code"
+        v-model="form.privateKeyPath"
+        :placeholder="keyPathPlaceholder"
+      />
     </div>
     <div v-else class="field">
       <div class="field-label">登录密码</div>

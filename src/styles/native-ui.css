@@ -487,3 +487,10 @@ input[type="number"].native-input::-webkit-inner-spin-button {
   color: var(--red);
   border: 1px solid color-mix(in srgb, var(--red) 40%, var(--border));
 }
+
+/* --- Naive UI 消息提示容器（teleport 至 body，需全局覆盖） --- */
+/* 消息提示容器：提升 z-index 避免被标题栏遮挡，下移至标题栏下方 */
+body .n-message-container.n-message-container--top {
+  z-index: 100000 !important;
+  top: 48px !important;
+}

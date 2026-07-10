@@ -21,15 +21,6 @@
       <div class="canvas-stage" ref="viewportRef">
         <CanvasMinimap />
         <div class="canvas-hint">{{ canvasHintLabel }}</div>
-        <!-- 画布左边缘的文件树开关窄条：点击切换文件树浮层显隐 -->
-        <button
-          class="canvas-sidebar-toggle"
-          :class="{ open: filesPanelVisible }"
-          :title="filesPanelVisible ? '隐藏文件树' : '显示文件树'"
-          @click="filesPanelVisible = !filesPanelVisible"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-        </button>
         <div v-if="showHint" class="canvas-empty">
           <n-empty :description="hintLabel">
             <template #extra>
@@ -160,17 +151,6 @@
           <div id="selection-rect"></div>
         </div>
 
-        <!-- 文件树浮层：从左侧滑入的浮动面板（始终叠加在画布之上） -->
-        <FileTree
-          v-if="filesPanelVisible"
-          ref="fileTreeRef"
-          @open-terminal="onOpenTerminalAt"
-          @open-preview="previewPath = $event"
-          @locate-cwd="onLocateCwd"
-          @cd-to="onCdTo"
-          @ready="onFileTreeReady"
-          @strategy-change="onStrategyChange"
-        />
         <!-- 文件预览浮层：从右侧滑入的浮动面板 -->
         <PreviewPanel
           v-if="previewPath"
@@ -208,11 +188,6 @@
     <!-- 历史命令视图 -->
     <section class="view" v-show="activeView === 'history'">
       <HistoryPanel @send-command="onSendCommand" />
-    </section>
-
-    <!-- 命令映射视图 -->
-    <section class="view" v-show="activeView === 'mappings'">
-      <MappingPanel />
     </section>
 
     <!-- SSH 视图 -->

@@ -231,13 +231,36 @@ export default defineComponent({
       if (size) applyTermFontSize(size);
     }
 
+    /** 应用界面字体：设置 --font-sans CSS 变量，叠加中文字体回退链 */
+    function applyUiFontFamily(font: string) {
+      const fallback = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif';
+      const family = font === 'System UI' ? `system-ui, ${fallback}` : `"${font}", ${fallback}`;
+      document.documentElement.style.setProperty('--font-sans', family);
+    }
+
+    /** 应用终端字体：设置 --font-mono CSS 变量，叠加等宽回退链 */
+    function applyTermFontFamily(font: string) {
+      const fallback = '"Cascadia Code", "Fira Code", Consolas, monospace';
+      document.documentElement.style.setProperty('--font-mono', `"${font}", ${fallback}`);
+    }
+
+    /** 应用圆角风格：设置 --radius-sm/md/lg 三档 CSS 变量 */
+    function applyRadiusStyle(radius: string) {
+      const r = Number(radius) || 0;
+      document.documentElement.style.setProperty('--radius-sm', `${Math.max(0, r - 2)}px`);
+      document.documentElement.style.setProperty('--radius-md', `${r}px`);
+      document.documentElement.style.setProperty('--radius-lg', `${r + 4}px`);
+    }
+
     function onUiFontFamilyChange(value: string | number) {
       uiFontFamily.value = String(value);
+      applyUiFontFamily(uiFontFamily.value);
       onLocalFlagChange();
     }
 
     function onTermFontFamilyChange(value: string | number) {
       termFontFamily.value = String(value);
+      applyTermFontFamily(termFontFamily.value);
       onLocalFlagChange();
       // 派发字体族变化事件，供终端窗口实时更新
       window.dispatchEvent(new CustomEvent('term-font-family-change', { detail: String(value) }));
@@ -245,6 +268,7 @@ export default defineComponent({
 
     function onRadiusStyleChange(value: string | number) {
       radiusStyle.value = String(value);
+      applyRadiusStyle(radiusStyle.value);
       onLocalFlagChange();
     }
 
@@ -306,6 +330,8 @@ export default defineComponent({
 
     function onLocalFlagChange() {
       persistLocalFlags();
+      // 派发标志变化事件，供已打开的终端窗口实时响应（命令补全 / Ghost Text 等开关）
+      window.dispatchEvent(new CustomEvent('term-flags-change'));
     }
 
     async function saveSettings() {
@@ -354,6 +380,10 @@ export default defineComponent({
         applyCraftTheme(currentTheme.value);
         document.documentElement.style.setProperty('--font-size-md', `${uiFontSize.value}px`);
         document.documentElement.style.setProperty('--term-font-size', `${termFontSize.value}px`);
+        // 启动时应用保存的字体族和圆角风格（localStorage 持久化的本地偏好）
+        applyUiFontFamily(uiFontFamily.value);
+        applyTermFontFamily(termFontFamily.value);
+        applyRadiusStyle(radiusStyle.value);
         window.dispatchEvent(new CustomEvent('term-font-size-change', { detail: termFontSize.value }));
         emit('theme-change', currentTheme.value);
       } catch {

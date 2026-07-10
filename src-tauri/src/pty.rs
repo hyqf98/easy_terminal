@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
+use crate::path_util;
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PtyOutputEvent {
     pub session_id: String,
@@ -256,16 +258,21 @@ fn build_unix_command(cwd: Option<&str>) -> Result<CommandBuilder, String> {
 }
 
 fn ensure_easy_terminal_zdotdir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let dir = home.join(".easy-terminal").join("zdotdir");
+    let app_dir = path_util::app_data_dir()?;
+    let dir = app_dir.join("zdotdir");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
     let zshrc = dir.join(".zshrc");
-    let shell_dir = home.join(".easy-terminal").join("shell");
+    let shell_dir = app_dir.join("shell");
 
     // 动态生成 .zshrc：检测插件是否存在，存在则 source
-    let syntax_path = shell_dir.join("zsh-syntax-highlighting/zsh-syntax-highlighting.zsh");
-    let auto_path = shell_dir.join("zsh-autosuggestions/zsh-autosuggestions.zsh");
+    // 注意：每次 join 只传单个路径组件，避免在 join 参数中硬编码 `/` 分隔符
+    let syntax_path = shell_dir
+        .join("zsh-syntax-highlighting")
+        .join("zsh-syntax-highlighting.zsh");
+    let auto_path = shell_dir
+        .join("zsh-autosuggestions")
+        .join("zsh-autosuggestions.zsh");
 
     let mut content = String::new();
     content.push_str("\nexport EASY_TERMINAL=1\n\n");

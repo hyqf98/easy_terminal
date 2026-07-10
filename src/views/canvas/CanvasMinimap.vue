@@ -1,5 +1,5 @@
 <template>
-  <div class="minimap" v-show="visible">
+  <div class="minimap" v-show="visible" @mousedown="onMinimapMouseDown">
     <div class="minimap-label">Overview</div>
     <div class="minimap-grid"></div>
     <div
@@ -13,7 +13,12 @@
       @mouseleave="onTermLeave"
       @click.stop="onTermClick(item)"
     ></div>
-    <div class="minimap-viewport" :style="viewportStyle"></div>
+    <div
+      class="minimap-viewport"
+      :style="viewportStyle"
+      @mousedown.stop.prevent="onViewportMouseDown"
+      title="拖动以移动画布视口"
+    ></div>
   </div>
 </template>
 <script src="./CanvasMinimap.ts"></script>

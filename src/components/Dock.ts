@@ -6,7 +6,6 @@ import {
   Book,
   BuildingStore,
   History,
-  ArrowsLeftRight,
   Lock,
   Keyboard,
   Settings,
@@ -25,14 +24,14 @@ const DOCK_ICONS: Record<string, Component> = markRaw({
   commands: Book,
   market: BuildingStore,
   history: History,
-  mappings: ArrowsLeftRight,
   ssh: Lock,
   shortcuts: Keyboard,
   settings: Settings,
 });
 
 // files 保留在 Dock：但点击后切换到独立的空视图，不再复用画布左侧的 FileTree 浮层
-const MAIN_IDS = ['canvas', 'files', 'commands', 'market', 'history', 'mappings'] as const;
+// mappings 已合并到命令管理面板的子标签中，不再作为独立 Dock 项
+const MAIN_IDS = ['canvas', 'files', 'commands', 'market', 'history'] as const;
 const TAIL_IDS = ['ssh', 'shortcuts', 'settings'] as const;
 
 const LABEL_KEYS: Record<string, string> = {
@@ -41,7 +40,6 @@ const LABEL_KEYS: Record<string, string> = {
   commands: 'sidebar.commands',
   market: 'sidebar.market',
   history: 'sidebar.history',
-  mappings: 'sidebar.mappings',
   ssh: 'sidebar.ssh',
   shortcuts: 'sidebar.shortcuts',
   settings: 'sidebar.settings',

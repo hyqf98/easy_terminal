@@ -4,6 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use crate::path_util;
+
 const DB_VERSION: &str = "2";
 const DEFAULT_PAGE_SIZE: i64 = 100;
 const DEFAULT_SEARCH_LIMIT: i64 = 12;
@@ -232,15 +234,11 @@ fn default_true() -> bool {
 }
 
 fn db_path() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    let dir = home.join(".easy-terminal");
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir.join("commands.db"))
+    Ok(path_util::app_data_dir()?.join("commands.db"))
 }
 
 fn archive_dir() -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-    Ok(home.join(".easy-terminal").join("commands-archive"))
+    Ok(path_util::app_data_dir()?.join("commands-archive"))
 }
 
 pub fn bundled_seeds() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
@@ -268,96 +266,6 @@ pub fn bundled_seeds() -> Vec<(&'static str, &'static str, &'static str, &'stati
             "system",
             "builtin",
             include_str!("../commands/system/ubuntu.json"),
-        ),
-        (
-            "arch",
-            "system",
-            "builtin",
-            include_str!("../commands/system/arch.json"),
-        ),
-        (
-            "java",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/java.json"),
-        ),
-        (
-            "python",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/python.json"),
-        ),
-        (
-            "conda",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/conda.json"),
-        ),
-        (
-            "npm",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/npm.json"),
-        ),
-        (
-            "pnpm",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/pnpm.json"),
-        ),
-        (
-            "yarn",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/yarn.json"),
-        ),
-        (
-            "uv",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/uv.json"),
-        ),
-        (
-            "docker",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/docker.json"),
-        ),
-        (
-            "git",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/git.json"),
-        ),
-        (
-            "kubectl",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/kubectl.json"),
-        ),
-        (
-            "systemctl",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/systemctl.json"),
-        ),
-        (
-            "rust",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/rust.json"),
-        ),
-        (
-            "ai-ml",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/ai-ml.json"),
-        ),
-        (
-            "devops",
-            "custom",
-            "builtin",
-            include_str!("../commands/custom/devops.json"),
         ),
     ]
 }
@@ -499,6 +407,22 @@ impl Db {
     }
 
     fn ensure_builtin_seeds(&self, conn: &mut Connection) -> Result<(), String> {
+        // Clean up deprecated builtin libraries (arch + all custom builtins)
+        // that were removed from bundled_seeds in newer versions.
+        conn.execute(
+            "DELETE FROM commands WHERE library_id IN (
+                SELECT id FROM command_libraries
+                WHERE source_type = 'builtin' AND (kind = 'custom' OR id = 'arch')
+            )",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM command_libraries WHERE source_type = 'builtin' AND (kind = 'custom' OR id = 'arch')",
+            [],
+        )
+        .map_err(|e| e.to_string())?;
+
         for (id, kind, source_type, content) in bundled_seeds() {
             let exists = conn
                 .query_row(
@@ -574,8 +498,7 @@ impl Db {
     }
 
     fn migrate_legacy_json(&self, conn: &mut Connection) -> Result<(), String> {
-        let home = dirs::home_dir().ok_or("Cannot determine home directory")?;
-        let root = home.join(".easy-terminal").join("commands");
+        let root = path_util::app_data_dir()?.join("commands");
         if !root.exists() {
             return Ok(());
         }

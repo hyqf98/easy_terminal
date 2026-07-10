@@ -1,8 +1,8 @@
 .minimap {
   position: absolute;
   right: 16px;
-  /* 对齐 Dock 顶部边缘 */
-  bottom: 70px;
+  /* 底部与 Dock 导航栏底部对齐 */
+  bottom: 18px;
   width: 180px;
   height: 120px;
   background: var(--surface);
@@ -11,16 +11,24 @@
   box-shadow: var(--shadow-sm);
   overflow: hidden;
   z-index: 20;
-  /* 启用交互（点击导航 / 悬停高亮）：整体作为控件捕获事件，阻止冒泡到画布触发框选 */
-  cursor: default;
+  /* 启用交互（点击导航 / 悬停高亮 / 拖拽视口框）：整体作为控件捕获事件，阻止冒泡到画布触发框选 */
+  cursor: pointer;
   -webkit-app-region: no-drag;
 }
 
 /* 纯装饰层不拦截指针事件，保证点击穿透到下方的 .minimap-term */
 .minimap-grid,
-.minimap-label,
-.minimap-viewport {
+.minimap-label {
   pointer-events: none;
+}
+
+/* 视口框可拖拽：需要接收指针事件 */
+.minimap-viewport {
+  pointer-events: auto;
+  cursor: grab;
+}
+.minimap-viewport:active {
+  cursor: grabbing;
 }
 
 .minimap-grid {

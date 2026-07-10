@@ -1,3 +1,4 @@
+use crate::path_util;
 use crate::{fs, settings};
 use serde::Serialize;
 use ssh2::{RenameFlags, Session, Sftp};
@@ -1033,12 +1034,9 @@ fn expand_home(path: String) -> Result<PathBuf, String> {
         return Err("密钥路径不能为空".to_string());
     }
 
-    if let Some(stripped) = path.strip_prefix("~/") {
-        let home = dirs::home_dir().ok_or("无法确定用户目录")?;
-        return Ok(home.join(stripped));
-    }
-
-    Ok(PathBuf::from(path))
+    // 统一使用 path_util::expand_path 展开 `~` 和 `$HOME` 等环境变量，
+    // 支持裸 `~`、`~/path`、`~user` 以及 `$VAR`/`${VAR}` 语法。
+    Ok(path_util::expand_path(&path))
 }
 
 pub fn prepare_ssh_key(private_key_path: String) -> Result<String, String> {

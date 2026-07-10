@@ -12,6 +12,7 @@ import type {
   CommandDetail,
   CommandEntry,
   CommandLibrarySummary,
+  CommandMapping,
   CommandSummary,
   CommandSummaryPage,
 } from '../../types';
@@ -124,10 +125,22 @@ export default defineComponent({
 
     async function reloadLibraries() {
       const libs = await invoke<CommandLibrarySummary[]>('list_command_libraries');
-      libraries.value = libs;
+      // Filter system libraries by current platform — only show the system
+      // library that matches the running OS (e.g. on macOS show only darwin).
+      // Custom/user libraries are always shown.
+      let platforms: string[] = [];
+      try {
+        platforms = await invoke<string[]>('get_platforms');
+      } catch {
+        /* fallback: show all */
+      }
+      const filtered = platforms.length > 0
+        ? libs.filter((lib) => lib.kind !== 'system' || lib.platforms.some((p) => platforms.includes(p)))
+        : libs;
+      libraries.value = filtered;
       if (
         activeLibraryId.value !== ALL_CATEGORY &&
-        !libs.some((lib) => lib.id === activeLibraryId.value)
+        !filtered.some((lib) => lib.id === activeLibraryId.value)
       ) {
         activeLibraryId.value = ALL_CATEGORY;
       }
@@ -191,6 +204,7 @@ export default defineComponent({
         category: detail.category,
         alias: detail.alias || [],
         tags: detail.tags || [],
+        triggers: detail.triggers || [],
         examples: detail.examples || [],
         hint: detail.hint || '',
         enabled: detail.enabled,
@@ -209,6 +223,7 @@ export default defineComponent({
         showMessage(t('cmd.categoryRequired'), 'warning');
         return;
       }
+      const triggers = entry.triggers || [];
       const payload = {
         id: entry.id ?? null,
         libraryId: targetLibraryId,
@@ -224,7 +239,7 @@ export default defineComponent({
         examples: entry.examples,
         hint: entry.hint || '',
         language: '',
-        triggers: [] as string[],
+        triggers,
         keywords: [] as string[],
         weight: 0,
         enabled: entry.enabled ?? true,
@@ -238,9 +253,49 @@ export default defineComponent({
         commandModalOpen.value = false;
         await reloadActiveCommands(activePage.value.page);
         await reloadLibraries();
+        // Sync mappings: if the command has triggers, create/update a corresponding mapping
+        await syncMappingForCommand(entry.name, entry.command, triggers, entry.description);
         emit('commands-changed');
       } catch (error) {
         showMessage(t('cmd.saveFailed', String(error)), 'error');
+      }
+    }
+
+    /** Sync CommandMapping entries for a saved command.
+     *  If triggers are set, create or update a mapping with the same command + triggers.
+     *  If triggers are empty, remove any existing mapping with the same command. */
+    async function syncMappingForCommand(name: string, command: string, triggers: string[], description: string) {
+      try {
+        const mappings = await invoke<CommandMapping[]>('load_command_mappings');
+        const existing = mappings.find((m) => m.command === command);
+        let next: CommandMapping[];
+
+        if (triggers.length > 0) {
+          const mapping: CommandMapping = {
+            id: existing?.id || `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            triggers,
+            command,
+            description: description || name,
+            tags: [],
+            examples: [],
+            hint: '',
+            enabled: true,
+            sourceType: 'user',
+            platforms: [],
+          };
+          if (existing) {
+            next = mappings.map((m) => (m.id === existing.id ? mapping : m));
+          } else {
+            next = [...mappings, mapping];
+          }
+        } else {
+          // No triggers — remove existing mapping if any
+          next = existing ? mappings.filter((m) => m.id !== existing.id) : mappings;
+        }
+
+        await invoke('save_command_mappings', { entries: next });
+      } catch {
+        // Mapping sync is best-effort; don't fail the command save
       }
     }
 
@@ -253,9 +308,11 @@ export default defineComponent({
       });
       if (!confirmed) return;
       try {
-        await invoke('delete_command', { libraryId: command.libraryId, commandId: command.id });
+        await invoke('delete_command_entry', { id: command.id });
         await reloadActiveCommands(activePage.value.page);
         await reloadLibraries();
+        // Also remove the corresponding mapping if one exists
+        await syncMappingForCommand(command.name, command.command, [], command.description);
         emit('commands-changed');
       } catch (error) {
         showMessage(t('cmd.saveFailed', String(error)), 'error');
@@ -384,6 +441,7 @@ export default defineComponent({
     });
 
     return {
+      ALL_CATEGORY,
       libraries,
       activeLibraryId,
       activePage,
@@ -433,7 +491,6 @@ export default defineComponent({
       deleteLibrary,
       exportLibrary,
       importFile,
-      ALL_CATEGORY,
     };
   },
 });
