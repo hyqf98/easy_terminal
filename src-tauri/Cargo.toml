@@ -33,6 +33,12 @@ tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 ssh2 = "0.9"
 rusqlite = { version = "0.32", features = ["bundled"] }
+# SQLite FTS5 全文搜索（bundled 编译，需启用 feature）
+# 通过 rusqlite 的 "bundled" 自带 SQLite，FTS5 默认编译包含在较新的 SQLite 版本中
+jwalk = "0.8"
+notify = { version = "6", features = ["serde"] }
+trash = "5"
+sysinfo = "0.32"
 
 [profile.dev]
 # Keep local debugging usable, but avoid huge symbol files in repeated tauri dev rebuilds.

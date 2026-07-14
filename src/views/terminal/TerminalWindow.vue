@@ -60,8 +60,9 @@
     </button>
     <!-- 补全弹窗 Teleport 到 body 并使用 position:fixed，避免被 .terminal-window 的 overflow:hidden 裁剪 -->
     <Teleport to="body">
-      <div class="completion-popup" v-if="suggestVisible && suggestItems.length > 0"
+      <div ref="completionPopupRef" class="completion-popup" v-if="suggestVisible && suggestItems.length > 0"
         :class="`selection-mode-${suggestSelectionMode}`"
+        :data-placement="suggestPlacement"
         :style="suggestStyle">
         <div class="completion-header">
           <span>{{ suggestHeaderText }}</span>
@@ -84,10 +85,13 @@
           </div>
         </div>
         <div class="completion-footer">
-          <span>↑↓ 选择 · ↹ 接受 · Esc 关闭</span>
+          <span>↑↓ / Tab 选择 · Enter 接受 · Esc 关闭</span>
           <span class="completion-source">{{ activeSuggestion ? activeSuggestion.sourceLabel : '' }}</span>
         </div>
       </div>
+    </Teleport>
+    <Teleport to="body">
+      <span v-if="ghostText" class="terminal-ghost-text" :style="ghostStyle" aria-hidden="true">{{ ghostText }}</span>
     </Teleport>
     <div class="resize-handle resize-n" @mousedown.prevent.stop="startResize('n', $event)"></div>
     <div class="resize-handle resize-s" @mousedown.prevent.stop="startResize('s', $event)"></div>

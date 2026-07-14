@@ -18,6 +18,7 @@ import ShortcutPanel from '../shortcut/ShortcutPanel.vue';
 import SettingsPanel from '../settings/SettingsPanel.vue';
 import TerminalWindow from '../terminal/TerminalWindow.vue';
 import TerminalFilePanel from '../terminal/TerminalFilePanel.vue';
+import FileManager from '../filemanager/FileManager.vue';
 import { Canvas } from '../canvas/canvas';
 import { ShortcutManager } from '../shortcut/shortcutManager';
 import { setupDesktopDrawShortcut } from '../shortcut/globalShortcut';
@@ -57,6 +58,7 @@ export default defineComponent({
     Titlebar, Dock, CanvasMinimap, TerminalModal,
     PreviewPanel, CommandConfigPanel, CommandMarketPanel,
     HistoryPanel, SshPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel,
+    FileManager,
   },
   setup() {
     useAppMessage();
@@ -78,7 +80,7 @@ export default defineComponent({
     const canvasHintLabel = computed(() => t('hint.canvasDrag'));
     const newTerminalLabel = computed(() => t('canvas.newTerminal'));
     // 文件管理空视图占位文案
-    const filesPlaceholderLabel = '文件管理（待实现）';
+    const filesPlaceholderLabel = '文件管理';
 
     const terminals = ref<TerminalEntry[]>([]);
     const activeTerminalId = ref('');
@@ -129,6 +131,14 @@ export default defineComponent({
     function onViewChange(view: string) {
       const next = view as ViewId;
       activeView.value = next;
+      // 切换到非画布视图时，隐藏所有终端的命令提示弹窗（弹窗 Teleport 到 body，
+      // v-show 切换不会连带隐藏）
+      if (next !== 'canvas') {
+        for (const [, el] of terminalInstanceMap) {
+          el?.hideSuggestions?.();
+          el?.blur?.();
+        }
+      }
       if (next === 'market' && marketRef.value) {
         // @ts-expect-error exposed component method
         void marketRef.value.init?.();
@@ -147,7 +157,15 @@ export default defineComponent({
       terminalModalOpen.value = true;
     }
 
-    function createTerminal(x = 80, y = 80, w = 700, h = 450, options: TerminalLaunchOptions = {}, zIndexOverride?: number) {
+    function createTerminal(
+      x = 80,
+      y = 80,
+      w = 700,
+      h = 450,
+      options: TerminalLaunchOptions = {},
+      zIndexOverride?: number,
+      autoFitViewport = true,
+    ) {
       const id = `term-${nextTerminalId++}`;
       const entry: TerminalEntry = {
         id, x, y, w, h,
@@ -159,7 +177,7 @@ export default defineComponent({
       showHint.value = false;
       // 首个终端创建后：智能调整视口缩放让终端以合理大小居中显示
       // 避免在极小 zoom 下终端内容看不清（非框选入口：Dock新建、SSH连接等）
-      if (terminals.value.length === 1) {
+      if (autoFitViewport && terminals.value.length === 1) {
         void nextTick(() => fitTerminalToViewport(x, y, w, h));
       }
       return id;
@@ -512,7 +530,7 @@ export default defineComponent({
             h: Math.max(100, Math.min(1200, session.h)),
           }));
         for (const session of valid) {
-          createTerminal(session.x, session.y, session.w, session.h, session.launchOptions || { mode: 'local' });
+          createTerminal(session.x, session.y, session.w, session.h, session.launchOptions || { mode: 'local' }, undefined, false);
         }
         if (valid.length > 0) showHint.value = false;
 
@@ -593,12 +611,9 @@ export default defineComponent({
         return { w: vp.clientWidth, h: vp.clientHeight };
       };
       canvas.onTerminalCreate = (x, y, w, h) => {
-        createTerminal(x, y, w, h);
-        // 首个终端创建后：智能调整 zoom 让终端在视口中以合理大小居中显示
-        // 保持框选尺寸不变，只调整视口缩放——避免极小 zoom 下终端内容看不清
-        if (terminals.value.length === 1) {
-          void nextTick(() => fitTerminalToViewport(x, y, w, h));
-        }
+        // 框选坐标已经按当前 pan/zoom 反算为画布坐标，创建后不能再次改变视口，
+        // 否则终端的屏幕尺寸和落点会偏离用户刚刚画出的矩形。
+        createTerminal(x, y, w, h, { mode: 'local' }, undefined, false);
       };
       canvas.onCanvasContextMenu = (cvs, clientX, clientY) => {
         const items: Array<{ label: string; action: () => void }> = [];
@@ -682,12 +697,19 @@ export default defineComponent({
 
       unsubLang = onLangChange(() => { /* computed auto-update via langTick in Dock */ });
       Perf.end('app.startup');
+
+      // FileManager 预览请求：复用 PreviewPanel
+      window.addEventListener('fm-open-preview', ((e: CustomEvent) => {
+        currentFileStrategy.value = null; // FileManager 仅处理本地文件
+        previewPath.value = e.detail as string;
+      }) as EventListener);
     });
 
     onUnmounted(() => {
       canvas?.destroy();
       canvas = null;
       unsubLang?.();
+      window.removeEventListener('fm-open-preview', (() => {}) as EventListener);
     });
 
     // 把画布吸附能力注入到每个终端窗口，拖拽/缩放时触发对齐辅助线

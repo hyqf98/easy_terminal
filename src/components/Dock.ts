@@ -9,6 +9,8 @@ import {
   Lock,
   Keyboard,
   Settings,
+  ChevronUp,
+  ChevronDown,
 } from '@vicons/tabler';
 import { t, onLangChange } from '../i18n';
 
@@ -61,6 +63,8 @@ export default defineComponent({
   emits: ['view-change'],
   setup() {
     const langTick = ref(0);
+    const dockExpanded = ref(false);
+    const dockShellRef = ref<HTMLElement | null>(null);
     const items = computed<DockItem[]>(() => {
       void langTick.value;
       return buildItems(MAIN_IDS);
@@ -71,16 +75,77 @@ export default defineComponent({
     });
 
     let unsub: (() => void) | null = null;
+    let collapseTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastExpandedAt = 0;
+
+    function cancelCollapse() {
+      if (!collapseTimer) return;
+      clearTimeout(collapseTimer);
+      collapseTimer = null;
+    }
+
+    function expandDock() {
+      cancelCollapse();
+      if (!dockExpanded.value) lastExpandedAt = performance.now();
+      dockExpanded.value = true;
+    }
+
+    function collapseDock() {
+      cancelCollapse();
+      dockExpanded.value = false;
+    }
+
+    function scheduleCollapse() {
+      if (!dockExpanded.value || collapseTimer) return;
+      collapseTimer = setTimeout(() => {
+        collapseTimer = null;
+        dockExpanded.value = false;
+      }, 250);
+    }
+
+    function toggleDock() {
+      // Pointer enter expands first; the same initial click must not immediately undo it.
+      if (dockExpanded.value && performance.now() - lastExpandedAt > 220) collapseDock();
+      else expandDock();
+    }
+
+    function onDocumentPointerMove(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (target && dockShellRef.value?.contains(target)) {
+        cancelCollapse();
+        return;
+      }
+      if (event.clientY >= window.innerHeight - 7) {
+        expandDock();
+      } else {
+        scheduleCollapse();
+      }
+    }
+
     onMounted(() => {
       unsub = onLangChange(() => {
         langTick.value++;
       });
+      document.addEventListener('pointermove', onDocumentPointerMove, { passive: true });
     });
     onUnmounted(() => {
       unsub?.();
+      cancelCollapse();
+      document.removeEventListener('pointermove', onDocumentPointerMove);
     });
 
     // 将静态图标映射暴露给模板，避免把组件塞进响应式数据
-    return { items, tailItems, iconMap: DOCK_ICONS };
+    return {
+      items,
+      tailItems,
+      iconMap: DOCK_ICONS,
+      dockExpanded,
+      dockShellRef,
+      ChevronUp,
+      ChevronDown,
+      expandDock,
+      scheduleCollapse,
+      toggleDock,
+    };
   },
 });

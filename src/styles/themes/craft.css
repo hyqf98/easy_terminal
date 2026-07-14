@@ -48,6 +48,7 @@
   --teal: #5a9e8f;
   --pink: #c45c7a;
   --border: var(--craft-border);
+  --border-strong: #d4ccc0;
   --border-sub: var(--craft-surface-muted);
   --shadow: rgba(61, 56, 50, 0.12);
   --scrollbar: rgba(193, 127, 89, 0.3);
@@ -121,6 +122,7 @@
   --teal: #6ab8a8;
   --pink: #e08090;
   --border: var(--craft-border);
+  --border-strong: #4a443e;
   --border-sub: var(--craft-surface-muted);
   --shadow: rgba(0, 0, 0, 0.4);
   --scrollbar: rgba(193, 127, 89, 0.35);

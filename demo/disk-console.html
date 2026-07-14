@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="craft-light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disk Console - 磁盘管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="console/console.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- 顶部工具栏: 导航按钮 + 地址栏 + 搜索 -->
+  <header class="toolbar">
+    <div class="nav-btns">
+      <button class="nav-btn" id="btn-back" title="后退 (Alt+左)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="nav-btn" id="btn-fwd" title="前进 (Alt+右)" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button class="nav-btn" id="btn-up" title="上一级 (Alt+上)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="18 15 12 9 6 15"/></svg>
+      </button>
+      <button class="nav-btn" id="btn-refresh" title="刷新 (F5)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      </button>
+    </div>
+    <div class="addrbar">
+      <svg class="addrbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="6" width="19" height="13" rx="1"/><line x1="2.5" y1="10" x2="21.5" y2="10"/></svg>
+      <div class="addrbar-path" id="addrbar-path"></div>
+    </div>
+    <div class="searchbox">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search" placeholder="搜索当前文件夹" autocomplete="off" spellcheck="false">
+    </div>
+    <button class="nav-btn" id="btn-theme" title="切换主题">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+  </header>
+
+  <!-- 主体: 左侧导航 + 右侧文件列表 -->
+  <div class="body">
+
+    <!-- 左侧导航 -->
+    <aside class="sidebar">
+      <div class="nav-group">
+        <div class="nav-group-title">快速访问</div>
+        <div class="nav-quick" data-disk-id="mac" data-path="/Users/dev/Downloads">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>下载</span>
+        </div>
+        <div class="nav-quick" data-disk-id="mac" data-path="/Users/dev/Documents">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span>文档</span>
+        </div>
+        <div class="nav-quick" data-disk-id="mac" data-path="/Users/dev/Developer/easy_terminal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>easy_terminal</span>
+        </div>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-title">此电脑</div>
+        <div class="disk-list" id="disk-list"><!-- JS 渲染磁盘 --></div>
+      </div>
+
+      <!-- 总容量概览 -->
+      <div class="sidebar-foot" id="sidebar-foot"><!-- JS 渲染总计 --></div>
+    </aside>
+
+    <!-- 右侧文件区 -->
+    <section class="files">
+      <!-- 列头 -->
+      <div class="files-header" id="files-header">
+        <div class="col col-name sorted" data-sort="name"><span>名称</span><i class="sort-arrow"></i></div>
+        <div class="col col-date" data-sort="date"><span>修改日期</span><i class="sort-arrow"></i></div>
+        <div class="col col-type" data-sort="type"><span>类型</span><i class="sort-arrow"></i></div>
+        <div class="col col-size" data-sort="size"><span>大小</span><i class="sort-arrow"></i></div>
+      </div>
+      <!-- 文件列表 -->
+      <div class="files-list" id="files-list"><!-- JS 渲染文件 --></div>
+    </section>
+
+  </div>
+
+  <!-- 底部状态栏 -->
+  <footer class="statusbar">
+    <span id="status-items">0 项</span>
+    <span class="sep">|</span>
+    <span id="status-size"></span>
+    <span class="spacer"></span>
+    <span class="mono" id="status-disk"></span>
+  </footer>
+
+</div>
+<script src="console/console.js"></script>
+</body>
+</html>

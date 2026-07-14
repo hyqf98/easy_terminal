@@ -89,6 +89,8 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
       originalLength: raw.length,
       length: raw.length,
       label: raw.label,
+      token,
+      resolved: false,
     });
     displayParts.push({ text: token, isPlaceholder: true, label: raw.label });
 
@@ -111,4 +113,103 @@ export function parsePlaceholders(template: string): ParsedPlaceholders {
 
 export function hasPlaceholder(text: string): boolean {
   return text != null && (text.includes('[%s') || /<\w[\w.-]*>/.test(text) || /\{\w[\w.-]*\}/.test(text));
+}
+
+export function isPlaceholderToken(text: string): boolean {
+  return /^<[^>]+>$|^\[%s(?::[^\]]+)?\]$|^\{[^}]+\}$/.test(text);
+}
+
+export interface PlaceholderEditResult {
+  line: string;
+  placeholders: PlaceholderInfo[];
+  cursorPosition: number;
+}
+
+/** Replace one placeholder as a single edit and shift every later range. */
+export function replacePlaceholderRange(
+  line: string,
+  placeholders: PlaceholderInfo[],
+  index: number,
+  replacement: string,
+): PlaceholderEditResult {
+  const next = placeholders.map((placeholder) => ({ ...placeholder }));
+  const target = next[index];
+  if (!target) {
+    return { line, placeholders: next, cursorPosition: line.length };
+  }
+
+  const oldLength = target.length;
+  const updatedLine = line.slice(0, target.position)
+    + replacement
+    + line.slice(target.position + oldLength);
+  const delta = replacement.length - oldLength;
+
+  target.length = replacement.length;
+  target.resolved = true;
+  for (let cursor = index + 1; cursor < next.length; cursor++) {
+    next[cursor].position += delta;
+  }
+
+  return {
+    line: updatedLine,
+    placeholders: next,
+    cursorPosition: target.position + replacement.length,
+  };
+}
+
+/**
+ * Update placeholder ranges after an ordinary line edit. The active placeholder
+ * grows or shrinks with edits inside its range; later placeholders are shifted.
+ */
+export function updatePlaceholderRanges(
+  placeholders: PlaceholderInfo[],
+  editStart: number,
+  removedLength: number,
+  insertedLength: number,
+  activeIndex: number,
+): PlaceholderInfo[] {
+  const editEnd = editStart + removedLength;
+  const delta = insertedLength - removedLength;
+
+  return placeholders.map((placeholder, index) => {
+    const next = { ...placeholder };
+    const placeholderEnd = placeholder.position + placeholder.length;
+    const insertionInsideActive = removedLength === 0
+      && index === activeIndex
+      && editStart >= placeholder.position
+      && editStart <= placeholderEnd;
+
+    if (insertionInsideActive) {
+      next.length += insertedLength;
+      next.resolved = true;
+      return next;
+    }
+
+    if (placeholder.position >= editEnd && !(removedLength === 0 && placeholder.position < editStart)) {
+      next.position += delta;
+      return next;
+    }
+
+    const overlapStart = Math.max(editStart, placeholder.position);
+    const overlapEnd = Math.min(editEnd, placeholderEnd);
+    const overlap = Math.max(0, overlapEnd - overlapStart);
+    if (overlap > 0) {
+      next.length = Math.max(0, placeholder.length - overlap + (index === activeIndex ? insertedLength : 0));
+      next.resolved = true;
+    }
+    return next;
+  });
+}
+
+/** Remove every still-visible placeholder token before a template is executed. */
+export function removeUnresolvedPlaceholderRanges(line: string, placeholders: PlaceholderInfo[]): string {
+  let result = line;
+  const ordered = [...placeholders].sort((left, right) => right.position - left.position);
+  for (const placeholder of ordered) {
+    const value = result.slice(placeholder.position, placeholder.position + placeholder.length);
+    if (!placeholder.resolved && isPlaceholderToken(value)) {
+      result = result.slice(0, placeholder.position) + result.slice(placeholder.position + placeholder.length);
+    }
+  }
+  return result;
 }

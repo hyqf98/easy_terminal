@@ -11,10 +11,29 @@ import { getTerminalThemeStrategy } from './strategies/terminalIndex';
 import { CommandIntelligence } from './commandIntelligence';
 import { Perf } from '../../utils/perf';
 import { normalizeTitleCwd } from '../../utils/path';
-import type { TerminalLaunchOptions, SuggestionItem, Rect, SnapOptions } from '../../types';
+import {
+  isPlaceholderToken,
+  removeUnresolvedPlaceholderRanges,
+  replacePlaceholderRange,
+  updatePlaceholderRanges,
+} from '../../utils/placeholder';
+import { calculateSuggestPlacement, type SuggestPlacement } from '../../utils/suggestPlacement';
+import {
+  nextTextBoundary,
+  previousTextBoundary,
+  textCellWidth,
+  textCursorDistance,
+  textIndexAtCell,
+} from '../../utils/terminalLine';
+import type { TerminalLaunchOptions, SuggestionItem, PlaceholderInfo, Rect, SnapOptions } from '../../types';
 import type { SSHProfile } from '../../types/ssh';
 
 type WindowRect = { x: number; y: number; w: number; h: number };
+
+interface TemplateInputSession {
+  bodyEnd: number;
+  ownedEnd: number;
+}
 
 let commandIntel: CommandIntelligence | null = null;
 let intelInitPromise: Promise<void> | null = null;
@@ -37,6 +56,8 @@ async function ensureIntel(): Promise<CommandIntelligence> {
 
 // Regex to detect Shift/Ctrl/Alt modified arrow key sequences: \x1b[1;2D, \x1b[1;5C, etc.
 const MODIFIED_ARROW_RE = /^\x1b\[1;\d+[ABCD]$/;
+const CURSOR_LEFT_SEQUENCES = new Set(['\x1b[D', '\x1b[1D', '\x1b[1;1D', '\x1bOD']);
+const CURSOR_RIGHT_SEQUENCES = new Set(['\x1b[C', '\x1b[1C', '\x1b[1;1C', '\x1bOC']);
 
 // normalizeTitleCwd 已抽取到 utils/path.ts
 
@@ -76,9 +97,13 @@ export default defineComponent({
     const isResizing = ref(false);
     const suggestVisible = ref(false);
     const suggestItems = ref<SuggestionItem[]>([]);
-    const suggestIndex = ref(0);
+    const suggestIndex = ref(-1);
     const suggestSelectionMode = ref<'keyboard' | 'mouse'>('keyboard');
     const suggestStyle = ref<Record<string, string>>({});
+    const suggestPlacement = ref<SuggestPlacement>('below');
+    const completionPopupRef = ref<HTMLDivElement | null>(null);
+    const ghostText = ref('');
+    const ghostStyle = ref<Record<string, string>>({});
     // SSH 切换下拉菜单显隐
     const sshMenuOpen = ref(false);
     // 文件面板展开状态（由父组件控制，仅用于 tab 视觉反馈）
@@ -90,7 +115,7 @@ export default defineComponent({
     }
 
     const activeSuggestion = computed(() => {
-      if (suggestVisible.value && suggestItems.value.length > 0) {
+      if (suggestVisible.value && suggestIndex.value >= 0 && suggestItems.value.length > 0) {
         return suggestItems.value[suggestIndex.value] || null;
       }
       return null;
@@ -124,7 +149,8 @@ export default defineComponent({
 
     // 每条建议的键盘提示徽标：首条 Tab 接受，其余按序号映射 ⌃N / ⌃P 风格
     function suggestKbdHint(idx: number, item: SuggestionItem): string {
-      if (idx === 0) return '↹ Tab';
+      if (suggestIndex.value === idx) return '↵ Enter';
+      if (suggestIndex.value < 0 && idx === 0) return '↹ 选择';
       if (item.type === 'history') return `⌃${idx}`;
       if (item.type === 'mapping') return '⇥';
       return `⌥${idx}`;
@@ -143,9 +169,9 @@ export default defineComponent({
     let unlisten: UnlistenFn | null = null;
     let unlistenLang: (() => void) | null = null;
     let sessionId = '';
-    // IME 组合输入状态：composition 期间禁止退格等编辑键干扰，结束后短暂锁定等 shell 回显
+    let ptyWriteQueue: Promise<void> = Promise.resolve();
+    // IME 组合输入状态：组合期间让输入法接管编辑键，提交后立即恢复正常终端输入。
     let imeComposing = false;
-    let imeJustFinished = 0;
     let disposed = false;
     // 监听 data-theme 属性变化，联动重应用 xterm 主题
     let themeObserver: MutationObserver | null = null;
@@ -154,6 +180,8 @@ export default defineComponent({
     let currentLine = '';
     let cursorPos = 0;
     let suggestTimer: ReturnType<typeof setTimeout> | null = null;
+    let suggestRequestId = 0;
+    let suggestPositionRafId: number | null = null;
     let outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
     let outputBuffer = '';
 
@@ -168,8 +196,17 @@ export default defineComponent({
     let lastSuggestMouseY = Number.NaN;
 
     // Placeholder navigation state
-    let activePlaceholders: import('../../types').PlaceholderInfo[] = [];
+    let activePlaceholders: PlaceholderInfo[] = [];
     let currentPlaceholderIdx = -1;
+    let templateSession: TemplateInputSession | null = null;
+    let placeholderSelectionArmed = false;
+
+    // Shift+方向键选中文本时的锚点与虚拟光标（buffer 绝对坐标）。
+    // 锚点 = 首次按下 Shift 时的光标位置；虚拟光标随方向键移动。
+    let selAnchorX: number | null = null;
+    let selAnchorY: number | null = null;
+    let selCursorX: number | null = null;
+    let selCursorY: number | null = null;
 
     // Click-to-move-cursor state
     let mouseDownX = 0;
@@ -249,11 +286,71 @@ export default defineComponent({
       }
     }
 
+    function clearGhostText() {
+      ghostText.value = '';
+      ghostStyle.value = {};
+    }
+
+    function hideSuggestions(clearItems = true) {
+      suggestRequestId++;
+      suggestVisible.value = false;
+      suggestIndex.value = -1;
+      if (clearItems) suggestItems.value = [];
+      clearGhostText();
+    }
+
     function resetLineTracking() {
       currentLine = '';
       cursorPos = 0;
       activePlaceholders = [];
       currentPlaceholderIdx = -1;
+      templateSession = null;
+      placeholderSelectionArmed = false;
+      clearSelectionAnchor();
+      term?.clearSelection();
+      hideSuggestions();
+    }
+
+    function scheduleSuggestPosition() {
+      if (suggestPositionRafId !== null) cancelAnimationFrame(suggestPositionRafId);
+      void nextTick(() => {
+        suggestPositionRafId = requestAnimationFrame(() => {
+          suggestPositionRafId = null;
+          updateSuggestPosition();
+          updateGhostPosition();
+        });
+      });
+    }
+
+    function getCursorGeometry(): {
+      cursorRect: DOMRect;
+      terminalRect: DOMRect;
+      cellWidth: number;
+      cellHeight: number;
+    } | null {
+      if (!term || !rootRef.value) return null;
+      const rootRect = rootRef.value.getBoundingClientRect();
+      const screenEl = bodyRef.value?.querySelector('.xterm-screen') as HTMLElement | null;
+      const screenRect = screenEl?.getBoundingClientRect();
+      if (!screenRect || screenRect.width <= 0 || screenRect.height <= 0) return null;
+
+      const cellWidth = screenRect.width / Math.max(1, term.cols);
+      const cellHeight = screenRect.height / Math.max(1, term.rows);
+      const cursorX = term.buffer.active.cursorX;
+      const cursorY = term.buffer.active.cursorY;
+      const cursorRect = DOMRect.fromRect({
+        x: screenRect.left + cursorX * cellWidth,
+        y: screenRect.top + cursorY * cellHeight,
+        width: cellWidth,
+        height: cellHeight,
+      });
+      const terminalRect = DOMRect.fromRect({
+        x: Math.max(0, rootRect.left),
+        y: Math.max(0, rootRect.top),
+        width: Math.max(0, Math.min(window.innerWidth, rootRect.right) - Math.max(0, rootRect.left)),
+        height: Math.max(0, Math.min(window.innerHeight, rootRect.bottom) - Math.max(0, rootRect.top)),
+      });
+      return { cursorRect, terminalRect, cellWidth, cellHeight };
     }
 
     // 检测当前是否处于 TUI 模式（alternate screen buffer 被激活）。
@@ -263,38 +360,50 @@ export default defineComponent({
       return !!term && term.buffer.active.type === 'alternate';
     }
 
+    /** Keep IME commits and the immediately following edit/navigation key in strict PTY order. */
+    function enqueuePtyWrite(data: string): Promise<void> {
+      const targetSessionId = sessionId;
+      if (!targetSessionId || disposed || !data) return Promise.resolve();
+      ptyWriteQueue = ptyWriteQueue
+        .catch(() => undefined)
+        .then(async () => {
+          if (disposed || sessionId !== targetSessionId) return;
+          await invoke('write_pty', { sessionId: targetSessionId, data });
+        });
+      return ptyWriteQueue;
+    }
+
     // 根据当前输入行向命令智能引擎查询并刷新补全建议列表
     async function updateSuggestions(input: string) {
+      const requestId = ++suggestRequestId;
       // 设置中关闭了命令智能补全时不显示建议弹窗
       if (!getLocalFlags().commandSuggest) {
-        suggestVisible.value = false;
-        suggestItems.value = [];
+        hideSuggestions();
         return;
       }
       const intel = getCommandIntel();
       const trimmed = input.trimStart();
       if (!intel || !trimmed || trimmed.length < 1) {
-        suggestVisible.value = false;
-        suggestItems.value = [];
+        hideSuggestions();
         return;
       }
 
       try {
         const results = await intel.searchSuggestions(trimmed);
-        if (disposed) return;
+        if (disposed || requestId !== suggestRequestId || input !== currentLine) return;
         if (results.length > 0) {
           suggestItems.value = results;
-          suggestIndex.value = 0;
+          suggestIndex.value = -1;
           suggestSelectionMode.value = 'keyboard';
+          suggestStyle.value = {};
           suggestVisible.value = true;
-          updateSuggestPosition();
+          refreshGhostText();
+          scheduleSuggestPosition();
         } else {
-          suggestVisible.value = false;
-          suggestItems.value = [];
+          hideSuggestions();
         }
       } catch {
-        suggestVisible.value = false;
-        suggestItems.value = [];
+        if (requestId === suggestRequestId) hideSuggestions();
       }
     }
 
@@ -302,100 +411,65 @@ export default defineComponent({
     // 定位基于 .xterm-screen 渲染画布的屏幕矩形 + xterm 渲染器单元格尺寸，
     // 自动计入标题栏高度与 body padding，再按视口边界兜底。
     function updateSuggestPosition() {
-      if (!term || disposed) {
-        suggestStyle.value = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
-        return;
-      }
-
-      const rootRect = rootRef.value?.getBoundingClientRect();
-      if (!rootRect) {
-        suggestStyle.value = { position: 'fixed', left: '4px', top: '60px', '--completion-list-max-height': '220px' };
-        return;
-      }
-
-      const buf = term.buffer.active;
-      const cursorY = buf.cursorY;
-      const cursorX = buf.cursorX;
-
-      // 从 xterm 内部渲染器获取精确的单元格尺寸（与 handleCursorClick 一致）
-      const core = (term as any)._core;
-      let cellW: number;
-      let cellH: number;
-      if (core?._renderService?.dimensions?.css?.cell) {
-        const dims = core._renderService.dimensions.css.cell;
-        cellW = dims.width;
-        cellH = dims.height;
-      } else {
-        // 兜底：用 body 尺寸粗估（含 padding，精度较低）
-        const bodyH = bodyRef.value?.clientHeight ?? rectState.value.h - UNIFIED_TITLEBAR_H;
-        const bodyW = bodyRef.value?.clientWidth ?? rectState.value.w;
-        cellW = (bodyW / term.cols) || 9;
-        cellH = (bodyH / term.rows) || 18;
-      }
-
-      // .xterm-screen 是实际渲染画布，与单元格 1:1 映射。
-      // 使用其 getBoundingClientRect 可自动计入标题栏高度与 body padding，无需手动估算。
-      const screenEl = bodyRef.value?.querySelector('.xterm-screen') as HTMLElement | null;
-      const screenRect = screenEl?.getBoundingClientRect() ?? null;
-
-      // 光标行在屏幕坐标系中的上沿与下沿（弹窗应出现在下沿以下）
-      let cursorTopScreenY: number;
-      let cursorBottomScreenY: number;
-      let cursorScreenX: number;
-
-      if (screenRect) {
-        // 精确路径：.xterm-screen rect + 渲染器单元格尺寸
-        cursorTopScreenY = screenRect.top + cursorY * cellH;
-        cursorBottomScreenY = screenRect.top + (cursorY + 1) * cellH;
-        cursorScreenX = screenRect.left + cursorX * cellW;
-      } else {
-        // 兜底路径：rootRect + 标题栏高度 + body padding 估算
-        const titleBarH = props.filePanelOpen ? 0 : UNIFIED_TITLEBAR_H;
-        const bodyPadTop = 10;   // .terminal-body { padding: 10px 12px }
-        const bodyPadLeft = 12;
-        cursorTopScreenY = rootRect.top + titleBarH + bodyPadTop + cursorY * cellH;
-        cursorBottomScreenY = rootRect.top + titleBarH + bodyPadTop + (cursorY + 1) * cellH;
-        cursorScreenX = rootRect.left + bodyPadLeft + cursorX * cellW;
-      }
-
-      const maxListH = 232;
-      const popupChromeH = 54;
-      const popupMaxW = 340;
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-
-      // 水平：贴光标列，右溢出回缩，左边界兜底
-      let left = cursorScreenX;
-      if (left + popupMaxW > vw - 8) left = Math.max(8, vw - 8 - popupMaxW);
-
-      // 垂直：默认落在光标行下方；下方空间不足且上方足够时翻转到光标上方
-      const spaceBelow = vh - cursorBottomScreenY;
-      const spaceAbove = cursorTopScreenY - rootRect.top; // 从终端根元素顶部到光标行上沿
-      let top: number;
-      let clampedMaxH: number;
-      if (spaceBelow < maxListH + popupChromeH + 10 && spaceAbove > maxListH) {
-        // 翻转到上方：弹窗底边贴近光标行上沿
-        top = Math.max(8, cursorTopScreenY - maxListH - popupChromeH);
-        clampedMaxH = Math.min(maxListH, Math.max(0, spaceAbove - popupChromeH - 6));
-      } else {
-        // 下方：弹窗顶边贴光标行下沿
-        top = cursorBottomScreenY;
-        clampedMaxH = Math.min(maxListH, Math.max(0, spaceBelow - popupChromeH - 6));
-      }
-
+      if (!suggestVisible.value || disposed) return;
+      const geometry = getCursorGeometry();
+      if (!geometry) return;
+      const popupWidth = completionPopupRef.value?.offsetWidth || 280;
+      const desiredListHeight = Math.min(200, suggestItems.value.length * 36 + 6);
+      const result = calculateSuggestPlacement({
+        cursorRect: geometry.cursorRect,
+        terminalRect: geometry.terminalRect,
+        popupWidth,
+        desiredListHeight,
+        chromeHeight: 49,
+        gap: 6,
+        edgePadding: 6,
+      });
+      suggestPlacement.value = result.placement;
       suggestStyle.value = {
         position: 'fixed',
-        left: `${Math.round(left)}px`,
-        top: `${Math.round(top)}px`,
-        '--completion-list-max-height': `${Math.max(112, clampedMaxH)}px`,
+        left: `${Math.round(result.left)}px`,
+        top: `${Math.round(result.top)}px`,
+        width: `${Math.round(result.width)}px`,
+        minWidth: `${Math.round(result.width)}px`,
+        maxWidth: `${Math.round(result.width)}px`,
+        '--completion-list-max-height': `${Math.floor(result.listHeight)}px`,
+      };
+    }
+
+    function refreshGhostText() {
+      clearGhostText();
+      if (!term || !suggestVisible.value || cursorPos !== currentLine.length || !getLocalFlags().ghostText || templateSession || activePlaceholders.length > 0) return;
+      const item = suggestItems.value[suggestIndex.value] || null;
+      const ghost = getCommandIntel()?.getGhostSuggestionForItem(currentLine, item) || null;
+      if (!ghost?.text || !currentLine.trim()) return;
+      ghostText.value = ghost.text;
+      updateGhostPosition();
+    }
+
+    function updateGhostPosition() {
+      if (!ghostText.value) return;
+      const geometry = getCursorGeometry();
+      if (!geometry) {
+        clearGhostText();
+        return;
+      }
+      const availableWidth = Math.max(0, geometry.terminalRect.right - geometry.cursorRect.left - 6);
+      ghostStyle.value = {
+        position: 'fixed',
+        left: `${Math.round(geometry.cursorRect.left)}px`,
+        top: `${Math.round(geometry.cursorRect.top)}px`,
+        maxWidth: `${Math.floor(availableWidth)}px`,
+        height: `${Math.ceil(geometry.cellHeight)}px`,
+        lineHeight: `${geometry.cellHeight}px`,
+        fontSize: `${Math.max(9, geometry.cellHeight * 0.72)}px`,
       };
     }
 
     function scrollSuggestIntoView(index = suggestIndex.value) {
       void nextTick(() => {
-        // 补全弹窗通过 <Teleport to="body"> 渲染到 document.body，
-        // 已脱离 .terminal-window 层级，必须从 document 全局查询。
-        const container = document.querySelector('.completion-list') as HTMLElement | null;
+        // 补全弹窗通过 <Teleport to="body"> 渲染，使用实例 ref 避免多终端互相串扰。
+        const container = completionPopupRef.value?.querySelector('.completion-list') as HTMLElement | null;
         const active = container?.querySelector('.completion-item.selected') as HTMLElement | null;
         if (!container || !active) return;
         const padding = 6;
@@ -427,7 +501,295 @@ export default defineComponent({
     }
 
     function onInputChanged(input: string) {
+      hideSuggestions();
+      if (templateSession) return;
       debouncedUpdateSuggestions(input);
+    }
+
+    function moveCursorTo(position: number) {
+      if (!sessionId || disposed) return;
+      const target = Math.max(0, Math.min(currentLine.length, position));
+      const direction = target - cursorPos;
+      const steps = textCursorDistance(currentLine, cursorPos, target);
+      cursorPos = target;
+      placeholderSelectionArmed = false;
+      clearSelectionAnchor();
+      if (direction < 0) {
+        void enqueuePtyWrite('\x1b[D'.repeat(steps));
+      } else if (direction > 0) {
+        void enqueuePtyWrite('\x1b[C'.repeat(steps));
+      }
+      clearGhostText();
+      scheduleSuggestPosition();
+    }
+
+    function highlightActivePlaceholder() {
+      term?.clearSelection();
+      const placeholder = activePlaceholders[currentPlaceholderIdx];
+      if (!term || !placeholder || placeholder.length <= 0) return;
+      const buffer = term.buffer.active;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      const cursorLinear = cursorRow * term.cols + buffer.cursorX;
+      const lineStart = cursorLinear - textCellWidth(currentLine.slice(0, cursorPos));
+      const targetLinear = lineStart + textCellWidth(currentLine.slice(0, placeholder.position));
+      const row = Math.max(0, Math.floor(targetLinear / term.cols));
+      const column = ((targetLinear % term.cols) + term.cols) % term.cols;
+      term.select(column, row, textCellWidth(currentLine.slice(placeholder.position, placeholder.position + placeholder.length)));
+      placeholderSelectionArmed = true;
+    }
+
+    /** 获取当前命令行的 buffer 坐标信息，用于选中计算。 */
+    function getCommandLineBounds() {
+      if (!term) return null;
+      const buffer = term.buffer.active;
+      const cols = term.cols;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      const cursorLinear = cursorRow * cols + buffer.cursorX;
+      const commandStartWidth = textCellWidth(currentLine.slice(0, cursorPos));
+      const lineStartLinear = cursorLinear - commandStartWidth;
+      const lineLength = textCellWidth(currentLine);
+      return { cursorRow, cursorX: buffer.cursorX, lineStartLinear, lineLength, cols };
+    }
+
+    /** 清除 Shift 选中锚点。 */
+    function clearSelectionAnchor() {
+      selAnchorX = null;
+      selAnchorY = null;
+      selCursorX = null;
+      selCursorY = null;
+    }
+
+    /** 根据锚点和虚拟光标位置执行 term.select()。 */
+    function performSelection() {
+      if (!term || selAnchorX === null || selAnchorY === null || selCursorX === null || selCursorY === null) return;
+      const cols = term.cols;
+      const anchorLinear = selAnchorY * cols + selAnchorX;
+      const cursorLinear = selCursorY * cols + selCursorX;
+      const startLinear = Math.min(anchorLinear, cursorLinear);
+      const length = Math.abs(cursorLinear - anchorLinear);
+      if (length <= 0) {
+        term.clearSelection();
+        return;
+      }
+      const startRow = Math.floor(startLinear / cols);
+      const startCol = startLinear % cols;
+      term.select(startCol, startRow, length);
+    }
+
+    /** Shift+方向键：在 buffer 坐标空间移动虚拟光标并选中文本。 */
+    function handleShiftArrow(event: KeyboardEvent): boolean {
+      if (!term) return true;
+      const buffer = term.buffer.active;
+      const cols = term.cols;
+      // 如果锚点不存在，或者之前的选区已被外部清除（如 term.clearSelection()），
+      // 则以当前光标位置重新初始化锚点。
+      const hasSelection = !!term.getSelection();
+      if (selAnchorX === null || !hasSelection) {
+        selAnchorX = buffer.cursorX;
+        selAnchorY = buffer.baseY + buffer.cursorY;
+        selCursorX = buffer.cursorX;
+        selCursorY = buffer.baseY + buffer.cursorY;
+      }
+      switch (event.key) {
+        case 'ArrowLeft':
+          if (selCursorX! > 0) {
+            selCursorX = selCursorX! - 1;
+          } else if (selCursorY! > 0) {
+            selCursorY = selCursorY! - 1;
+            selCursorX = cols - 1;
+          }
+          break;
+        case 'ArrowRight':
+          if (selCursorX! < cols - 1) {
+            selCursorX = selCursorX! + 1;
+          } else {
+            selCursorY = selCursorY! + 1;
+            selCursorX = 0;
+          }
+          break;
+        case 'ArrowUp':
+          if (selCursorY! > 0) selCursorY = selCursorY! - 1;
+          break;
+        case 'ArrowDown':
+          selCursorY = selCursorY! + 1;
+          break;
+        default:
+          return true;
+      }
+      performSelection();
+      return false;
+    }
+
+    /** Ctrl+A：选中当前正在输入的整行命令。 */
+    function handleSelectAll(): boolean {
+      if (!term) return true;
+      const buffer = term.buffer.active;
+      const cols = term.cols;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      let startCol: number;
+      let length: number;
+      if (currentLine.length > 0) {
+        const bounds = getCommandLineBounds();
+        if (!bounds) return true;
+        if (bounds.lineLength <= 0) return false;
+        const row = Math.max(0, Math.floor(bounds.lineStartLinear / cols));
+        startCol = ((bounds.lineStartLinear % cols) + cols) % cols;
+        length = bounds.lineLength;
+        term.select(startCol, row, length);
+        selAnchorX = startCol;
+        selAnchorY = row;
+        selCursorX = startCol + length;
+        selCursorY = row;
+      } else {
+        // currentLine 为空时（PTY 未初始化），回退到选中当前行的非空内容
+        const lineText = buffer.getLine(cursorRow)?.translateToString(false) || '';
+        const trimmed = lineText.replace(/\s+$/, '');
+        length = trimmed.length;
+        if (length <= 0) return false;
+        startCol = 0;
+        term.select(startCol, cursorRow, length);
+        selAnchorX = startCol;
+        selAnchorY = cursorRow;
+        selCursorX = startCol + length;
+        selCursorY = cursorRow;
+      }
+      return false;
+    }
+
+    /** Shift+Home：选中从命令开头到当前光标。 */
+    function handleShiftHome(): boolean {
+      if (!term) return true;
+      const buffer = term.buffer.active;
+      const cols = term.cols;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      const cursorX = buffer.cursorX;
+      // currentLine 为空时（PTY 未初始化），回退到 buffer 当前行行首
+      const lineStartCol = currentLine.length > 0
+        ? ((getCommandLineBounds()?.lineStartLinear ?? 0) % cols + cols) % cols
+        : 0;
+      selAnchorX = lineStartCol;
+      selAnchorY = cursorRow;
+      selCursorX = cursorX;
+      selCursorY = cursorRow;
+      performSelection();
+      return false;
+    }
+
+    /** Shift+End：选中从当前光标到命令结尾。 */
+    function handleShiftEnd(): boolean {
+      if (!term) return true;
+      const buffer = term.buffer.active;
+      const cols = term.cols;
+      const cursorRow = buffer.baseY + buffer.cursorY;
+      const cursorX = buffer.cursorX;
+      // currentLine 为空时（PTY 未初始化），回退到 buffer 当前行行尾
+      let endCol: number;
+      if (currentLine.length > 0) {
+        const bounds = getCommandLineBounds();
+        if (!bounds) return true;
+        const endLinear = bounds.lineStartLinear + bounds.lineLength;
+        endCol = endLinear % cols;
+      } else {
+        // 读取当前行实际文本，找到最后一个非空字符
+        const lineText = buffer.getLine(cursorRow)?.translateToString(false) || '';
+        endCol = lineText.replace(/\s+$/, '').length;
+      }
+      selAnchorX = cursorX;
+      selAnchorY = cursorRow;
+      selCursorX = endCol;
+      selCursorY = cursorRow;
+      performSelection();
+      return false;
+    }
+
+    function shouldReplaceActivePlaceholder(): boolean {
+      const placeholder = activePlaceholders[currentPlaceholderIdx];
+      if (!placeholder || cursorPos < placeholder.position || cursorPos > placeholder.position + placeholder.length) return false;
+      if (placeholderSelectionArmed) return true;
+      if (placeholder.resolved) return false;
+      return isPlaceholderToken(currentLine.slice(placeholder.position, placeholder.position + placeholder.length));
+    }
+
+    function updateTemplateSessionForEdit(editStart: number, removedLength: number, insertedLength: number) {
+      if (!templateSession) return;
+      const editEnd = editStart + removedLength;
+      const removedFromBody = Math.max(0, Math.min(editEnd, templateSession.bodyEnd) - Math.min(editStart, templateSession.bodyEnd));
+      const insertedIntoBody = editStart <= templateSession.bodyEnd ? insertedLength : 0;
+      templateSession.bodyEnd = Math.max(0, templateSession.bodyEnd - removedFromBody + insertedIntoBody);
+      if (editStart <= templateSession.ownedEnd) {
+        templateSession.ownedEnd = Math.max(templateSession.bodyEnd, templateSession.ownedEnd + insertedLength - removedLength);
+      }
+    }
+
+    function templateBodyWasRemoved(): boolean {
+      if (!templateSession) return false;
+      return currentLine.slice(0, templateSession.bodyEnd).trim().length === 0;
+    }
+
+    function clearInvalidTemplateSession(afterEditData: string): boolean {
+      if (!templateBodyWasRemoved() || !sessionId) return false;
+      currentLine = '';
+      cursorPos = 0;
+      activePlaceholders = [];
+      currentPlaceholderIdx = -1;
+      templateSession = null;
+      placeholderSelectionArmed = false;
+      term?.clearSelection();
+      hideSuggestions();
+      // Apply the user's edit, then clear the complete readline buffer from end to start.
+      void enqueuePtyWrite(`${afterEditData}\x05\x15`);
+      return true;
+    }
+
+    function replaceActivePlaceholder(text: string): boolean {
+      const placeholder = activePlaceholders[currentPlaceholderIdx];
+      if (!placeholder || !shouldReplaceActivePlaceholder() || !sessionId) return false;
+      const oldPosition = placeholder.position;
+      const oldLength = placeholder.length;
+      const move = oldPosition - cursorPos;
+      const moveSteps = textCursorDistance(currentLine, cursorPos, oldPosition);
+      const moveSequence = move < 0 ? '\x1b[D'.repeat(moveSteps) : '\x1b[C'.repeat(moveSteps);
+      const result = replacePlaceholderRange(currentLine, activePlaceholders, currentPlaceholderIdx, text);
+      currentLine = result.line;
+      activePlaceholders = result.placeholders;
+      cursorPos = result.cursorPosition;
+      updateTemplateSessionForEdit(oldPosition, oldLength, text.length);
+      placeholderSelectionArmed = false;
+      term?.clearSelection();
+      hideSuggestions();
+      void enqueuePtyWrite(moveSequence + '\x1b[3~'.repeat(oldLength) + text);
+      return true;
+    }
+
+    function deleteActivePlaceholder(): boolean {
+      const placeholder = activePlaceholders[currentPlaceholderIdx];
+      if (!placeholder || !shouldReplaceActivePlaceholder() || !sessionId) return false;
+      const oldPosition = placeholder.position;
+      const oldLength = placeholder.length;
+      const move = oldPosition - cursorPos;
+      const moveSteps = textCursorDistance(currentLine, cursorPos, oldPosition);
+      const moveSequence = move < 0 ? '\x1b[D'.repeat(moveSteps) : '\x1b[C'.repeat(moveSteps);
+      const result = replacePlaceholderRange(currentLine, activePlaceholders, currentPlaceholderIdx, '');
+      currentLine = result.line;
+      activePlaceholders = result.placeholders;
+      cursorPos = result.cursorPosition;
+      updateTemplateSessionForEdit(oldPosition, oldLength, 0);
+      placeholderSelectionArmed = false;
+      term?.clearSelection();
+      onInputChanged(currentLine);
+      void enqueuePtyWrite(moveSequence + '\x1b[3~'.repeat(oldLength));
+      return true;
+    }
+
+    function applyTrackedEdit(editStart: number, removedLength: number, insertedLength: number) {
+      activePlaceholders = updatePlaceholderRanges(
+        activePlaceholders,
+        editStart,
+        removedLength,
+        insertedLength,
+        currentPlaceholderIdx,
+      );
+      updateTemplateSessionForEdit(editStart, removedLength, insertedLength);
     }
 
     async function initTerminal() {
@@ -459,7 +821,63 @@ export default defineComponent({
       term.unicode.activeVersion = '11';
 
       term.open(bodyRef.value);
+      term.onRender(() => {
+        if (suggestVisible.value || ghostText.value) scheduleSuggestPosition();
+      });
 
+      // 自定义键盘拦截：在普通命令行模式下处理选中快捷键。
+      // TUI 模式（vim/htop/less 等）下全部放行，交由应用程序自行处理。
+      const isMacPlatform = /Mac/i.test(navigator.platform);
+      term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+        if (event.type !== 'keydown') return true;
+        // TUI 模式放行
+        if (isTuiMode()) return true;
+
+        // Ctrl+A：选中整行命令（覆盖默认的"移动到行首"语义）
+        if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
+          return handleSelectAll();
+        }
+
+        // Shift+方向键：逐字符/逐行选中
+        if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
+            && (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+          return handleShiftArrow(event);
+        }
+
+        // Shift+Home / Shift+End：选中到行首/行尾
+        if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'Home') {
+          return handleShiftHome();
+        }
+        if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && event.key === 'End') {
+          return handleShiftEnd();
+        }
+
+        // macOS：Cmd+Left / Cmd+Right 等同 Home / End
+        if (isMacPlatform && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+          if (event.key === 'ArrowLeft') {
+            cursorPos = 0;
+            placeholderSelectionArmed = false;
+            clearSelectionAnchor();
+            term?.clearSelection();
+            clearGhostText();
+            scheduleSuggestPosition();
+            void enqueuePtyWrite('\x1b[H');
+            return false;
+          }
+          if (event.key === 'ArrowRight') {
+            cursorPos = currentLine.length;
+            placeholderSelectionArmed = false;
+            clearSelectionAnchor();
+            term?.clearSelection();
+            refreshGhostText();
+            scheduleSuggestPosition();
+            void enqueuePtyWrite('\x1b[F');
+            return false;
+          }
+        }
+
+        return true;
+      });
       try {
         const webglAddon = new WebglAddon();
         webglAddon.onContextLoss(() => {
@@ -482,14 +900,12 @@ export default defineComponent({
 
       fitAddon.fit();
 
-      // 监听 IME 组合输入状态：composition 期间标记，结束后短暂锁定退格等编辑键
-      // 避免 shell 回显中文前退格先到 PTY 导致"最后一个字符删不掉"
+      // 监听 IME 组合输入状态：composition 期间由输入法处理候选，提交后立即交还终端。
       const imeTextarea = bodyRef.value.querySelector('.xterm-helper-textarea') as HTMLElement | null;
       if (imeTextarea) {
         imeTextarea.addEventListener('compositionstart', () => { imeComposing = true; });
         imeTextarea.addEventListener('compositionend', () => {
           imeComposing = false;
-          imeJustFinished = Date.now();
         });
       }
 
@@ -549,7 +965,7 @@ export default defineComponent({
         // TUI 模式（vim/htop/less/claude/codex 等）：所有按键直接透传 PTY，
         // 不做命令跟踪、补全拦截、占位符跳转等任何行编辑逻辑。
         if (isTuiMode()) {
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
           return;
         }
 
@@ -557,8 +973,13 @@ export default defineComponent({
           return;
         }
 
+        if (data === '\x1b' && suggestVisible.value) {
+          hideSuggestions();
+          return;
+        }
+
         if (data === '\r') {
-          if (suggestVisible.value && suggestItems.value.length > 0) {
+          if (suggestVisible.value && suggestIndex.value >= 0 && suggestItems.value.length > 0) {
             const item = suggestItems.value[suggestIndex.value];
             if (item) {
               applySuggestion(item);
@@ -573,132 +994,184 @@ export default defineComponent({
               jumpToNextPlaceholder();
               return;
             }
-            // Last placeholder — delete remaining placeholder text if still present,
-            // then execute the command
-            const lastPh = activePlaceholders[currentPlaceholderIdx];
-            const phText = currentLine.slice(lastPh.position, lastPh.position + lastPh.length);
-            if (/^<[^>]*>$|^\[%s[^\]]*\]$|^\{[^}]*\}$/.test(phText)) {
-              // Delete the placeholder text via forward-delete
-              const deleteSeq = '\x1b[3~'.repeat(lastPh.length);
-              void invoke('write_pty', { sessionId, data: deleteSeq });
-              currentLine = currentLine.slice(0, lastPh.position) + currentLine.slice(lastPh.position + lastPh.length);
+            // Last placeholder: strip every unresolved token before execution.
+            const sanitizedLine = removeUnresolvedPlaceholderRanges(currentLine, activePlaceholders);
+            if (sanitizedLine !== currentLine) {
+              const command = sanitizedLine.trim();
+              resetLineTracking();
+              if (command) emit('command-executed', command, '');
+              void enqueuePtyWrite(`\x01\x0b${sanitizedLine}\r`);
+              return;
             }
           }
           const command = currentLine.trim();
           resetLineTracking();
-          suggestVisible.value = false;
           if (command) {
             emit('command-executed', command, '');
           }
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data === '\x7f' || data === '\b') {
-          // IME 组合输入中或刚结束（50ms 内）时丢弃退格：
-          // composition 期间退格会被 IME 拦截用于取消候选词，
-          // composition 刚结束时 shell 可能还没回显完中文，提前退格会导致"最后一个字符删不掉"
-          if (imeComposing || (imeJustFinished && Date.now() - imeJustFinished < 50)) {
-            return;
-          }
+          // 组合输入期间由输入法消费退格；compositionend 后不再吞键。
+          if (imeComposing) return;
+          if (deleteActivePlaceholder()) return;
           if (cursorPos > 0) {
-            currentLine = currentLine.slice(0, cursorPos - 1) + currentLine.slice(cursorPos);
-            cursorPos--;
-            // Update placeholder positions: shift back placeholders after the deleted char
-            if (activePlaceholders.length > 0) {
-              for (const ph of activePlaceholders) {
-                if (ph.position >= cursorPos) {
-                  ph.position -= 1;
-                }
-              }
-            }
+            const editStart = previousTextBoundary(currentLine, cursorPos);
+            const removedLength = cursorPos - editStart;
+            currentLine = currentLine.slice(0, editStart) + currentLine.slice(cursorPos);
+            cursorPos = editStart;
+            applyTrackedEdit(editStart, removedLength, 0);
           }
+          clearSelectionAnchor();
+          if (clearInvalidTemplateSession(data)) return;
           onInputChanged(currentLine);
-          void invoke('write_pty', { sessionId, data });
-        } else if (data === '\x1b[D') {
-          cursorPos = Math.max(0, cursorPos - 1);
-          void invoke('write_pty', { sessionId, data });
-        } else if (data === '\x1b[C') {
-          cursorPos = Math.min(currentLine.length, cursorPos + 1);
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
+        } else if (CURSOR_LEFT_SEQUENCES.has(data)) {
+          cursorPos = previousTextBoundary(currentLine, cursorPos);
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          clearGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
+        } else if (CURSOR_RIGHT_SEQUENCES.has(data)) {
+          cursorPos = nextTextBoundary(currentLine, cursorPos);
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          if (cursorPos === currentLine.length) refreshGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
         } else if (data === '\x1b[A') {
           resetLineTracking();
-          suggestVisible.value = false;
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data === '\x1b[B') {
           resetLineTracking();
-          suggestVisible.value = false;
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data === '\x03') {
           resetLineTracking();
-          suggestVisible.value = false;
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data === '\x15') {
-          resetLineTracking();
-          suggestVisible.value = false;
-          void invoke('write_pty', { sessionId, data });
+          const removed = cursorPos;
+          currentLine = currentLine.slice(cursorPos);
+          cursorPos = 0;
+          applyTrackedEdit(0, removed, 0);
+          if (clearInvalidTemplateSession(data)) return;
+          onInputChanged(currentLine);
+          void enqueuePtyWrite(data);
         } else if (data === '\x17') {
           const beforeCursor = currentLine.slice(0, cursorPos);
           const trimmed = beforeCursor.replace(/\S+\s*$/, '');
           const deleted = cursorPos - trimmed.length;
           currentLine = trimmed + currentLine.slice(cursorPos);
           cursorPos -= deleted;
+          applyTrackedEdit(cursorPos, deleted, 0);
+          if (clearInvalidTemplateSession(data)) return;
           onInputChanged(currentLine);
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
+        } else if (data === '\x01') {
+          cursorPos = 0;
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          clearGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
+        } else if (data === '\x05') {
+          cursorPos = currentLine.length;
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          refreshGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
+        } else if (data === '\x0b') {
+          const removed = currentLine.length - cursorPos;
+          currentLine = currentLine.slice(0, cursorPos);
+          applyTrackedEdit(cursorPos, removed, 0);
+          if (templateBodyWasRemoved()) {
+            resetLineTracking();
+          } else {
+            onInputChanged(currentLine);
+          }
+          void enqueuePtyWrite(data);
         } else if (data === '\t') {
           if (suggestVisible.value && suggestItems.value.length > 0) {
-            const item = suggestItems.value[suggestIndex.value];
-            if (item) {
+            if (suggestIndex.value < 0) {
+              suggestSelectionMode.value = 'keyboard';
+              suggestIndex.value = 0;
+              scrollSuggestIntoView(0);
+              refreshGhostText();
+            } else {
+              const item = suggestItems.value[suggestIndex.value];
               applySuggestion(item);
             }
           } else if (activePlaceholders.length > 0 && currentPlaceholderIdx >= 0) {
-            jumpToNextPlaceholder();
+            jumpToPlaceholder(1, true);
           } else {
-            void invoke('write_pty', { sessionId, data });
+            void enqueuePtyWrite(data);
           }
+        } else if (data === '\x1b[Z' && activePlaceholders.length > 0 && currentPlaceholderIdx >= 0) {
+          jumpToPlaceholder(-1, true);
+        } else if (data === '\x1b[3~') {
+          if (deleteActivePlaceholder()) return;
+          if (cursorPos < currentLine.length) {
+            const nextPosition = nextTextBoundary(currentLine, cursorPos);
+            currentLine = currentLine.slice(0, cursorPos) + currentLine.slice(nextPosition);
+            applyTrackedEdit(cursorPos, nextPosition - cursorPos, 0);
+          }
+          if (clearInvalidTemplateSession(data)) return;
+          onInputChanged(currentLine);
+          void enqueuePtyWrite(data);
         } else if (MODIFIED_ARROW_RE.test(data)) {
-          // [fix2] Shift/Ctrl/Alt+Arrow — don't send to PTY, let xterm handle selection
-          // xterm.js handles these internally for text selection
+          // 修饰方向键可能由 shell 绑定为按词移动；必须透传，不能在前端吞掉。
+          clearSelectionAnchor();
+          hideSuggestions();
+          void enqueuePtyWrite(data);
         } else if (data.length === 1 && data >= ' ') {
+          if (replaceActivePlaceholder(data)) return;
+          const editStart = cursorPos;
           currentLine = currentLine.slice(0, cursorPos) + data + currentLine.slice(cursorPos);
           cursorPos++;
-          // Update placeholder positions: shift all placeholders at or after cursorPos
-          if (activePlaceholders.length > 0) {
-            for (const ph of activePlaceholders) {
-              if (ph.position >= cursorPos - 1) {
-                ph.position += data.length;
-              }
-            }
-          }
+          applyTrackedEdit(editStart, 0, data.length);
+          clearSelectionAnchor();
           onInputChanged(currentLine);
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data.length > 1 && !data.startsWith('\x1b') && !data.includes('\r') && !data.includes('\n') && !data.includes('\x7f') && !data.includes('\b')) {
           // IME 输入（中文/日文等）：onData 收到的是完整输入文本（多字符），
           // 需要整体插入 currentLine 并更新 cursorPos，否则后续删除会错位。
           // 排除含控制字符的多字符数据（如粘贴多行文本），交给下方 else 透传
-          currentLine = currentLine.slice(0, cursorPos) + data + currentLine.slice(cursorPos);
+          if (replaceActivePlaceholder(data)) return;
+          const editStart = cursorPos;
+          currentLine = currentLine.slice(0, editStart) + data + currentLine.slice(cursorPos);
           cursorPos += data.length;
-          // Update placeholder positions for multi-char input
-          if (activePlaceholders.length > 0) {
-            for (const ph of activePlaceholders) {
-              if (ph.position >= cursorPos - data.length) {
-                ph.position += data.length;
-              }
-            }
-          }
+          applyTrackedEdit(editStart, 0, data.length);
           onInputChanged(currentLine);
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
         } else if (data === '\x1b[H' || data === '\x1b[1~') {
           cursorPos = 0;
-          void invoke('write_pty', { sessionId, data });
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          clearGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
         } else if (data === '\x1b[F' || data === '\x1b[4~') {
           cursorPos = currentLine.length;
-          void invoke('write_pty', { sessionId, data });
+          placeholderSelectionArmed = false;
+          clearSelectionAnchor();
+          term?.clearSelection();
+          refreshGhostText();
+          scheduleSuggestPosition();
+          void enqueuePtyWrite(data);
         } else if (data.startsWith('\x1b[')) {
           // Unknown escape sequences — pass to PTY
           // but reset local tracking since we can't know cursor state after
-          void invoke('write_pty', { sessionId, data });
+          void enqueuePtyWrite(data);
           resetLineTracking();
-          suggestVisible.value = false;
         } else {
-          void invoke('write_pty', { sessionId, data });
+          if (data.includes('\r') || data.includes('\n')) resetLineTracking();
+          else clearGhostText();
+          void enqueuePtyWrite(data);
         }
       });
 
@@ -710,8 +1183,11 @@ export default defineComponent({
             suggestSelectionMode.value = 'keyboard';
             lastSuggestMouseX = Number.NaN;
             lastSuggestMouseY = Number.NaN;
-            suggestIndex.value = (suggestIndex.value + 1) % suggestItems.value.length;
+            suggestIndex.value = suggestIndex.value < 0
+              ? 0
+              : (suggestIndex.value + 1) % suggestItems.value.length;
             scrollSuggestIntoView(suggestIndex.value);
+            refreshGhostText();
             return;
           }
           if (domEvent.key === 'ArrowUp') {
@@ -719,12 +1195,15 @@ export default defineComponent({
             suggestSelectionMode.value = 'keyboard';
             lastSuggestMouseX = Number.NaN;
             lastSuggestMouseY = Number.NaN;
-            suggestIndex.value = (suggestIndex.value - 1 + suggestItems.value.length) % suggestItems.value.length;
+            suggestIndex.value = suggestIndex.value < 0
+              ? suggestItems.value.length - 1
+              : (suggestIndex.value - 1 + suggestItems.value.length) % suggestItems.value.length;
             scrollSuggestIntoView(suggestIndex.value);
+            refreshGhostText();
             return;
           }
           if (domEvent.key === 'Escape') {
-            suggestVisible.value = false;
+            hideSuggestions();
             return;
           }
         }
@@ -756,10 +1235,7 @@ export default defineComponent({
       }
 
       if (props.launchOptions.startupCommand) {
-        await invoke('write_pty', {
-          sessionId,
-          data: props.launchOptions.startupCommand + '\n',
-        });
+        await enqueuePtyWrite(props.launchOptions.startupCommand + '\n');
       }
 
       if (props.launchOptions.passwordSequence) {
@@ -767,7 +1243,7 @@ export default defineComponent({
         for (const seq of props.launchOptions.passwordSequence) {
           setTimeout(() => {
             if (!disposed && sessionId) {
-              void invoke('write_pty', { sessionId, data: seq });
+              void enqueuePtyWrite(seq);
             }
           }, delay);
           delay += 800;
@@ -813,60 +1289,22 @@ export default defineComponent({
     }
 
     function jumpToNextPlaceholder() {
-      if (activePlaceholders.length === 0 || currentPlaceholderIdx < 0 || !sessionId || disposed) return;
+      jumpToPlaceholder(1, false);
+    }
 
-      const currentPh = activePlaceholders[currentPlaceholderIdx];
-      const nextIdx = currentPlaceholderIdx + 1;
-      
-      if (nextIdx >= activePlaceholders.length) {
-        // Already on the last placeholder — don't jump, let Enter execute
+    function jumpToPlaceholder(direction: 1 | -1, wrap: boolean) {
+      if (activePlaceholders.length === 0 || currentPlaceholderIdx < 0 || !sessionId || disposed) return;
+      let nextIdx = currentPlaceholderIdx + direction;
+      if (wrap) {
+        nextIdx = (nextIdx + activePlaceholders.length) % activePlaceholders.length;
+      } else if (nextIdx < 0 || nextIdx >= activePlaceholders.length) {
         return;
       }
 
-      const target = activePlaceholders[nextIdx];
-
-      // If the current placeholder text is still present (not yet replaced by user input),
-      // delete it so it doesn't remain in the command line.
-      if (currentPh) {
-        const placeholderText = currentLine.slice(currentPh.position, currentPh.position + currentPh.length);
-        if (/^<[^>]*>$|^\[%s[^\]]*\]$|^\{[^}]*\}$/.test(placeholderText)) {
-          // Move cursor to the start of the placeholder if not already there
-          if (cursorPos !== currentPh.position) {
-            const diff = cursorPos - currentPh.position;
-            if (diff > 0) {
-              cursorPos = currentPh.position;
-              void invoke('write_pty', { sessionId, data: '\x1b[D'.repeat(diff) });
-            } else {
-              cursorPos = currentPh.position;
-              void invoke('write_pty', { sessionId, data: '\x1b[C'.repeat(-diff) });
-            }
-          }
-          // Delete the placeholder text using forward-delete (\x1b[3~)
-          const deleteSeq = '\x1b[3~'.repeat(currentPh.length);
-          void invoke('write_pty', { sessionId, data: deleteSeq });
-          // Update currentLine: remove the placeholder text
-          currentLine = currentLine.slice(0, currentPh.position) + currentLine.slice(currentPh.position + currentPh.length);
-          // Update subsequent placeholder positions
-          for (let i = nextIdx; i < activePlaceholders.length; i++) {
-            activePlaceholders[i].position -= currentPh.length;
-          }
-        }
-      }
-
       currentPlaceholderIdx = nextIdx;
-      
-      // Move cursor to the next placeholder position
-      const moveLeft = cursorPos - target.position;
-      const moveRight = target.position - cursorPos;
-      if (moveLeft > 0) {
-        cursorPos = target.position;
-        const seq = '\x1b[D'.repeat(moveLeft);
-        void invoke('write_pty', { sessionId, data: seq });
-      } else if (moveRight > 0) {
-        cursorPos = target.position;
-        const seq = '\x1b[C'.repeat(moveRight);
-        void invoke('write_pty', { sessionId, data: seq });
-      }
+      const target = activePlaceholders[nextIdx];
+      moveCursorTo(target.position);
+      setTimeout(highlightActivePlaceholder, 20);
     }
 
     function handleCursorClick(e: MouseEvent) {
@@ -887,18 +1325,9 @@ export default defineComponent({
       const relX = e.clientX - screenRect.left;
       const relY = e.clientY - screenRect.top;
 
-      // Get accurate cell dimensions from xterm's internal renderer
-      const core = (term as any)._core;
-      let cellW: number;
-      let cellH: number;
-      if (core?._renderService?.dimensions?.css?.cell) {
-        const dims = core._renderService.dimensions.css.cell;
-        cellW = dims.width;
-        cellH = dims.height;
-      } else {
-        cellW = screenRect.width / term.cols;
-        cellH = screenRect.height / term.rows;
-      }
+      // getBoundingClientRect 已包含画布缩放，因此直接按实际屏幕尺寸换算单元格。
+      const cellW = screenRect.width / term.cols;
+      const cellH = screenRect.height / term.rows;
 
       if (cellW <= 0 || cellH <= 0) return;
 
@@ -908,23 +1337,33 @@ export default defineComponent({
 
       if (clickRow !== cursorY) return;
 
-      // Prompt starts at: cursorX (absolute buffer column) minus cursorPos (position in tracked line)
-      const promptStartCol = cursorX - cursorPos;
+      // 中文等宽字符占两个单元格，提示符起点必须按显示宽度而非 JS 字符串长度计算。
+      const promptStartCol = cursorX - textCellWidth(currentLine.slice(0, cursorPos));
       if (promptStartCol < 0) return;
 
       // Target position within the tracked input line
-      const targetPos = Math.max(0, Math.min(currentLine.length, clickCol - promptStartCol));
+      const targetPos = textIndexAtCell(currentLine, clickCol - promptStartCol);
 
       if (targetPos === cursorPos) return;
 
       // Send arrow keys to move cursor
-      const diff = targetPos - cursorPos;
+      const direction = targetPos - cursorPos;
+      const steps = textCursorDistance(currentLine, cursorPos, targetPos);
       cursorPos = targetPos;
-      if (diff < 0) {
-        void invoke('write_pty', { sessionId, data: '\x1b[D'.repeat(-diff) });
+      placeholderSelectionArmed = false;
+      clearSelectionAnchor();
+      const clickedPlaceholderIndex = activePlaceholders.findIndex((placeholder) => (
+        targetPos >= placeholder.position && targetPos <= placeholder.position + placeholder.length
+      ));
+      if (clickedPlaceholderIndex >= 0) currentPlaceholderIdx = clickedPlaceholderIndex;
+      clearGhostText();
+      scheduleSuggestPosition();
+      if (direction < 0) {
+        void enqueuePtyWrite('\x1b[D'.repeat(steps));
       } else {
-        void invoke('write_pty', { sessionId, data: '\x1b[C'.repeat(diff) });
+        void enqueuePtyWrite('\x1b[C'.repeat(steps));
       }
+      if (clickedPlaceholderIndex >= 0) setTimeout(highlightActivePlaceholder, 20);
     }
 
     function applySuggestion(item: SuggestionItem) {
@@ -936,10 +1375,10 @@ export default defineComponent({
       // the user can see and replace them. Fall back to raw text if no placeholders.
       const newText = hasPlaceholders ? ph!.insertText : (item.insertText || item.executeText);
 
-      suggestVisible.value = false;
+      hideSuggestions();
 
-      // Use Ctrl+U to reliably clear the line, then type new text
-      void invoke('write_pty', { sessionId, data: '\x15' });
+      // Move to the beginning and kill to the end so cursor edits cannot leave a suffix behind.
+      void enqueuePtyWrite('\x01\x0b');
 
       setTimeout(() => {
         if (!sessionId || disposed) return;
@@ -947,18 +1386,25 @@ export default defineComponent({
         // Set up placeholder state before writing
         activePlaceholders = [];
         currentPlaceholderIdx = -1;
+        templateSession = null;
+        placeholderSelectionArmed = false;
 
         if (hasPlaceholders && ph!.placeholders.length > 0) {
-          activePlaceholders = [...ph!.placeholders];
+          activePlaceholders = ph!.placeholders.map((placeholder) => ({ ...placeholder }));
           currentPlaceholderIdx = 0;
           currentLine = newText;
           cursorPos = newText.length;
+          const firstPlaceholder = activePlaceholders[0];
+          templateSession = {
+            bodyEnd: newText.slice(0, firstPlaceholder.position).trimEnd().length,
+            ownedEnd: newText.length,
+          };
         } else {
           currentLine = newText;
           cursorPos = newText.length;
         }
 
-        void invoke('write_pty', { sessionId, data: newText }).then(() => {
+        void enqueuePtyWrite(newText).then(() => {
           if (disposed || !sessionId) return;
           // Move cursor to first placeholder position after PTY has echoed the text
           if (hasPlaceholders && activePlaceholders.length > 0 && currentPlaceholderIdx >= 0) {
@@ -967,15 +1413,12 @@ export default defineComponent({
               const targetPos = activePlaceholders[currentPlaceholderIdx].position;
               const moveLeft = cursorPos - targetPos;
               if (moveLeft > 0) {
+                const moveSteps = textCursorDistance(currentLine, cursorPos, targetPos);
                 cursorPos = targetPos;
-                const seq = '\x1b[D'.repeat(moveLeft);
-                void invoke('write_pty', { sessionId, data: seq });
+                const seq = '\x1b[D'.repeat(moveSteps);
+                void enqueuePtyWrite(seq);
               }
-              // Cursor is now at the first placeholder position.
-              // The placeholder text (e.g. <src>) is visible in the terminal.
-              // When the user types, characters are inserted at the cursor position.
-              // When they press Tab/Enter, jumpToNextPlaceholder will delete the
-              // remaining placeholder text and move to the next one.
+              setTimeout(highlightActivePlaceholder, 20);
             }, 80);
           }
         });
@@ -997,6 +1440,7 @@ export default defineComponent({
       if (!moved) return;
       suggestSelectionMode.value = 'mouse';
       suggestIndex.value = index;
+      refreshGhostText();
     }
 
     function handleResize() {
@@ -1018,6 +1462,7 @@ export default defineComponent({
             });
           }
         }
+        scheduleSuggestPosition();
       } catch { /* ignore */ }
     }
 
@@ -1052,6 +1497,7 @@ export default defineComponent({
         const nextY = snappedGroup.y;
         rectState.value = { ...rectState.value, x: nextX, y: nextY };
         emit('rect-change', props.terminalId, { x: nextX, y: nextY, w: rectState.value.w, h: rectState.value.h });
+        scheduleSuggestPosition();
       }
 
       function onUp() {
@@ -1113,6 +1559,7 @@ export default defineComponent({
           : snappedGroup;
         rectState.value = snapped;
         emit('rect-change', props.terminalId, { x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
+        scheduleSuggestPosition();
         // 用 requestAnimationFrame 节流，避免拖动缩放时每帧都调用 resize_pty（60+次/秒）
         if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
         resizeRafId = requestAnimationFrame(() => {
@@ -1161,7 +1608,7 @@ export default defineComponent({
 
     // 外部向当前终端 PTY 注入数据（用于「在终端执行 cd」等场景）
     function writeToTerminal(data: string) {
-      if (sessionId) void invoke('write_pty', { sessionId, data });
+      if (sessionId) void enqueuePtyWrite(data);
     }
 
     // 切换 SSH 连接：null 表示切回本地终端
@@ -1189,6 +1636,7 @@ export default defineComponent({
 
     function blur() {
       isFocused.value = false;
+      hideSuggestions();
     }
 
     function setTheme(themeName: string) {
@@ -1215,6 +1663,10 @@ export default defineComponent({
       if (suggestTimer) {
         clearTimeout(suggestTimer);
         suggestTimer = null;
+      }
+      if (suggestPositionRafId !== null) {
+        cancelAnimationFrame(suggestPositionRafId);
+        suggestPositionRafId = null;
       }
       if (outputFlushTimer) {
         clearTimeout(outputFlushTimer);
@@ -1288,11 +1740,13 @@ export default defineComponent({
         if (disposed || !term) return;
         term.options.fontSize = calcFontSize(rectState.value.w, rectState.value.h);
         fitAddon?.fit();
+        scheduleSuggestPosition();
       };
       onTermFontFamilyChange = () => {
         if (disposed || !term) return;
         term.options.fontFamily = getTermFontFamily();
         fitAddon?.fit();
+        scheduleSuggestPosition();
       };
       window.addEventListener('term-font-size-change', onTermFontSizeChange);
       window.addEventListener('term-font-family-change', onTermFontFamilyChange);
@@ -1302,16 +1756,24 @@ export default defineComponent({
         if (disposed) return;
         // 命令智能补全被关闭时，立即清除已显示的建议弹窗
         if (!getLocalFlags().commandSuggest) {
-          suggestVisible.value = false;
-          suggestItems.value = [];
+          hideSuggestions();
+        } else if (!getLocalFlags().ghostText) {
+          clearGhostText();
+        } else {
+          refreshGhostText();
         }
       };
       window.addEventListener('term-flags-change', onTermFlagsChange);
     });
 
     watch(() => props.filePanelOpen, () => {
-      void nextTick(() => handleResize());
+      void nextTick(() => {
+        handleResize();
+        scheduleSuggestPosition();
+      });
     });
+
+    watch(() => props.viewportZoom, scheduleSuggestPosition);
 
     onUnmounted(() => {
       document.removeEventListener('click', onSshMenuOutsideClick);
@@ -1319,7 +1781,7 @@ export default defineComponent({
     });
 
     // 暴露命令式能力，供父组件统一标题栏和文件面板调用
-    expose({ writeToTerminal, startDrag, startResize, minimize, toggleMaximize, requestClose });
+    expose({ writeToTerminal, startDrag, startResize, minimize, toggleMaximize, requestClose, hideSuggestions, blur });
 
     return {
       bodyRef,
@@ -1336,6 +1798,10 @@ export default defineComponent({
       suggestIndex,
       suggestSelectionMode,
       suggestStyle,
+      suggestPlacement,
+      completionPopupRef,
+      ghostText,
+      ghostStyle,
       containerClasses,
       containerStyle,
       startDrag,

@@ -7,6 +7,10 @@ export interface PlaceholderInfo {
   /** Length of the placeholder token in insertText (e.g. `<src>` → 5) */
   length: number;
   label: string;
+  /** Original token text, for example `<file>`. */
+  token?: string;
+  /** Whether the visible token has already been replaced or removed. */
+  resolved?: boolean;
 }
 
 export interface ParsedPlaceholders {

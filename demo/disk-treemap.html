@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="craft-light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Disk Lens - Treemap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* === Craft 主题 Token (直接取自 src/styles/themes/craft.css) === */
+  [data-theme="craft-light"]{
+    --bg:#faf7f2; --surface:#ffffff; --surface-muted:#f0ebe3; --term-bg:#f5f0e8;
+    --border:#e8e0d4; --accent:#c17f59; --accent-hover:#a86b47; --accent-soft:#e8d5c4;
+    --text:#3d3832; --text-sub:#5c554c; --text-muted:#9a8f82;
+    --green:#6b9e5a; --yellow:#d4a24a; --red:#c45c5c; --blue:#5a8ec4;
+    --mauve:#9a7ab8; --peach:#d4845a; --teal:#5a9e8f; --pink:#c45c7a;
+    --shadow-sm:0 1px 3px rgba(61,56,50,.06),0 1px 2px rgba(61,56,50,.04);
+    --shadow-md:0 4px 16px rgba(61,56,50,.08),0 2px 6px rgba(61,56,50,.05);
+    --shadow-lg:0 12px 32px rgba(61,56,50,.14),0 4px 12px rgba(61,56,50,.08);
+    --radius-xs:4px; --radius-sm:6px; --radius-md:8px; --radius-lg:12px;
+  }
+  [data-theme="craft-dark"]{
+    --bg:#1e1c1a; --surface:#2a2724; --surface-muted:#332f2b; --term-bg:#252220;
+    --border:#3d3832; --accent:#d4956a; --accent-hover:#e8a87a; --accent-soft:#4a3f35;
+    --text:#e8e0d4; --text-sub:#c4bcb0; --text-muted:#9a8f82;
+    --green:#7ab86a; --yellow:#d4a24a; --red:#e07070; --blue:#6aa8d4;
+    --mauve:#b09ad0; --peach:#e8a070; --teal:#6ab8a8; --pink:#e08090;
+    --shadow-sm:0 1px 3px rgba(0,0,0,.4); --shadow-md:0 4px 16px rgba(0,0,0,.45);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:"Manrope","PingFang SC",system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+    font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    font-feature-settings:"cv11","ss01";
+  }
+  .mono{font-family:"JetBrains Mono",monospace;font-feature-settings:"zero","ss01"}
+
+  /* === Tauri 桌面窗口框架 === */
+  .app{
+    display:flex; flex-direction:column; height:100vh;
+    background:var(--bg);
+  }
+  .titlebar{
+    height:38px; flex-shrink:0;
+    display:flex; align-items:center; padding:0 12px; gap:12px;
+    background:var(--surface-muted);
+    border-bottom:1px solid var(--border);
+    user-select:none;
+    -webkit-app-region:drag;
+  }
+  .traffic{display:flex;gap:7px;-webkit-app-region:no-drag}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--border);cursor:pointer;transition:filter .15s}
+  .dot.close{background:#ff5f57}.dot.min{background:#febc2e}.dot.max{background:#28c840}
+  .traffic:hover .dot:not(:hover){filter:saturate(.4)}
+  .titlebar-title{
+    font-size:12px; font-weight:600; color:var(--text-sub);
+    display:flex; align-items:center; gap:8px;
+  }
+  .titlebar-title svg{width:14px;height:14px;color:var(--accent)}
+  .titlebar-spacer{flex:1}
+  .titlebar-actions{display:flex;gap:6px;-webkit-app-region:no-drag}
+  .icon-btn{
+    width:26px;height:26px; display:grid;place-items:center;
+    border:1px solid transparent; border-radius:var(--radius-sm);
+    background:transparent; color:var(--text-muted); cursor:pointer;
+    transition:all .14s ease;
+  }
+  .icon-btn:hover{background:var(--surface);color:var(--text);border-color:var(--border)}
+  .icon-btn svg{width:15px;height:15px}
+  .theme-toggle{font-size:11px;padding:0 10px;width:auto;gap:6px;color:var(--text-muted)}
+  .theme-toggle svg{width:13px;height:13px}
+
+  /* === 工具栏 === */
+  .toolbar{
+    height:44px; flex-shrink:0;
+    display:flex; align-items:center; gap:8px; padding:0 16px;
+    background:var(--surface); border-bottom:1px solid var(--border);
+  }
+  .breadcrumb{
+    display:flex; align-items:center; gap:6px;
+    font-family:"JetBrains Mono",monospace; font-size:12px;
+    color:var(--text-muted); flex:1; min-width:0;
+  }
+  .breadcrumb svg{width:12px;height:12px;color:var(--text-muted);flex-shrink:0}
+  .crumb{
+    color:var(--text-sub); cursor:pointer; padding:2px 6px;
+    border-radius:var(--radius-xs); white-space:nowrap;
+    transition:background .12s,color .12s;
+  }
+  .crumb:hover{background:var(--surface-muted);color:var(--text)}
+  .crumb.current{color:var(--accent);font-weight:500}
+  .crumb-sep{color:var(--text-muted);opacity:.5}
+
+  .toolbar-group{display:flex;gap:4px;align-items:center}
+  .btn{
+    height:28px; padding:0 12px;
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--border); border-radius:var(--radius-sm);
+    background:var(--surface); color:var(--text);
+    font-family:inherit; font-size:12px; font-weight:500;
+    cursor:pointer; transition:all .14s ease;
+  }
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn svg{width:13px;height:13px}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);color:#fff}
+  .btn.ghost{background:transparent;border-color:transparent}
+  .btn.ghost:hover{background:var(--surface-muted);color:var(--text);border-color:transparent}
+  .seg{display:flex;background:var(--surface-muted);border-radius:var(--radius-sm);padding:2px;gap:2px}
+  .seg button{
+    border:none;background:transparent;color:var(--text-muted);
+    font-family:inherit;font-size:11px;font-weight:600;
+    padding:0 10px;height:22px;cursor:pointer;border-radius:var(--radius-xs);
+    display:inline-flex;align-items:center;gap:5px;transition:all .14s;
+  }
+  .seg button svg{width:12px;height:12px}
+  .seg button.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
+  .seg button:not(.active):hover{color:var(--text-sub)}
+
+  /* === 三栏布局 === */
+  .workspace{
+    flex:1; display:grid;
+    grid-template-columns:240px 1fr 300px;
+    min-height:0;
+  }
+
+  /* === 左侧：卷列表 === */
+  .sidebar{
+    background:var(--surface-muted);
+    border-right:1px solid var(--border);
+    overflow-y:auto; padding:14px 0;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .side-section{
+    padding:0 12px 8px;
+  }
+  .side-label{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--text-muted);
+    padding:0 4px 8px;
+  }
+  .vol{
+    display:block; width:100%; padding:10px 12px;
+    border:none; background:transparent; cursor:pointer;
+    text-align:left; border-radius:var(--radius-sm);
+    border-left:2px solid transparent;
+    transition:all .14s ease; margin:1px 0;
+    font-family:inherit;
+  }
+  .vol:hover{background:var(--surface)}
+  .vol.active{background:var(--surface);border-left-color:var(--accent)}
+  .vol-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .vol-ico{width:18px;height:18px;color:var(--accent);flex-shrink:0}
+  .vol-ico.external{color:var(--teal)}
+  .vol-ico.network{color:var(--mauve)}
+  .vol-name{font-size:12px;font-weight:600;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .vol-size{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-muted)}
+  .ring{width:32px;height:32px;flex-shrink:0}
+  .ring circle{fill:none;stroke-width:3}
+  .ring .bg{stroke:var(--border)}
+  .ring .fg{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .6s cubic-bezier(.22,1,.36,1)}
+  .ring.warn .fg{stroke:var(--yellow)}
+  .ring.danger .fg{stroke:var(--red)}
+  .vol-foot{display:flex;justify-content:space-between;align-items:center;font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-muted);padding-left:26px}
+  .vol-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px}
+
+  /* === 中部：Treemap === */
+  .canvas{
+    background:var(--bg); position:relative;
+    display:flex; flex-direction:column; min-width:0;
+    padding:16px;
+  }
+  .canvas-head{
+    display:flex; align-items:flex-end; justify-content:space-between;
+    margin-bottom:14px; gap:16px;
+  }
+  .canvas-title{display:flex;flex-direction:column;gap:2px}
+  .canvas-title h1{
+    font-size:17px; font-weight:700; color:var(--text);
+    letter-spacing:-.01em; line-height:1.2;
+  }
+  .canvas-sub{
+    font-family:"JetBrains Mono",monospace; font-size:11px;
+    color:var(--text-muted);
+  }
+  .canvas-sub b{color:var(--accent);font-weight:600}
+  .legend{display:flex;gap:14px;align-items:center}
+  .legend-item{
+    display:flex;align-items:center;gap:6px;
+    font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-muted);
+  }
+  .legend-swatch{width:10px;height:10px;border-radius:2px}
+
+  /* Treemap 容器 */
+  .treemap{
+    flex:1; position:relative; background:var(--surface);
+    border:1px solid var(--border); border-radius:var(--radius-md);
+    overflow:hidden; box-shadow:var(--shadow-sm);
+    min-height:0;
+  }
+  /* 用 CSS grid 模拟 squarified treemap */
+  .tm{position:absolute;inset:0;padding:3px;display:flex;flex-direction:column;gap:3px}
+  .tm-row{display:flex;gap:3px;flex:1;min-height:0}
+  .tm-cell{
+    position:relative; border-radius:var(--radius-xs);
+    overflow:hidden; cursor:pointer;
+    transition:transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s, outline-color .12s;
+    outline:1.5px solid transparent; outline-offset:-1.5px;
+    display:flex; flex-direction:column;
+    min-width:0; min-height:0;
+  }
+  .tm-cell:hover{outline-color:rgba(255,255,255,.85);z-index:5;box-shadow:var(--shadow-md)}
+  .tm-cell.selected{outline-color:var(--accent);outline-width:2px;z-index:6}
+  .tm-label{
+    padding:6px 8px; font-family:"JetBrains Mono",monospace;
+    font-size:11px; font-weight:600; color:#fff;
+    line-height:1.25; text-shadow:0 1px 2px rgba(0,0,0,.35);
+    overflow:hidden;
+  }
+  .tm-label .sz{font-size:10px;font-weight:500;opacity:.85;display:block;margin-top:1px}
+  /* 当格子太小不显示文字 */
+  .tm-cell.tiny .tm-label{display:none}
+
+  /* 色阶 (Craft 调色板内取色，降饱和) */
+  .c-accent{background:#c17f59}
+  .c-peach{background:#d4845a}
+  .c-yellow{background:#c4993f}
+  .c-green{background:#6b9e5a}
+  .c-teal{background:#5a9e8f}
+  .c-blue{background:#5a8ec4}
+  .c-mauve{background:#9a7ab8}
+  .c-pink{background:#c45c7a}
+  .c-red{background:#c45c5c}
+  .c-muted{background:#9a8f82}
+
+  .tm-empty{
+    display:flex;align-items:center;justify-content:center;
+    height:100%; color:var(--text-muted); flex-direction:column; gap:10px;
+    font-size:12px;
+  }
+  .tm-empty svg{width:40px;height:40px;opacity:.4}
+
+  /* === 右侧：选中详情 === */
+  .detail{
+    background:var(--surface);
+    border-left:1px solid var(--border);
+    overflow-y:auto; padding:16px;
+    display:flex; flex-direction:column; gap:18px;
+  }
+  .det-head{display:flex;align-items:center;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .det-ico{
+    width:36px;height:36px;flex-shrink:0;
+    background:var(--accent-soft); color:var(--accent);
+    border-radius:var(--radius-sm); display:grid;place-items:center;
+  }
+  .det-ico svg{width:18px;height:18px}
+  .det-name{font-size:13px;font-weight:700;color:var(--text);line-height:1.3;word-break:break-all}
+  .det-path{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--text-muted);margin-top:2px;word-break:break-all}
+
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border-radius:var(--radius-sm);overflow:hidden}
+  .stat{background:var(--surface);padding:10px 12px}
+  .stat-label{font-family:"JetBrains Mono",monospace;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:4px}
+  .stat-val{font-family:"JetBrains Mono",monospace;font-size:15px;font-weight:700;color:var(--text);letter-spacing:-.01em}
+  .stat-val.accent{color:var(--accent)}
+  .stat-val.warn{color:var(--yellow)}
+  .stat-sub{font-size:10px;color:var(--text-muted);margin-top:2px}
+
+  .det-section h3{
+    font-family:"JetBrains Mono",monospace; font-size:10px;
+    text-transform:uppercase; letter-spacing:.08em;
+    color:var(--text-muted); font-weight:600;
+    margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;
+  }
+  .det-section h3 a{color:var(--accent);text-decoration:none;font-weight:500;text-transform:none;letter-spacing:0}
+  .filelist{display:flex;flex-direction:column;gap:1px}
+  .file{
+    display:flex;align-items:center;gap:8px;padding:7px 8px;
+    border-radius:var(--radius-xs);cursor:pointer;transition:background .12s;
+  }
+  .file:hover{background:var(--surface-muted)}
+  .file-ico{width:14px;height:14px;flex-shrink:0;color:var(--text-muted)}
+  .file-ico.code{color:var(--mauve)}.file-ico.video{color:var(--pink)}.file-ico.img{color:var(--teal)}.file-ico.archive{color:var(--peach)}.file-ico.doc{color:var(--blue)}
+  .file-name{flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .file-size{font-family:"JetBrains Mono",monospace;font-size:11px;color:var(--text-muted);flex-shrink:0}
+  .file-bar{
+    width:48px;height:4px;background:var(--surface-muted);border-radius:2px;overflow:hidden;flex-shrink:0;
+  }
+  .file-bar i{display:block;height:100%;background:var(--accent);border-radius:2px}
+
+  .det-actions{display:flex;gap:6px;padding-top:6px}
+  .det-actions .btn{flex:1;justify-content:center;height:30px}
+
+  /* === 状态栏 === */
+  .statusbar{
+    height:24px; flex-shrink:0;
+    display:flex; align-items:center; padding:0 14px; gap:16px;
+    background:var(--surface-muted); border-top:1px solid var(--border);
+    font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--text-muted);
+  }
+  .statusbar .pulse{width:6px;height:6px;border-radius:50%;background:var(--green);position:relative}
+  .statusbar .pulse::after{content:"";position:absolute;inset:-2px;border-radius:50%;background:var(--green);opacity:.4;animation:breathe 2.4s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1);opacity:.4}50%{transform:scale(1.8);opacity:0}}
+  .status-sep{color:var(--border)}
+  .status-right{margin-left:auto;display:flex;gap:16px;align-items:center}
+
+  /* 滚动条 */
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===== 标题栏 ===== -->
+  <header class="titlebar">
+    <div class="traffic">
+      <span class="dot close"></span>
+      <span class="dot min"></span>
+      <span class="dot max"></span>
+    </div>
+    <div class="titlebar-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>
+      Disk Lens <span style="opacity:.5;font-weight:400;">/ Macintosh HD</span>
+    </div>
+    <div class="titlebar-spacer"></div>
+    <div class="titlebar-actions">
+      <button class="icon-btn theme-toggle" onclick="toggleTheme()" title="切换主题">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <span id="themeLabel">Dark</span>
+      </button>
+      <button class="icon-btn" title="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </header>
+
+  <!-- ===== 工具栏 ===== -->
+  <div class="toolbar">
+    <nav class="breadcrumb">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <span class="crumb">Macintosh HD</span>
+      <span class="crumb-sep">/</span>
+      <span class="crumb">Users</span>
+      <span class="crumb-sep">/</span>
+      <span class="crumb">haijun</span>
+      <span class="crumb-sep">/</span>
+      <span class="crumb current">Developer</span>
+    </nav>
+    <div class="toolbar-group">
+      <div class="seg">
+        <button class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Treemap</button>
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6 3"/></svg>Sunburst</button>
+        <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>List</button>
+      </div>
+      <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>重新扫描</button>
+      <button class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>清理 23.4 GB</button>
+    </div>
+  </div>
+
+  <!-- ===== 工作区 ===== -->
+  <main class="workspace">
+
+    <!-- 左侧：卷列表 -->
+    <aside class="sidebar">
+      <div class="side-section">
+        <div class="side-label">本地卷 / 3</div>
+        <button class="vol active">
+          <div class="vol-head">
+            <svg class="vol-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="1"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="14" x2="8" y2="14"/></svg>
+            <div class="vol-name">Macintosh HD</div>
+            <svg class="ring" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"/><circle class="fg" cx="18" cy="18" r="15" stroke-dasharray="94.2" stroke-dashoffset="33" transform="rotate(-90 18 18)"/></svg>
+          </div>
+          <div class="vol-foot">
+            <span class="vol-path">/dev/disk3s1</span>
+            <span><b style="color:var(--text-sub)">412 GB</b> / 500 GB</span>
+          </div>
+        </button>
+
+        <button class="vol">
+          <div class="vol-head">
+            <svg class="vol-ico external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L4 7v10l8 5 8-5V7z"/><path d="M4 7l8 5 8-5"/><line x1="12" y1="22" x2="12" y2="12"/></svg>
+            <div class="vol-name">Sandisk Extreme</div>
+            <svg class="ring warn" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"/><circle class="fg" cx="18" cy="18" r="15" stroke-dasharray="94.2" stroke-dashoffset="14" transform="rotate(-90 18 18)"/></svg>
+          </div>
+          <div class="vol-foot">
+            <span class="vol-path">/Volumes/Sandisk</span>
+            <span><b style="color:var(--text-sub)">1.81 TB</b> / 2 TB</span>
+          </div>
+        </button>
+
+        <button class="vol">
+          <div class="vol-head">
+            <svg class="vol-ico network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <div class="vol-name">nas-photos</div>
+            <svg class="ring" viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="15"/><circle class="fg" cx="18" cy="18" r="15" stroke-dasharray="94.2" stroke-dashoffset="62" transform="rotate(-90 18 18)"/></svg>
+          </div>
+          <div class="vol-foot">
+            <span class="vol-path">smb://10.0.1.4</span>
+            <span><b style="color:var(--text-sub)">1.2 TB</b> / 3 TB</span>
+          </div>
+        </button>
+      </div>
+
+      <div class="side-section" style="margin-top:6px">
+        <div class="side-label">扫描会话</div>
+        <button class="vol" style="padding:8px 12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>
+            <span style="font-size:11px;color:var(--text);flex:1">Macintosh HD</span>
+            <span class="mono" style="font-size:10px;color:var(--text-muted)">2 分前</span>
+          </div>
+        </button>
+        <button class="vol" style="padding:8px 12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--border)"></span>
+            <span style="font-size:11px;color:var(--text-sub);flex:1">Macintosh HD</span>
+            <span class="mono" style="font-size:10px;color:var(--text-muted)">昨天</span>
+          </div>
+        </button>
+        <button class="vol" style="padding:8px 12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--border)"></span>
+            <span style="font-size:11px;color:var(--text-sub);flex:1">Sandisk Extreme</span>
+            <span class="mono" style="font-size:10px;color:var(--text-muted)">3 天前</span>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 中部：Treemap 画布 -->
+    <section class="canvas">
+      <div class="canvas-head">
+        <div class="canvas-title">
+          <h1>Developer</h1>
+          <div class="canvas-sub">路径 /Users/haijun/Developer &nbsp;&middot;&nbsp; <b>47.2 GB</b> / 412 GB &nbsp;&middot;&nbsp; 12,847 个文件 &nbsp;&middot;&nbsp; 扫描耗时 3.4s</div>
+        </div>
+        <div class="legend">
+          <div class="legend-item"><span class="legend-swatch c-accent"></span>代码仓库</div>
+          <div class="legend-item"><span class="legend-swatch c-teal"></span>node_modules</div>
+          <div class="legend-item"><span class="legend-swatch c-pink"></span>媒体</div>
+          <div class="legend-item"><span class="legend-swatch c-yellow"></span>构建产物</div>
+        </div>
+      </div>
+
+      <div class="treemap">
+        <div class="tm">
+          <!-- 顶行：大块 -->
+          <div class="tm-row">
+            <div class="tm-cell c-accent selected" style="flex:2.4" onclick="selectCell(this)">
+              <div class="tm-label">easy_terminal<span class="sz">14.8 GB</span></div>
+            </div>
+            <div class="tm-cell c-teal" style="flex:1.6" onclick="selectCell(this)">
+              <div class="tm-label">node_modules<span class="sz">9.2 GB</span></div>
+            </div>
+            <div class="tm-cell c-peach" style="flex:1" onclick="selectCell(this)">
+              <div class="tm-label">.git<span class="sz">5.7 GB</span></div>
+            </div>
+          </div>
+          <!-- 第二行 -->
+          <div class="tm-row" style="flex:.78">
+            <div class="tm-cell c-blue" style="flex:1.3" onclick="selectCell(this)">
+              <div class="tm-label">media-archive<span class="sz">4.1 GB</span></div>
+            </div>
+            <div class="tm-cell c-yellow" style="flex:1" onclick="selectCell(this)">
+              <div class="tm-label">dist + target<span class="sz">3.3 GB</span></div>
+            </div>
+            <div class="tm-cell c-mauve" style="flex:.7" onclick="selectCell(this)">
+              <div class="tm-label">.cache<span class="sz">2.1 GB</span></div>
+            </div>
+            <div class="tm-cell c-green" style="flex:.6" onclick="selectCell(this)">
+              <div class="tm-label">docs<span class="sz">1.6 GB</span></div>
+            </div>
+          </div>
+          <!-- 第三行：小块群 -->
+          <div class="tm-row" style="flex:.5">
+            <div class="tm-cell c-pink tiny" style="flex:.5" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-red tiny" style="flex:.42" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-muted tiny" style="flex:.38" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-teal tiny" style="flex:.3" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-mauve tiny" style="flex:.24" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-peach tiny" style="flex:.2" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-yellow tiny" style="flex:.16" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-green tiny" style="flex:.12" onclick="selectCell(this)"></div>
+            <div class="tm-cell c-blue tiny" style="flex:.1" onclick="selectCell(this)"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右侧：详情 -->
+    <aside class="detail">
+      <div class="det-head">
+        <div class="det-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 22a8 8 0 0 1 16 0"/><circle cx="10" cy="9" r="4"/><path d="M19 7l3 3"/><path d="M22 7l-3 3"/></svg>
+        </div>
+        <div style="flex:1;min-width:0">
+          <div class="det-name">easy_terminal</div>
+          <div class="det-path">/Users/haijun/Developer/easy_terminal</div>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <div class="stat-label">总占用</div>
+          <div class="stat-val accent">14.8 <span style="font-size:11px;font-weight:500">GB</span></div>
+          <div class="stat-sub">含子目录</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">文件数</div>
+          <div class="stat-val">3,402</div>
+          <div class="stat-sub">2,189 目录</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">最大文件</div>
+          <div class="stat-val mono" style="font-size:13px">882 MB</div>
+          <div class="stat-sub">target/debug/incremental</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">修改于</div>
+          <div class="stat-val mono" style="font-size:13px">14 分钟前</div>
+          <div class="stat-sub">活跃仓库</div>
+        </div>
+      </div>
+
+      <div class="det-section">
+        <h3>子目录分布 <a href="#">查看全部 18 项</a></h3>
+        <div class="filelist">
+          <div class="file">
+            <svg class="file-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="file-name">src-tauri/target</span>
+            <span class="file-bar"><i style="width:88%;background:var(--accent)"></i></span>
+            <span class="file-size">6.4 GB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="file-name">node_modules</span>
+            <span class="file-bar"><i style="width:58%;background:var(--teal)"></i></span>
+            <span class="file-size">4.2 GB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="file-name">.git/objects</span>
+            <span class="file-bar"><i style="width:41%;background:var(--peach)"></i></span>
+            <span class="file-size">2.9 GB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="file-name">dist</span>
+            <span class="file-bar"><i style="width:14%;background:var(--yellow)"></i></span>
+            <span class="file-size">982 MB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            <span class="file-name">docs/assets</span>
+            <span class="file-bar"><i style="width:9%;background:var(--blue)"></i></span>
+            <span class="file-size">610 MB</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="det-section">
+        <h3>大文件 TOP 5</h3>
+        <div class="filelist">
+          <div class="file">
+            <svg class="file-ico archive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+            <span class="file-name">incremental.tar.zst</span>
+            <span class="file-size">882 MB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="1"/></svg>
+            <span class="file-name">demo-capture.mov</span>
+            <span class="file-size">514 MB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span class="file-name">screenshot-grid.png</span>
+            <span class="file-size">238 MB</span>
+          </div>
+          <div class="file">
+            <svg class="file-ico code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <span class="file-name">Cargo.lock</span>
+            <span class="file-size">8.4 MB</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="det-actions">
+        <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>深入</button>
+        <button class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="1"/><line x1="9" y1="3" x2="9" y2="21"/></svg>在 Finder 显示</button>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ===== 状态栏 ===== -->
+  <footer class="statusbar">
+    <span class="pulse"></span>
+    <span>扫描完成</span>
+    <span class="status-sep">|</span>
+    <span>412.3 GB / 500 GB</span>
+    <span class="status-sep">|</span>
+    <span>可回收 <b style="color:var(--accent)">23.4 GB</b></span>
+    <div class="status-right">
+      <span>索引 47,231 项</span>
+      <span class="status-sep">|</span>
+      <span>build 2026.07.2</span>
+    </div>
+  </footer>
+</div>
+
+<script>
+function toggleTheme(){
+  const html=document.documentElement;
+  const cur=html.getAttribute('data-theme');
+  const next=cur==='craft-dark'?'craft-light':'craft-dark';
+  html.setAttribute('data-theme',next);
+  document.getElementById('themeLabel').textContent=next==='craft-dark'?'Light':'Dark';
+}
+function selectCell(el){
+  document.querySelectorAll('.tm-cell').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+}
+</script>
+</body>
+</html>

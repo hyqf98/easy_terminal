@@ -372,7 +372,8 @@ export class Canvas implements CanvasController {
     const w = Math.abs(snapped.x - this.dragStartX);
     const h = Math.abs(snapped.y - this.dragStartY);
 
-    if (w >= 100 && h >= 80) {
+    // 与 TerminalWindow 的 min-width/min-height 保持一致，避免创建后被 CSS 强制撑大。
+    if (w >= 200 && h >= 100) {
       this.onTerminalCreate?.(x, y, w, h);
     }
   }

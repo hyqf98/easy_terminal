@@ -34,17 +34,23 @@ fn get_icon(name: &str, is_dir: bool) -> String {
         .to_lowercase();
     match ext.as_str() {
         "ts" | "tsx" => "typescript".into(),
-        "js" | "jsx" => "javascript".into(),
+        "js" | "jsx" | "mjs" | "cjs" => "javascript".into(),
         "rs" => "rust".into(),
-        "py" => "python".into(),
-        "css" | "scss" | "less" => "css".into(),
-        "html" => "html".into(),
-        "json" => "json".into(),
-        "md" => "markdown".into(),
-        "toml" | "yaml" | "yml" => "config".into(),
-        "png" | "jpg" | "jpeg" | "gif" | "svg" | "ico" => "image".into(),
-        "exe" | "msi" => "executable".into(),
-        "zip" | "tar" | "gz" | "rar" | "7z" => "archive".into(),
+        "py" | "pyw" => "python".into(),
+        "css" | "scss" | "less" | "sass" => "css".into(),
+        "html" | "htm" => "html".into(),
+        "json" | "jsonc" => "json".into(),
+        "md" | "markdown" => "markdown".into(),
+        "toml" | "yaml" | "yml" | "ini" | "conf" | "env" => "config".into(),
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "ico" | "webp" | "bmp" | "avif" => "image".into(),
+        "mp4" | "webm" | "mov" | "avi" | "mkv" | "m4v" | "flv" => "video".into(),
+        "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" => "audio".into(),
+        "exe" | "msi" | "app" | "dmg" | "deb" | "rpm" | "apk" => "executable".into(),
+        "zip" | "tar" | "gz" | "rar" | "7z" | "bz2" | "xz" => "archive".into(),
+        "doc" | "docx" => "word".into(),
+        "xls" | "xlsx" | "csv" => "excel".into(),
+        "ppt" | "pptx" => "ppt".into(),
+        "pdf" => "pdf".into(),
         _ => "file".into(),
     }
 }
@@ -150,6 +156,134 @@ pub fn delete_entries(paths: Vec<String>) -> Result<(), String> {
         } else {
             fs::remove_file(&p).map_err(|e| e.to_string())?;
         }
+    }
+    Ok(())
+}
+
+/// 递归复制文件/目录到目标目录。同名文件自动添加序号后缀。
+pub fn copy_entries(sources: Vec<String>, dest_dir: String) -> Result<(), String> {
+    let dest = path_util::expand_path(&dest_dir);
+    if !dest.is_dir() {
+        return Err(format!("Destination is not a directory: {}", dest_dir));
+    }
+    for src in sources {
+        let from = path_util::expand_path(&src);
+        if !from.exists() {
+            continue;
+        }
+        let file_name = from.file_name().ok_or("Invalid path")?;
+        let target = unique_path(&dest.join(file_name));
+        copy_recursive(&from, &target)?;
+    }
+    Ok(())
+}
+
+fn unique_path(path: &Path) -> std::path::PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("file");
+    let ext = path.extension().and_then(|s| s.to_str());
+    let parent = path.parent().unwrap_or(Path::new("."));
+    let mut counter = 2;
+    loop {
+        let new_name = match ext {
+            Some(e) => format!("{} ({}).{}", stem, counter, e),
+            None => format!("{} ({})", stem, counter),
+        };
+        let candidate = parent.join(&new_name);
+        if !candidate.exists() {
+            return candidate;
+        }
+        counter += 1;
+    }
+}
+
+fn copy_recursive(src: &Path, dest: &Path) -> Result<(), String> {
+    if src.is_dir() {
+        fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+        for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let dest_child = dest.join(entry.file_name());
+            copy_recursive(&entry.path(), &dest_child)?;
+        }
+    } else {
+        fs::copy(src, dest).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// 将文件/目录移入系统回收站。
+pub fn trash_entries(paths: Vec<String>) -> Result<(), String> {
+    let expanded: Vec<_> = paths.iter().map(|p| path_util::expand_path(p)).collect();
+    trash::delete_all(&expanded).map_err(|e| format!("Trash error: {e}"))
+}
+
+/// 使用操作系统默认程序打开文件。
+pub fn open_with_default_app(path: &str) -> Result<(), String> {
+    let p = path_util::expand_path(path);
+    if !p.exists() {
+        return Err(format!("File not found: {}", path));
+    }
+    // 使用 std::process::Command 调用平台默认打开程序
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&p)
+            .spawn()
+            .map_err(|e| format!("Failed to open: {e}"))?;
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", p.to_str().unwrap_or("")])
+            .spawn()
+            .map_err(|e| format!("Failed to open: {e}"))?;
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&p)
+            .spawn()
+            .map_err(|e| format!("Failed to open: {e}"))?;
+    }
+    Ok(())
+}
+
+/// 在系统文件管理器中显示文件（Finder/Explorer）。
+pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
+    let p = path_util::expand_path(path);
+    #[cfg(target_os = "macos")]
+    {
+        if p.is_dir() {
+            std::process::Command::new("open")
+                .arg(&p)
+                .spawn()
+                .map_err(|e| format!("Failed to reveal: {e}"))?;
+        } else {
+            std::process::Command::new("open")
+                .args(["-R", &p.to_str().unwrap_or("")])
+                .spawn()
+                .map_err(|e| format!("Failed to reveal: {e}"))?;
+        }
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .args(["/select,", &p.to_str().unwrap_or("")])
+            .spawn()
+            .map_err(|e| format!("Failed to reveal: {e}"))?;
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
+    {
+        let dir = if p.is_dir() { &p } else { p.parent().unwrap_or(Path::new(".")) };
+        std::process::Command::new("xdg-open")
+            .arg(dir)
+            .spawn()
+            .map_err(|e| format!("Failed to reveal: {e}"))?;
     }
     Ok(())
 }

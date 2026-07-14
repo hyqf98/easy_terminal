@@ -1,5 +1,7 @@
 mod commands;
 mod db;
+mod disks;
+mod file_index;
 mod fs;
 mod path_util;
 mod pty;
@@ -399,6 +401,63 @@ fn get_os_platform() -> String {
 #[tauri::command]
 fn read_file_preview(path: String) -> Result<fs::FilePreviewData, String> {
     fs::read_file_preview(&path)
+}
+
+// === File Manager Commands ===
+
+#[tauri::command]
+fn copy_entries(sources: Vec<String>, dest_dir: String) -> Result<(), String> {
+    fs::copy_entries(sources, dest_dir)
+}
+
+#[tauri::command]
+fn trash_entries(paths: Vec<String>) -> Result<(), String> {
+    fs::trash_entries(paths)
+}
+
+#[tauri::command]
+fn open_with_default_app(path: String) -> Result<(), String> {
+    fs::open_with_default_app(&path)
+}
+
+#[tauri::command]
+fn reveal_in_file_manager(path: String) -> Result<(), String> {
+    fs::reveal_in_file_manager(&path)
+}
+
+#[tauri::command]
+async fn search_files(query: String, limit: Option<i64>) -> Result<Vec<file_index::FileSearchResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        file_index::search(&query, limit.unwrap_or(200))
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+fn get_index_status() -> file_index::IndexStatus {
+    file_index::get_status()
+}
+
+#[tauri::command]
+fn rebuild_index() {
+    file_index::rebuild()
+}
+
+#[tauri::command]
+fn get_index_config() -> Result<file_index::IndexConfig, String> {
+    file_index::load_index_config()
+}
+
+#[tauri::command]
+fn save_index_config(config: file_index::IndexConfig) -> Result<(), String> {
+    file_index::save_index_config(&config)?;
+    // 保存后触发重建索引，使用指定配置而非默认读取
+    file_index::start_background_scan(
+        move |_, _, _| {},
+        Some(config),
+    );
+    Ok(())
 }
 
 #[derive(serde::Serialize)]
@@ -813,6 +872,24 @@ pub fn run() {
             if !shortcut.trim().is_empty() && registered.is_none() {
                 eprintln!("failed to register desktop draw shortcut on startup: {shortcut}");
             }
+
+            // 启动文件索引后台扫描
+            let app_handle = app.handle().clone();
+            file_index::start_background_scan(move |count, estimated, current_path| {
+                use tauri::Emitter;
+                let progress = if estimated > 0 {
+                    ((count as f64 / estimated as f64) * 100.0).min(99.0) as u8
+                } else {
+                    0
+                };
+                let _ = app_handle.emit("index-progress", serde_json::json!({
+                    "totalFiles": count,
+                    "estimatedTotal": estimated,
+                    "currentPath": current_path,
+                    "progress": progress,
+                }));
+            }, None);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -831,8 +908,19 @@ pub fn run() {
             delete_entries,
             get_home_dir,
             list_drives,
+            disks::list_disks,
             get_os_platform,
             read_file_preview,
+            // File Manager
+            copy_entries,
+            trash_entries,
+            open_with_default_app,
+            reveal_in_file_manager,
+            search_files,
+            get_index_status,
+            rebuild_index,
+            get_index_config,
+            save_index_config,
             get_settings,
             save_settings,
             save_terminal_state,
