@@ -225,6 +225,18 @@ struct PortableCommandEntry {
     enabled: bool,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalFavoriteRecord {
+    pub id: i64,
+    pub ssh_profile_id: String,
+    pub path: String,
+    pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub sort_order: i64,
+}
+
 pub struct Db {
     conn: Mutex<Connection>,
 }
@@ -369,10 +381,24 @@ impl Db {
         )
         .map_err(|e| format!("FTS5 setup failed: {e}"))?;
 
+        tx.execute_batch("INSERT INTO commands_fts(commands_fts) VALUES('rebuild');")
+            .map_err(|e| format!("FTS5 rebuild failed: {e}"))?;
+
         tx.execute_batch(
-            "INSERT INTO commands_fts(commands_fts) VALUES('rebuild');",
+            "CREATE TABLE IF NOT EXISTS terminal_favorites (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 ssh_profile_id TEXT NOT NULL DEFAULT '',
+                 path TEXT NOT NULL,
+                 name TEXT NOT NULL DEFAULT '',
+                 icon TEXT NOT NULL DEFAULT 'folder',
+                 color TEXT NOT NULL DEFAULT '#e0a030',
+                 sort_order INTEGER NOT NULL DEFAULT 0,
+                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                 UNIQUE(ssh_profile_id, path)
+             );
+             CREATE INDEX IF NOT EXISTS idx_terminal_favorites_ssh_profile_id ON terminal_favorites(ssh_profile_id);",
         )
-        .map_err(|e| format!("FTS5 rebuild failed: {e}"))?;
+        .map_err(|e| format!("terminal favorites schema init failed: {e}"))?;
 
         tx.commit().map_err(|e| e.to_string())?;
         Ok(())
@@ -1330,6 +1356,104 @@ impl Db {
         } else {
             Err(format!("library '{library_id}' not found"))
         }
+    }
+
+    pub fn list_favorites(&self, ssh_profile_id: &str) -> Result<Vec<TerminalFavoriteRecord>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, ssh_profile_id, path, name, icon, color, sort_order
+                 FROM terminal_favorites
+                 WHERE ssh_profile_id = ?1
+                 ORDER BY sort_order, id",
+            )
+            .map_err(|e| e.to_string())?;
+        let items = stmt
+            .query_map(params![ssh_profile_id], |row| {
+                Ok(TerminalFavoriteRecord {
+                    id: row.get(0)?,
+                    ssh_profile_id: row.get(1)?,
+                    path: row.get(2)?,
+                    name: row.get(3)?,
+                    icon: row.get(4)?,
+                    color: row.get(5)?,
+                    sort_order: row.get(6)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .filter_map(|item| item.ok())
+            .collect();
+        Ok(items)
+    }
+
+    pub fn add_favorite(
+        &self,
+        ssh_profile_id: &str,
+        path: &str,
+        name: &str,
+        icon: &str,
+        color: &str,
+    ) -> Result<i64, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        // 计算下一个 sort_order：当前 ssh_profile_id 下最大 sort_order + 1
+        let max_order: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(sort_order), -1) FROM terminal_favorites WHERE ssh_profile_id = ?1",
+                params![ssh_profile_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO terminal_favorites (ssh_profile_id, path, name, icon, color, sort_order)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![ssh_profile_id, path, name, icon, color, max_order + 1],
+        )
+        .map_err(|e| format!("add favorite failed: {e}"))?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn remove_favorite(&self, ssh_profile_id: &str, path: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "DELETE FROM terminal_favorites WHERE ssh_profile_id = ?1 AND path = ?2",
+            params![ssh_profile_id, path],
+        )
+        .map_err(|e| format!("remove favorite failed: {e}"))?;
+        Ok(())
+    }
+
+    pub fn update_favorite(&self, id: i64, name: &str, icon: &str, color: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let changed = conn
+            .execute(
+                "UPDATE terminal_favorites
+                 SET name = ?2, icon = ?3, color = ?4
+                 WHERE id = ?1",
+                params![id, name, icon, color],
+            )
+            .map_err(|e| format!("update favorite failed: {e}"))?;
+        if changed == 0 {
+            return Err(format!("favorite '{id}' not found"));
+        }
+        Ok(())
+    }
+
+    pub fn reorder_favorites(
+        &self,
+        ssh_profile_id: &str,
+        ordered_ids: &[i64],
+    ) -> Result<(), String> {
+        let mut conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let tx = conn.transaction().map_err(|e| e.to_string())?;
+        for (index, id) in ordered_ids.iter().enumerate() {
+            tx.execute(
+                "UPDATE terminal_favorites SET sort_order = ?1 WHERE id = ?2 AND ssh_profile_id = ?3",
+                params![index as i64, id, ssh_profile_id],
+            )
+            .map_err(|e| format!("reorder favorite failed: {e}"))?;
+        }
+        tx.commit().map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 

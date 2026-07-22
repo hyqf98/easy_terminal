@@ -45,7 +45,7 @@
           v-for="item in visibleItems"
           :key="item.id"
           class="history-row"
-          :title="item.command"
+          :data-tooltip="item.command"
           @click="sendCommand(item.command)"
         >
           <span class="history-cmd" v-html="renderCommand(item.command)"></span>
@@ -53,7 +53,7 @@
           <span class="history-term-tag">{{ terminalTag(item) }}</span>
           <button
             class="icon-btn history-copy-btn"
-            :title="t('history.copy')"
+            :data-tooltip="t('history.copy')"
             @click.stop="copyCommand(item.command)"
           >
             <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>

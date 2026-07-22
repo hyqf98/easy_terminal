@@ -26,3 +26,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# VPN: 构建时自动下载的 openvpn 二进制（不入版本库）
+src-tauri/binaries/
+src-tauri/resources/wintun.dll

@@ -27,7 +27,7 @@
         <button class="btn btn-soft" @click="saveRepoUrl">保存</button>
         <button
           class="icon-btn market-refresh-btn"
-          :title="refreshLabel"
+          :data-tooltip="refreshLabel"
           :disabled="loading"
           @click="refresh"
         >
@@ -80,7 +80,7 @@
               <button
                 v-else
                 class="btn btn-soft market-install-btn"
-                :title="lib.isInstalled ? uninstallLabel : ''"
+                :data-tooltip="lib.isInstalled ? uninstallLabel : ''"
                 @click="lib.isInstalled && uninstallLib(lib)"
               >{{ installedLabel }}</button>
             </div>

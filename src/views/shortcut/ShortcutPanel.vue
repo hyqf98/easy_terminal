@@ -43,7 +43,7 @@
             <div class="shortcut-action-desc">{{ binding.description }}</div>
           </div>
         </div>
-        <div class="shortcut-keys" title="点击重新录制" @click="openRecord(binding, selectedPlatform)">
+        <div class="shortcut-keys" data-tooltip="点击重新录制" @click="openRecord(binding, selectedPlatform)">
           <div v-if="getFieldValue(binding, selectedPlatform)" class="keycap-group">
             <template v-for="(token, index) in getComboTokens(binding, selectedPlatform)" :key="index">
               <span v-if="index > 0" class="keycap-plus">+</span>
@@ -59,7 +59,7 @@
           </span>
           <template v-else-if="getFieldValue(binding, selectedPlatform)">
             <span class="shortcut-status">已绑定</span>
-            <button class="shortcut-clear-btn" type="button" title="清空" @click="clearField(binding, selectedPlatform)">
+            <button class="shortcut-clear-btn" type="button" data-tooltip="清空" @click="clearField(binding, selectedPlatform)">
               <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
             </button>
           </template>

@@ -1,6 +1,6 @@
 export { LocalFileStrategy } from './LocalFileStrategy';
 export { RemoteFileStrategy } from './RemoteFileStrategy';
-export type { IFileOperationStrategy, FileEntry, FilePreviewData } from './FileOperationStrategy';
+export type { IFileOperationStrategy, FileEntry, FilePreviewData, RemoteDirectoryCursor, RemoteDirectoryPage } from './FileOperationStrategy';
 
 import { LocalFileStrategy } from './LocalFileStrategy';
 import { RemoteFileStrategy } from './RemoteFileStrategy';

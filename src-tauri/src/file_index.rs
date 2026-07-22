@@ -81,12 +81,49 @@ pub struct IndexConfig {
 /// 类别→扩展名映射表（扩展名不含点，全小写）。
 fn category_extensions() -> &'static [(&'static str, &'static [&'static str])] {
     &[
-        ("code", &["ts", "js", "jsx", "tsx", "rs", "py", "go", "java", "c", "cpp", "h", "hpp", "rb", "php", "swift", "kt", "scala", "sh", "zsh", "vue", "svelte", "lua", "r", "elixir", "ex", "erl", "clj", "hs", "ml", "fs", "dart", "groovy", "gradle", "cmake", "make", "asm", "sql"]),
-        ("document", &["md", "txt", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "rtf", "csv", "json", "yaml", "yml", "toml", "xml", "html", "htm", "org", "rst", "tex", "log", "pages", "numbers", "key"]),
-        ("image", &["png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "tiff", "tif", "heic", "heif", "psd", "ai", "sketch", "raw", "cr2", "nef"]),
-        ("audio", &["mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "aiff", "opus"]),
-        ("video", &["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg"]),
-        ("archive", &["zip", "tar", "gz", "rar", "7z", "tgz", "bz2", "xz", "iso", "dmg", "pkg", "deb", "rpm"]),
+        (
+            "code",
+            &[
+                "ts", "js", "jsx", "tsx", "rs", "py", "go", "java", "c", "cpp", "h", "hpp", "rb",
+                "php", "swift", "kt", "scala", "sh", "zsh", "vue", "svelte", "lua", "r", "elixir",
+                "ex", "erl", "clj", "hs", "ml", "fs", "dart", "groovy", "gradle", "cmake", "make",
+                "asm", "sql",
+            ],
+        ),
+        (
+            "document",
+            &[
+                "md", "txt", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "rtf", "csv",
+                "json", "yaml", "yml", "toml", "xml", "html", "htm", "org", "rst", "tex", "log",
+                "pages", "numbers", "key",
+            ],
+        ),
+        (
+            "image",
+            &[
+                "png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "bmp", "tiff", "tif", "heic",
+                "heif", "psd", "ai", "sketch", "raw", "cr2", "nef",
+            ],
+        ),
+        (
+            "audio",
+            &[
+                "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "aiff", "opus",
+            ],
+        ),
+        (
+            "video",
+            &[
+                "mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "m4v", "mpg", "mpeg",
+            ],
+        ),
+        (
+            "archive",
+            &[
+                "zip", "tar", "gz", "rar", "7z", "tgz", "bz2", "xz", "iso", "dmg", "pkg", "deb",
+                "rpm",
+            ],
+        ),
     ]
 }
 
@@ -124,10 +161,24 @@ fn default_roots_and_exclusions() -> (Vec<String>, Vec<String>) {
     {
         let roots = vec!["/".to_string()];
         let excluded_paths = vec![
-            "/System", "/Library", "/usr", "/bin", "/sbin", "/opt",
-            "/private", "/dev", "/proc", "/sys", "/.vol",
-            "/var/folders", "/var/db", "/var/log", "/var/tmp",
-            "/private/var", "/private/tmp", "/private/etc",
+            "/System",
+            "/Library",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/opt",
+            "/private",
+            "/dev",
+            "/proc",
+            "/sys",
+            "/.vol",
+            "/var/folders",
+            "/var/db",
+            "/var/log",
+            "/var/tmp",
+            "/private/var",
+            "/private/tmp",
+            "/private/etc",
         ]
         .into_iter()
         .map(String::from)
@@ -138,10 +189,21 @@ fn default_roots_and_exclusions() -> (Vec<String>, Vec<String>) {
     {
         let roots = vec!["/".to_string()];
         let excluded_paths = vec![
-            "/proc", "/sys", "/dev", "/run", "/snap",
-            "/usr", "/bin", "/sbin", "/lib", "/lib64",
-            "/var/cache", "/var/log", "/var/tmp",
-            "/boot", "/lost+found",
+            "/proc",
+            "/sys",
+            "/dev",
+            "/run",
+            "/snap",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/lib",
+            "/lib64",
+            "/var/cache",
+            "/var/log",
+            "/var/tmp",
+            "/boot",
+            "/lost+found",
         ]
         .into_iter()
         .map(String::from)
@@ -325,7 +387,10 @@ fn open_db() -> Result<Connection, String> {
             .query_row("SELECT COUNT(*) FROM file_fts", [], |row| row.get(0))
             .unwrap_or(0);
         if main_count > 0 && fts_count == 0 {
-            let _ = conn.execute("INSERT INTO file_fts(rowid, name) SELECT id, name FROM file_index;", []);
+            let _ = conn.execute(
+                "INSERT INTO file_fts(rowid, name) SELECT id, name FROM file_index;",
+                [],
+            );
         }
     }
 
@@ -355,14 +420,28 @@ fn write_meta(conn: &Connection, key: &str, value: &str) {
 // ===========================================================================
 
 /// 判断路径是否应被排除（系统目录、虚拟文件系统、缓存目录等）。
-fn should_skip(path: &Path) -> bool {
+pub fn should_skip(path: &Path) -> bool {
     #[cfg(target_os = "macos")]
     {
         let skip_prefixes = [
-            "/System", "/Library", "/usr", "/bin", "/sbin", "/opt",
-            "/private", "/dev", "/proc", "/sys", "/.vol",
-            "/var/folders", "/var/db", "/var/log", "/var/tmp",
-            "/private/var", "/private/tmp", "/private/etc",
+            "/System",
+            "/Library",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/opt",
+            "/private",
+            "/dev",
+            "/proc",
+            "/sys",
+            "/.vol",
+            "/var/folders",
+            "/var/db",
+            "/var/log",
+            "/var/tmp",
+            "/private/var",
+            "/private/tmp",
+            "/private/etc",
         ];
         if let Some(s) = path.to_str() {
             if skip_prefixes.iter().any(|p| s.starts_with(p)) {
@@ -373,10 +452,21 @@ fn should_skip(path: &Path) -> bool {
     #[cfg(target_os = "linux")]
     {
         let skip_prefixes = [
-            "/proc", "/sys", "/dev", "/run", "/snap",
-            "/usr", "/bin", "/sbin", "/lib", "/lib64",
-            "/var/cache", "/var/log", "/var/tmp",
-            "/boot", "/lost+found",
+            "/proc",
+            "/sys",
+            "/dev",
+            "/run",
+            "/snap",
+            "/usr",
+            "/bin",
+            "/sbin",
+            "/lib",
+            "/lib64",
+            "/var/cache",
+            "/var/log",
+            "/var/tmp",
+            "/boot",
+            "/lost+found",
         ];
         if let Some(s) = path.to_str() {
             if skip_prefixes.iter().any(|p| s.starts_with(p)) {
@@ -407,9 +497,17 @@ fn should_skip(path: &Path) -> bool {
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         if matches!(
             name,
-            "node_modules" | ".git" | ".cache" | "__pycache__"
-                | ".Trash" | "target" | ".npm" | ".cargo"
-                | ".rustup" | ".vscode" | ".idea"
+            "node_modules"
+                | ".git"
+                | ".cache"
+                | "__pycache__"
+                | ".Trash"
+                | "target"
+                | ".npm"
+                | ".cargo"
+                | ".rustup"
+                | ".vscode"
+                | ".idea"
         ) {
             return true;
         }
@@ -418,7 +516,7 @@ fn should_skip(path: &Path) -> bool {
 }
 
 /// 判断路径是否在用户配置的排除列表中。
-fn is_config_excluded(path: &Path, config: &IndexConfig) -> bool {
+pub fn is_config_excluded(path: &Path, config: &IndexConfig) -> bool {
     if let Some(s) = path.to_str() {
         return config
             .excluded_paths
@@ -526,7 +624,10 @@ where
             ESTIMATED_TOTAL.store(total, Ordering::SeqCst);
             INDEXING.store(false, Ordering::SeqCst);
             emit_progress(total, total, "");
-            eprintln!("[file_index] reusing existing index ({} files), skipping full rebuild", total);
+            eprintln!(
+                "[file_index] reusing existing index ({} files), skipping full rebuild",
+                total
+            );
             start_watcher(config);
             return;
         }
@@ -534,7 +635,10 @@ where
         // ============================================================
         // 全量构建
         // ============================================================
-        eprintln!("[file_index] starting full rebuild, roots: {:?}", config.roots);
+        eprintln!(
+            "[file_index] starting full rebuild, roots: {:?}",
+            config.roots
+        );
 
         // 扫描前：禁用 FTS 触发器，避免逐行同步的巨大开销
         let _ = conn.execute_batch(
@@ -649,7 +753,10 @@ where
         TOTAL_FILES.store(count, Ordering::SeqCst);
 
         // 扫描完成后：一次性批量重建 FTS5 索引（比逐行触发器快 100x）
-        let _ = conn.execute("INSERT INTO file_fts(rowid, name) SELECT id, name FROM file_index;", []);
+        let _ = conn.execute(
+            "INSERT INTO file_fts(rowid, name) SELECT id, name FROM file_index;",
+            [],
+        );
 
         // 重建完成后恢复 FTS 触发器（用于后续增量更新）
         let _ = conn.execute_batch(
@@ -680,7 +787,10 @@ where
 
         let est = ESTIMATED_TOTAL.load(Ordering::SeqCst);
         emit_progress(count, est, "");
-        eprintln!("[file_index] full rebuild complete: {} files indexed", count);
+        eprintln!(
+            "[file_index] full rebuild complete: {} files indexed",
+            count
+        );
 
         // 启动增量 watcher
         start_watcher(config);
@@ -733,7 +843,9 @@ fn start_watcher(config: IndexConfig) {
                     watch_count += 1;
                 }
                 Err(e) => {
-                    eprintln!("[file_index] recursive watch failed for {root}: {e}, trying non-recursive");
+                    eprintln!(
+                        "[file_index] recursive watch failed for {root}: {e}, trying non-recursive"
+                    );
                     // inotify watch 数超限时降级为只监听顶层目录
                     let _ = watcher.watch(path, RecursiveMode::NonRecursive);
                     watch_count += 1;
@@ -747,7 +859,10 @@ fn start_watcher(config: IndexConfig) {
             return;
         }
 
-        eprintln!("[file_index] watcher started, monitoring {} root(s)", watch_count);
+        eprintln!(
+            "[file_index] watcher started, monitoring {} root(s)",
+            watch_count
+        );
 
         // 打开独立的查询/写入连接（WAL 模式下读写不互斥）
         let conn = match open_db() {
@@ -878,10 +993,7 @@ fn process_event_batch(conn: &Connection, events: &[notify::Event], config: &Ind
                 .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("");
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
             let _ = tx.execute(
                 "INSERT OR REPLACE INTO file_index (path, name, parent_dir, is_dir, size, modified, extension, indexed_at)
@@ -918,6 +1030,22 @@ fn process_event_batch(conn: &Connection, events: &[notify::Event], config: &Ind
 /// 性能：FTS5 的倒排索引使搜索从 O(n) 全表扫描降为 O(log n + k)，
 /// k 为匹配结果数。百万级文件仍可在 1ms 内返回。
 pub fn search(query: &str, limit: i64) -> Result<Vec<FileSearchResult>, String> {
+    let mut results = Vec::new();
+    search_with_callback(query, limit, || false, |result| results.push(result))?;
+    Ok(results)
+}
+
+/// 以 SQLite 游标逐条读取文件名搜索结果，供流式界面及时显示并支持取消。
+pub fn search_with_callback<C, F>(
+    query: &str,
+    limit: i64,
+    mut cancelled: C,
+    mut on_result: F,
+) -> Result<(), String>
+where
+    C: FnMut() -> bool,
+    F: FnMut(FileSearchResult),
+{
     let conn = open_db()?;
 
     // 构造 FTS5 MATCH 查询：
@@ -939,7 +1067,7 @@ pub fn search(query: &str, limit: i64) -> Result<Vec<FileSearchResult>, String> 
         .join(" ");
 
     if fts_query.is_empty() {
-        return Ok(Vec::new());
+        return Ok(());
     }
 
     // FTS5 bm25() 排名：相关性越高分数越低（负值），用 rank 排序避免全量排序
@@ -956,21 +1084,23 @@ pub fn search(query: &str, limit: i64) -> Result<Vec<FileSearchResult>, String> 
                ORDER BY fi.is_dir DESC, fi.name ASC";
 
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
-    let results = stmt
-        .query_map(params![fts_query, limit], |row| {
-            Ok(FileSearchResult {
-                path: row.get(0)?,
-                name: row.get(1)?,
-                is_dir: row.get::<_, i64>(2)? != 0,
-                size: row.get(3)?,
-                modified: row.get(4)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .filter_map(|r| r.ok())
-        .collect();
+    let mut rows = stmt
+        .query(params![fts_query, limit])
+        .map_err(|e| e.to_string())?;
+    while let Some(row) = rows.next().map_err(|e| e.to_string())? {
+        if cancelled() {
+            break;
+        }
+        on_result(FileSearchResult {
+            path: row.get(0).map_err(|e| e.to_string())?,
+            name: row.get(1).map_err(|e| e.to_string())?,
+            is_dir: row.get::<_, i64>(2).map_err(|e| e.to_string())? != 0,
+            size: row.get(3).map_err(|e| e.to_string())?,
+            modified: row.get(4).map_err(|e| e.to_string())?,
+        });
+    }
 
-    Ok(results)
+    Ok(())
 }
 
 // ===========================================================================
@@ -994,10 +1124,7 @@ pub fn get_status() -> IndexStatus {
         indexing,
         total_files: total,
         last_scan: LAST_SCAN.load(Ordering::SeqCst),
-        current_path: CURRENT_PATH
-            .lock()
-            .map(|s| s.clone())
-            .unwrap_or_default(),
+        current_path: CURRENT_PATH.lock().map(|s| s.clone()).unwrap_or_default(),
         estimated_total: estimated,
         progress,
     }

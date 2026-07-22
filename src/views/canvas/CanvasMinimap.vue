@@ -8,7 +8,7 @@
       class="minimap-term"
       :class="{ focused: item.focused, hovered: hoveredIndex === index }"
       :style="item.style"
-      :title="`跳转至终端 (${Math.round(item.rect.x)}, ${Math.round(item.rect.y)})`"
+      :data-tooltip="`跳转至终端 (${Math.round(item.rect.x)}, ${Math.round(item.rect.y)})`"
       @mouseenter="onTermEnter(index)"
       @mouseleave="onTermLeave"
       @click.stop="onTermClick(item)"
@@ -17,7 +17,7 @@
       class="minimap-viewport"
       :style="viewportStyle"
       @mousedown.stop.prevent="onViewportMouseDown"
-      title="拖动以移动画布视口"
+      data-tooltip="拖动以移动画布视口"
     ></div>
   </div>
 </template>

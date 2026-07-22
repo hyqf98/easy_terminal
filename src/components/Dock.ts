@@ -7,6 +7,7 @@ import {
   BuildingStore,
   History,
   Lock,
+  ShieldLock,
   Keyboard,
   Settings,
   ChevronUp,
@@ -27,6 +28,7 @@ const DOCK_ICONS: Record<string, Component> = markRaw({
   market: BuildingStore,
   history: History,
   ssh: Lock,
+  vpn: ShieldLock,
   shortcuts: Keyboard,
   settings: Settings,
 });
@@ -34,7 +36,7 @@ const DOCK_ICONS: Record<string, Component> = markRaw({
 // files 保留在 Dock：但点击后切换到独立的空视图，不再复用画布左侧的 FileTree 浮层
 // mappings 已合并到命令管理面板的子标签中，不再作为独立 Dock 项
 const MAIN_IDS = ['canvas', 'files', 'commands', 'market', 'history'] as const;
-const TAIL_IDS = ['ssh', 'shortcuts', 'settings'] as const;
+const TAIL_IDS = ['ssh', 'vpn', 'shortcuts', 'settings'] as const;
 
 const LABEL_KEYS: Record<string, string> = {
   canvas: 'sidebar.canvas',
@@ -43,6 +45,7 @@ const LABEL_KEYS: Record<string, string> = {
   market: 'sidebar.market',
   history: 'sidebar.history',
   ssh: 'sidebar.ssh',
+  vpn: 'sidebar.vpn',
   shortcuts: 'sidebar.shortcuts',
   settings: 'sidebar.settings',
 };
@@ -109,29 +112,14 @@ export default defineComponent({
       else expandDock();
     }
 
-    function onDocumentPointerMove(event: PointerEvent) {
-      const target = event.target as Node | null;
-      if (target && dockShellRef.value?.contains(target)) {
-        cancelCollapse();
-        return;
-      }
-      if (event.clientY >= window.innerHeight - 7) {
-        expandDock();
-      } else {
-        scheduleCollapse();
-      }
-    }
-
     onMounted(() => {
       unsub = onLangChange(() => {
         langTick.value++;
       });
-      document.addEventListener('pointermove', onDocumentPointerMove, { passive: true });
     });
     onUnmounted(() => {
       unsub?.();
       cancelCollapse();
-      document.removeEventListener('pointermove', onDocumentPointerMove);
     });
 
     // 将静态图标映射暴露给模板，避免把组件塞进响应式数据

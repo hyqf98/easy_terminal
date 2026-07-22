@@ -105,20 +105,6 @@
   gap: 22px;
 }
 
-.isp-body::-webkit-scrollbar {
-  width: 6px;
-}
-.isp-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-.isp-body::-webkit-scrollbar-thumb {
-  background: var(--scrollbar);
-  border-radius: 999px;
-}
-.isp-body::-webkit-scrollbar-thumb:hover {
-  background: var(--scrollbar-hover);
-}
-
 /* ═══ 分区 ═══ */
 .isp-section {
   display: flex;

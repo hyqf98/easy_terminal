@@ -38,7 +38,7 @@
         <div class="mapping-side">
           <span class="mapping-side-label">{{ t('mapping.trigger') }}</span>
           <div class="mapping-side-triggers">
-            <span v-for="trigger in mapping.triggers" :key="trigger" class="mapping-trigger-chip" :title="trigger">{{ trigger }}</span>
+            <span v-for="trigger in mapping.triggers" :key="trigger" class="mapping-trigger-chip" :data-tooltip="trigger">{{ trigger }}</span>
             <span v-if="!mapping.triggers || !mapping.triggers.length" class="mapping-side-empty">—</span>
           </div>
         </div>
@@ -53,20 +53,20 @@
           <div
             class="mapping-toggle"
             :class="{ on: mapping.enabled }"
-            :title="t('mapping.toggle')"
+            :data-tooltip="t('mapping.toggle')"
             @click="toggleMapping(mapping)"
           ></div>
           <div class="mapping-pair-actions">
-            <button class="icon-btn mapping-copy-btn" :title="t('mapping.copy')" @click="copyCommand(mapping.command)">
+            <button class="icon-btn mapping-copy-btn" :data-tooltip="t('mapping.copy')" @click="copyCommand(mapping.command)">
               <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
-            <button class="icon-btn" :title="t('mapping.edit')" @click="editMapping(mapping)">
+            <button class="icon-btn" :data-tooltip="t('mapping.edit')" @click="editMapping(mapping)">
               <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>
             <button
               v-if="mapping.sourceType !== 'builtin'"
               class="icon-btn mapping-delete-btn"
-              :title="t('history.delete')"
+              :data-tooltip="t('history.delete')"
               @click="deleteMapping(mapping)"
             >
               <svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>

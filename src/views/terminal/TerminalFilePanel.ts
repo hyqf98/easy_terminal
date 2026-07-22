@@ -22,7 +22,7 @@ export default defineComponent({
     launchOptions: { type: Object as PropType<TerminalLaunchOptions>, default: () => ({ mode: 'local' }) },
     sshProfiles: { type: Array as PropType<SSHProfile[]>, default: () => [] },
   },
-  emits: ['open-preview', 'open-terminal', 'cd-to', 'panel-resize-start'],
+  emits: ['open-preview', 'open-terminal', 'open-current-terminal', 'panel-resize-start'],
   setup(props, { emit }) {
     const fileTreeRef = ref<InstanceType<typeof FileTree> | null>(null);
     const currentStrategy = ref<IFileOperationStrategy | null>(null);
@@ -84,7 +84,7 @@ export default defineComponent({
       emit('open-preview', { path, strategy: currentStrategy.value });
     }
     function onOpenTerminal(dirPath: string) { emit('open-terminal', dirPath); }
-    function onCdTo(path: string) { emit('cd-to', { path, terminalId: props.terminalId }); }
+    function onOpenCurrentTerminal(dirPath: string) { emit('open-current-terminal', dirPath); }
     function onLocateCwd() { syncCwd(); }
 
     /** 左下角手柄：通知父组件触发绑定终端的 startResize('sw')，面板随之同步缩放 */
@@ -92,6 +92,6 @@ export default defineComponent({
       emit('panel-resize-start', e);
     }
 
-    return { fileTreeRef, onReady, onStrategyChange, onOpenPreview, onOpenTerminal, onCdTo, onLocateCwd, onResizeStart };
+    return { fileTreeRef, onReady, onStrategyChange, onOpenPreview, onOpenTerminal, onOpenCurrentTerminal, onLocateCwd, onResizeStart };
   },
 });

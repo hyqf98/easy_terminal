@@ -18,6 +18,7 @@ import {
   updatePlaceholderRanges,
 } from '../../utils/placeholder';
 import { calculateSuggestPlacement, type SuggestPlacement } from '../../utils/suggestPlacement';
+import { parseFilePreviewCommand } from './commandIntercept';
 import {
   nextTextBoundary,
   previousTextBoundary,
@@ -25,7 +26,10 @@ import {
   textCursorDistance,
   textIndexAtCell,
 } from '../../utils/terminalLine';
-import type { TerminalLaunchOptions, SuggestionItem, PlaceholderInfo, Rect, SnapOptions } from '../../types';
+import type {
+  TerminalLaunchOptions, SuggestionItem, PlaceholderInfo, Rect, SnapOptions,
+  RuntimePlatform, TerminalFilePreviewRequest,
+} from '../../types';
 import type { SSHProfile } from '../../types/ssh';
 
 type WindowRect = { x: number; y: number; w: number; h: number };
@@ -58,6 +62,11 @@ async function ensureIntel(): Promise<CommandIntelligence> {
 const MODIFIED_ARROW_RE = /^\x1b\[1;\d+[ABCD]$/;
 const CURSOR_LEFT_SEQUENCES = new Set(['\x1b[D', '\x1b[1D', '\x1b[1;1D', '\x1bOD']);
 const CURSOR_RIGHT_SEQUENCES = new Set(['\x1b[C', '\x1b[1C', '\x1b[1;1C', '\x1bOC']);
+const MIN_TERMINAL_FONT_SIZE = 9;
+const MAX_TERMINAL_FONT_SIZE = 28;
+const SUGGEST_CURSOR_GAP = 8;
+const SUGGEST_EDGE_PADDING = 18;
+const TERMINAL_OVERSCROLL_MAX_PX = 96;
 
 // normalizeTitleCwd 已抽取到 utils/path.ts
 
@@ -82,10 +91,20 @@ export default defineComponent({
     filePanelOpen: { type: Boolean, default: false },
     // 文件面板展开时，整体窗口左侧比终端多出的宽度，用于整体吸附/拖拽坐标换算
     filePanelInset: { type: Number, default: 0 },
+    performancePanelOpen: { type: Boolean, default: false },
+    performancePanelInset: { type: Number, default: 0 },
+    // 任一侧栏打开后，标题栏与外框由父级统一窗口组接管。
+    unifiedPanelOpen: { type: Boolean, default: false },
+    platform: { type: String as PropType<RuntimePlatform>, default: 'windows' },
+    handleFilePreview: {
+      type: Function as PropType<(request: TerminalFilePreviewRequest) => Promise<boolean>>,
+      default: null,
+    },
   },
-  emits: ['activate', 'close', 'command-executed', 'cwd-change', 'interaction-start', 'interaction-end', 'switch-ssh', 'toggle-file-panel', 'rect-change'],
+  emits: ['activate', 'close', 'command-executed', 'cwd-change', 'interaction-start', 'interaction-end', 'switch-ssh', 'toggle-file-panel', 'toggle-performance-panel', 'rect-change'],
   setup(props, { emit, expose }) {
     const bodyRef = ref<HTMLDivElement | null>(null);
+    const xtermHostRef = ref<HTMLDivElement | null>(null);
     const rootRef = ref<HTMLDivElement | null>(null);
 
     const terminalName = ref(props.launchOptions.profileName || t('terminal.unnamed'));
@@ -102,8 +121,13 @@ export default defineComponent({
     const suggestStyle = ref<Record<string, string>>({});
     const suggestPlacement = ref<SuggestPlacement>('below');
     const completionPopupRef = ref<HTMLDivElement | null>(null);
+    const completionListRef = ref<HTMLDivElement | null>(null);
+    const showCompletionScrollbar = ref(false);
+    const completionScrollbarTop = ref(0);
+    const completionScrollbarHeight = ref(24);
     const ghostText = ref('');
     const ghostStyle = ref<Record<string, string>>({});
+    const ghostPreviewMode = ref<'suffix' | 'replacement'>('suffix');
     // SSH 切换下拉菜单显隐
     const sshMenuOpen = ref(false);
     // 文件面板展开状态（由父组件控制，仅用于 tab 视觉反馈）
@@ -113,24 +137,13 @@ export default defineComponent({
     function toggleFilePanel() {
       emit('toggle-file-panel', props.terminalId);
     }
+    function togglePerformancePanel() { emit('toggle-performance-panel', props.terminalId); }
 
     const activeSuggestion = computed(() => {
       if (suggestVisible.value && suggestIndex.value >= 0 && suggestItems.value.length > 0) {
         return suggestItems.value[suggestIndex.value] || null;
       }
       return null;
-    });
-
-    // 补全弹窗头部文案：与 mockup completion-header 一致（命令补全 / 历史联想 / 映射匹配）
-    const suggestHeaderText = computed(() => {
-      if (!suggestItems.value.length) return '命令补全';
-      const hasHistory = suggestItems.value.some((i) => i.type === 'history');
-      const hasMapping = suggestItems.value.some((i) => i.type === 'mapping');
-      if (hasMapping) return '命令映射';
-      if (hasHistory && suggestItems.value.every((i) => i.type === 'history')) {
-        return '历史联想';
-      }
-      return '命令补全';
     });
 
     // 每条建议的小图标 SVG path（按来源类型区分，贴近 mockup completion-icon）
@@ -182,14 +195,31 @@ export default defineComponent({
     let suggestTimer: ReturnType<typeof setTimeout> | null = null;
     let suggestRequestId = 0;
     let suggestPositionRafId: number | null = null;
+    let completionScrollbarDragStartY = 0;
+    let completionScrollbarDragStartScrollTop = 0;
     let outputFlushTimer: ReturnType<typeof setTimeout> | null = null;
     let outputBuffer = '';
+    // 选择命令后，zsh-autosuggestions 会在 PTY 输出新输入行后才补画灰色后缀。
+    // 不能只在发送按键前擦除；这里记录需要随真实 PTY 输出执行的擦除次数。
+    let pendingShellAutosuggestionClears = 0;
+    let shellAutosuggestionClearTimer: ReturnType<typeof setTimeout> | null = null;
+    let terminalOverscrollPx = 0;
+    let removeTerminalOverscrollListener: (() => void) | null = null;
 
     // 拖动缩放时的 resize 防抖 ID，避免每帧都调用 resize_pty
     let resizeRafId: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let resizeGeneration = 0;
+    let lastPtyCols = 0;
+    let lastPtyRows = 0;
+    let pendingPreviewRequestId = 0;
+    let previewAbortController: AbortController | null = null;
+    let previewInputLocked = false;
     // 终端字体实时变化监听句柄
     let onTermFontSizeChange: (() => void) | null = null;
     let onTermFontFamilyChange: (() => void) | null = null;
+    // 当前终端相对全局字号设置的临时偏移，仅影响被激活的这个终端实例。
+    let terminalFontSizeOffset = 0;
     // 设置面板标志变化监听句柄（命令补全 / Ghost Text 等开关）
     let onTermFlagsChange: (() => void) | null = null;
     let lastSuggestMouseX = Number.NaN;
@@ -207,6 +237,9 @@ export default defineComponent({
     let selAnchorY: number | null = null;
     let selCursorX: number | null = null;
     let selCursorY: number | null = null;
+    // 选区在命令文本中的字符索引。它与 buffer 坐标分开保存，避免提示符被纳入 Shift 选区。
+    let selAnchorIndex: number | null = null;
+    let selCursorIndex: number | null = null;
 
     // Click-to-move-cursor state
     let mouseDownX = 0;
@@ -219,6 +252,8 @@ export default defineComponent({
       dragging: isDragging.value,
       resizing: isResizing.value,
       'has-file-panel': props.filePanelOpen,
+      'has-performance-panel': props.performancePanelOpen,
+      'has-side-panel': props.unifiedPanelOpen,
     }));
 
     const statusClass = computed(() => {
@@ -233,11 +268,11 @@ export default defineComponent({
     const UNIFIED_TITLEBAR_H = 28;
     const containerStyle = computed(() => ({
       left: `${rectState.value.x}px`,
-      top: `${props.filePanelOpen ? rectState.value.y + UNIFIED_TITLEBAR_H : rectState.value.y}px`,
+      top: `${props.unifiedPanelOpen ? rectState.value.y + UNIFIED_TITLEBAR_H : rectState.value.y}px`,
       width: `${rectState.value.w}px`,
       height: isMinimized.value
         ? '38px'
-        : `${Math.max(100, rectState.value.h - (props.filePanelOpen ? UNIFIED_TITLEBAR_H : 0))}px`,
+        : `${Math.max(100, rectState.value.h - (props.unifiedPanelOpen ? UNIFIED_TITLEBAR_H : 0))}px`,
       zIndex: props.zIndex,
     }));
 
@@ -246,9 +281,28 @@ export default defineComponent({
       return getTerminalThemeStrategy(themeName).getTheme();
     }
 
-    function calcFontSize(w: number, h: number): number {
-      const minDim = Math.min(w, h);
-      return Math.round(Math.max(12, Math.min(16, 12 + (minDim - 300) / 250)));
+    function getBaseTerminalFontSize(): number {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--term-font-size');
+      const parsed = Number.parseFloat(raw);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 13;
+    }
+
+    function resolveFontSize(): number {
+      return Math.max(
+        MIN_TERMINAL_FONT_SIZE,
+        Math.min(MAX_TERMINAL_FONT_SIZE, Math.round(getBaseTerminalFontSize() + terminalFontSizeOffset)),
+      );
+    }
+
+    /** Increase or decrease only this terminal's font while preserving the global size preference. */
+    function adjustTerminalFontSize(delta: -1 | 1): void {
+      const currentSize = term?.options.fontSize ?? resolveFontSize();
+      const nextSize = Math.max(MIN_TERMINAL_FONT_SIZE, Math.min(MAX_TERMINAL_FONT_SIZE, currentSize + delta));
+      if (nextSize === currentSize) return;
+
+      terminalFontSizeOffset = nextSize - getBaseTerminalFontSize();
+      if (term) term.options.fontSize = nextSize;
+      scheduleResize();
     }
 
     // 从 localStorage 读取终端字体族设置（与 SettingsPanel 的 FLAGS_STORAGE_KEY 一致）
@@ -289,12 +343,51 @@ export default defineComponent({
     function clearGhostText() {
       ghostText.value = '';
       ghostStyle.value = {};
+      ghostPreviewMode.value = 'suffix';
+    }
+
+    /**
+     * Clear the shell-rendered autosuggestion from the current terminal row.
+     * zsh-autosuggestions paints its suffix directly into xterm, so hiding our
+     * Vue ghost layer alone is insufficient before a selected command is redrawn.
+     */
+    function clearShellAutosuggestion(): Promise<void> {
+      if (!term || disposed || isTuiMode()) return Promise.resolve();
+      return new Promise((resolve) => {
+        try {
+          term?.write('\x1b[K', resolve);
+        } catch {
+          resolve();
+        }
+      });
+    }
+
+    /** Keep the output-bound clearing window short so unrelated later output is never erased. */
+    function armShellAutosuggestionClear(): void {
+      pendingShellAutosuggestionClears = Math.max(pendingShellAutosuggestionClears, 3);
+      if (shellAutosuggestionClearTimer) clearTimeout(shellAutosuggestionClearTimer);
+      shellAutosuggestionClearTimer = setTimeout(() => {
+        pendingShellAutosuggestionClears = 0;
+        shellAutosuggestionClearTimer = null;
+      }, 350);
+    }
+
+    /**
+     * Clear the late shell redraw after a selected command is written back to the PTY.
+     * The redraw is asynchronous, so retain the request until the following terminal
+     * output batches have been rendered rather than relying on animation-frame timing.
+     */
+    function clearShellAutosuggestionAfterSuggestionWrite(): void {
+      if (!term || disposed || isTuiMode() || cursorPos !== currentLine.length) return;
+      armShellAutosuggestionClear();
+      void clearShellAutosuggestion();
     }
 
     function hideSuggestions(clearItems = true) {
       suggestRequestId++;
       suggestVisible.value = false;
       suggestIndex.value = -1;
+      showCompletionScrollbar.value = false;
       if (clearItems) suggestItems.value = [];
       clearGhostText();
     }
@@ -353,11 +446,110 @@ export default defineComponent({
       return { cursorRect, terminalRect, cellWidth, cellHeight };
     }
 
+    /** Apply the blank region by moving xterm's rendered screen, not its shell buffer. */
+    function applyTerminalOverscroll(): void {
+      const screen = xtermHostRef.value?.querySelector('.xterm-screen') as HTMLElement | null;
+      if (!screen) return;
+      screen.style.transform = terminalOverscrollPx > 0
+        ? `translateY(-${Math.round(terminalOverscrollPx)}px)`
+        : '';
+    }
+
+    /** Return from the intentional blank region before input or an external command is echoed. */
+    function scrollToLatestTerminalContent(): void {
+      if (terminalOverscrollPx <= 0) return;
+      terminalOverscrollPx = 0;
+      applyTerminalOverscroll();
+      term?.scrollToBottom();
+    }
+
+    /**
+     * xterm clamps native viewport scrolling at the final buffer row. Capture
+     * downward wheel movement there and turn it into a visual-only blank region.
+     */
+    function installTerminalOverscroll(): void {
+      const host = xtermHostRef.value;
+      if (!host) return;
+      const onWheel = (event: WheelEvent) => {
+        if (!term || disposed || event.ctrlKey || event.metaKey) return;
+        const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+          ? 16
+          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+            ? host.clientHeight
+            : 1;
+        const delta = event.deltaY * unit;
+        if (delta === 0) return;
+        const buffer = term.buffer.active;
+        const atBottom = buffer.viewportY >= buffer.baseY;
+        if (terminalOverscrollPx <= 0 && !(delta > 0 && atBottom)) return;
+
+        const next = Math.max(0, Math.min(TERMINAL_OVERSCROLL_MAX_PX, terminalOverscrollPx + delta));
+        if (next === terminalOverscrollPx) return;
+        terminalOverscrollPx = next;
+        event.preventDefault();
+        event.stopPropagation();
+        applyTerminalOverscroll();
+      };
+      host.addEventListener('wheel', onWheel, { capture: true, passive: false });
+      removeTerminalOverscrollListener = () => {
+        host.removeEventListener('wheel', onWheel, true);
+        removeTerminalOverscrollListener = null;
+      };
+    }
+
     // 检测当前是否处于 TUI 模式（alternate screen buffer 被激活）。
     // vim/htop/less/claude/codex 等 TUI 程序进入时会切换到 alternate screen，
     // 此时所有按键应直接透传给 PTY，不做行编辑/补全/点击移动光标等拦截。
     function isTuiMode(): boolean {
       return !!term && term.buffer.active.type === 'alternate';
+    }
+
+    function cancelPendingPreview() {
+      pendingPreviewRequestId++;
+      previewAbortController?.abort();
+      previewAbortController = null;
+      previewInputLocked = false;
+    }
+
+    async function tryHandleFilePreview(command: string): Promise<void> {
+      const parsed = parseFilePreviewCommand(
+        command,
+        currentCwd.value,
+        props.platform,
+        props.launchOptions.mode === 'ssh' ? 'ssh' : 'local',
+        props.launchOptions.profileId,
+        props.terminalId,
+      );
+      if (!parsed || !props.handleFilePreview) {
+        resetLineTracking();
+        emit('command-executed', command, currentCwd.value);
+        void enqueuePtyWrite('\r');
+        return;
+      }
+
+      const requestId = ++pendingPreviewRequestId;
+      previewAbortController = new AbortController();
+      parsed.signal = previewAbortController.signal;
+      previewInputLocked = true;
+      const oldLine = currentLine;
+      const oldCursor = cursorPos;
+      hideSuggestions();
+      let handled = false;
+      try {
+        handled = await props.handleFilePreview(parsed);
+      } catch {
+        handled = false;
+      }
+      if (disposed || requestId !== pendingPreviewRequestId) return;
+      previewAbortController = null;
+      previewInputLocked = false;
+      resetLineTracking();
+      emit('command-executed', command, currentCwd.value);
+      if (handled) {
+        await rewriteShellLine(oldLine, oldCursor, '', 0, '\r');
+      } else {
+        await enqueuePtyWrite('\r');
+      }
     }
 
     /** Keep IME commits and the immediately following edit/navigation key in strict PTY order. */
@@ -371,6 +563,33 @@ export default defineComponent({
           await invoke('write_pty', { sessionId: targetSessionId, data });
         });
       return ptyWriteQueue;
+    }
+
+    function textBoundaryCount(text: string): number {
+      let count = 0;
+      let position = text.length;
+      while (position > 0) {
+        position = previousTextBoundary(text, position);
+        count++;
+      }
+      return count;
+    }
+
+    /** Rewrite the tracked shell input without relying on shell-specific kill-line bindings. */
+    function rewriteShellLine(
+      oldLine: string,
+      oldCursor: number,
+      newLine: string,
+      newCursor = newLine.length,
+      suffix = '',
+    ): Promise<void> {
+      const moveToEnd = '\x1b[C'.repeat(textCursorDistance(oldLine, oldCursor, oldLine.length));
+      const eraseLine = '\x7f'.repeat(textBoundaryCount(oldLine));
+      const safeCursor = Math.max(0, Math.min(newLine.length, newCursor));
+      const moveToCursor = '\x1b[D'.repeat(textCursorDistance(newLine, safeCursor, newLine.length));
+      return enqueuePtyWrite(moveToEnd + eraseLine)
+        .then(() => enqueuePtyWrite(newLine))
+        .then(() => enqueuePtyWrite(moveToCursor + suffix));
     }
 
     // 根据当前输入行向命令智能引擎查询并刷新补全建议列表
@@ -387,7 +606,6 @@ export default defineComponent({
         hideSuggestions();
         return;
       }
-
       try {
         const results = await intel.searchSuggestions(trimmed);
         if (disposed || requestId !== suggestRequestId || input !== currentLine) return;
@@ -399,6 +617,7 @@ export default defineComponent({
           suggestVisible.value = true;
           refreshGhostText();
           scheduleSuggestPosition();
+          scheduleCompletionScrollbarUpdate();
         } else {
           hideSuggestions();
         }
@@ -422,8 +641,8 @@ export default defineComponent({
         popupWidth,
         desiredListHeight,
         chromeHeight: 49,
-        gap: 6,
-        edgePadding: 6,
+        gap: SUGGEST_CURSOR_GAP,
+        edgePadding: SUGGEST_EDGE_PADDING,
       });
       suggestPlacement.value = result.placement;
       suggestStyle.value = {
@@ -435,16 +654,39 @@ export default defineComponent({
         maxWidth: `${Math.round(result.width)}px`,
         '--completion-list-max-height': `${Math.floor(result.listHeight)}px`,
       };
+      scheduleCompletionScrollbarUpdate();
     }
 
     function refreshGhostText() {
       clearGhostText();
-      if (!term || !suggestVisible.value || cursorPos !== currentLine.length || !getLocalFlags().ghostText || templateSession || activePlaceholders.length > 0) return;
+      // 选中列表项是明确的用户操作，始终显示该项预览；未选中时不创建
+      // 应用层 Ghost，完全保留 shell 原生 autosuggestion 的行为。
+      if (!term || !suggestVisible.value || cursorPos !== currentLine.length || templateSession || activePlaceholders.length > 0) return;
       const item = suggestItems.value[suggestIndex.value] || null;
-      const ghost = getCommandIntel()?.getGhostSuggestionForItem(currentLine, item) || null;
-      if (!ghost?.text || !currentLine.trim()) return;
-      ghostText.value = ghost.text;
+      if (!item || !currentLine.trim()) return;
+      const preview = getSelectedSuggestionPreview(item);
+      if (!preview) return;
+      ghostText.value = preview.text;
+      ghostPreviewMode.value = preview.mode;
       updateGhostPosition();
+    }
+
+    /** Build an unambiguous preview of the actively selected command-list row. */
+    function getSelectedSuggestionPreview(item: SuggestionItem): { text: string; mode: 'suffix' | 'replacement' } | null {
+      const candidate = (item.placeholders?.hasPlaceholders
+        ? item.placeholders.insertText
+        : item.insertText || item.executeText || item.usage).trim();
+      const typed = currentLine.trimStart();
+      if (!candidate || !typed) return null;
+      if (candidate.startsWith(typed)) {
+        const suffix = candidate.slice(typed.length);
+        return suffix ? { text: suffix, mode: 'suffix' } : null;
+      }
+
+      // For mappings and short history rows (for example `cd` after `cd `),
+      // show the selected row as a complete replacement preview rather than
+      // silently showing no feedback.
+      return { text: candidate, mode: 'replacement' };
     }
 
     function updateGhostPosition() {
@@ -455,15 +697,93 @@ export default defineComponent({
         return;
       }
       const availableWidth = Math.max(0, geometry.terminalRect.right - geometry.cursorRect.left - 6);
+      const commandWidth = textCellWidth(currentLine.slice(0, cursorPos)) * geometry.cellWidth;
+      const replacement = ghostPreviewMode.value === 'replacement';
       ghostStyle.value = {
         position: 'fixed',
-        left: `${Math.round(geometry.cursorRect.left)}px`,
+        left: `${Math.round(replacement ? geometry.cursorRect.left - commandWidth : geometry.cursorRect.left)}px`,
         top: `${Math.round(geometry.cursorRect.top)}px`,
-        maxWidth: `${Math.floor(availableWidth)}px`,
+        maxWidth: `${Math.floor(replacement ? geometry.terminalRect.right - (geometry.cursorRect.left - commandWidth) - 6 : availableWidth)}px`,
         height: `${Math.ceil(geometry.cellHeight)}px`,
         lineHeight: `${geometry.cellHeight}px`,
         fontSize: `${Math.max(9, geometry.cellHeight * 0.72)}px`,
       };
+    }
+
+    /** Keep the completion list's custom scrollbar in sync with its scroll range. */
+    function updateCompletionScrollbar(): void {
+      const list = completionListRef.value;
+      if (!list) {
+        showCompletionScrollbar.value = false;
+        return;
+      }
+      const scrollable = list.scrollHeight > list.clientHeight + 1;
+      showCompletionScrollbar.value = scrollable;
+      if (!scrollable) {
+        completionScrollbarTop.value = 0;
+        return;
+      }
+
+      const trackPadding = 4;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const thumbHeight = Math.min(trackHeight, Math.max(24, Math.round((list.clientHeight / list.scrollHeight) * trackHeight)));
+      const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+      const maxScroll = Math.max(1, list.scrollHeight - list.clientHeight);
+      completionScrollbarHeight.value = thumbHeight;
+      completionScrollbarTop.value = trackPadding + Math.round((list.scrollTop / maxScroll) * maxThumbTop);
+    }
+
+    function scheduleCompletionScrollbarUpdate(): void {
+      void nextTick(updateCompletionScrollbar);
+    }
+
+    function scrollCompletionToThumbClientY(clientY: number): void {
+      const list = completionListRef.value;
+      if (!list) return;
+      const trackPadding = 4;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const maxThumbTop = Math.max(0, trackHeight - completionScrollbarHeight.value);
+      if (maxThumbTop <= 0) return;
+      const rect = list.getBoundingClientRect();
+      const relative = Math.max(0, Math.min(
+        maxThumbTop,
+        clientY - rect.top - trackPadding - completionScrollbarHeight.value / 2,
+      ));
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      list.scrollTop = (relative / maxThumbTop) * maxScroll;
+      updateCompletionScrollbar();
+    }
+
+    function onCompletionScrollbarTrackMouseDown(event: MouseEvent): void {
+      scrollCompletionToThumbClientY(event.clientY);
+    }
+
+    function onCompletionScrollbarDragMove(event: MouseEvent): void {
+      const list = completionListRef.value;
+      if (!list) return;
+      const trackPadding = 4;
+      const trackHeight = Math.max(0, list.clientHeight - trackPadding * 2);
+      const maxThumbTop = Math.max(1, trackHeight - completionScrollbarHeight.value);
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      const delta = event.clientY - completionScrollbarDragStartY;
+      list.scrollTop = completionScrollbarDragStartScrollTop + (delta / maxThumbTop) * maxScroll;
+      updateCompletionScrollbar();
+    }
+
+    function onCompletionScrollbarDragEnd(): void {
+      document.body.classList.remove('completion-scrollbar-dragging');
+      window.removeEventListener('mousemove', onCompletionScrollbarDragMove);
+      window.removeEventListener('mouseup', onCompletionScrollbarDragEnd);
+    }
+
+    function onCompletionScrollbarThumbMouseDown(event: MouseEvent): void {
+      const list = completionListRef.value;
+      if (!list) return;
+      completionScrollbarDragStartY = event.clientY;
+      completionScrollbarDragStartScrollTop = list.scrollTop;
+      document.body.classList.add('completion-scrollbar-dragging');
+      window.addEventListener('mousemove', onCompletionScrollbarDragMove);
+      window.addEventListener('mouseup', onCompletionScrollbarDragEnd);
     }
 
     function scrollSuggestIntoView(index = suggestIndex.value) {
@@ -475,10 +795,12 @@ export default defineComponent({
         const padding = 6;
         if (index <= 0) {
           container.scrollTop = 0;
+          updateCompletionScrollbar();
           return;
         }
         if (index >= suggestItems.value.length - 1) {
           container.scrollTop = container.scrollHeight - container.clientHeight;
+          updateCompletionScrollbar();
           return;
         }
         const itemTop = active.offsetTop;
@@ -490,7 +812,33 @@ export default defineComponent({
         } else if (itemBottom > viewBottom - padding) {
           container.scrollTop = Math.max(0, itemBottom - container.clientHeight + padding);
         }
+        updateCompletionScrollbar();
       });
+    }
+
+    /**
+     * Apply the two-stage suggestion navigation contract.
+     * Down chooses the first row only when no suggestion is selected yet. Up
+     * stays available to the shell history until that first Down press occurs.
+     */
+    function navigateSuggestionByKey(key: 'ArrowUp' | 'ArrowDown'): boolean {
+      if (!suggestVisible.value || suggestItems.value.length === 0) return false;
+      if (suggestIndex.value < 0 && key === 'ArrowUp') return false;
+
+      suggestSelectionMode.value = 'keyboard';
+      lastSuggestMouseX = Number.NaN;
+      lastSuggestMouseY = Number.NaN;
+      suggestIndex.value = suggestIndex.value < 0
+        ? 0
+        : key === 'ArrowDown'
+          ? (suggestIndex.value + 1) % suggestItems.value.length
+          : (suggestIndex.value - 1 + suggestItems.value.length) % suggestItems.value.length;
+      // 方向键不会透传给 shell；因此先清除它保留在 xterm 中的旧后缀，
+      // 再绘制当前列表项的 Vue Ghost，避免两层提示占用同一行。
+      void clearShellAutosuggestion();
+      scrollSuggestIntoView(suggestIndex.value);
+      refreshGhostText();
+      return true;
     }
 
     function debouncedUpdateSuggestions(input: string) {
@@ -500,10 +848,15 @@ export default defineComponent({
       }, 120);
     }
 
-    function onInputChanged(input: string) {
+    /**
+     * Clear stale completion state after an edit. Suggestions are intentionally
+     * requested only when the user types a space, keeping shell history and
+     * normal command entry free from unsolicited popups.
+     */
+    function onInputChanged(input: string, triggerSuggestions = false) {
       hideSuggestions();
       if (templateSession) return;
-      debouncedUpdateSuggestions(input);
+      if (triggerSuggestions) debouncedUpdateSuggestions(input);
     }
 
     function moveCursorTo(position: number) {
@@ -536,6 +889,8 @@ export default defineComponent({
       const column = ((targetLinear % term.cols) + term.cols) % term.cols;
       term.select(column, row, textCellWidth(currentLine.slice(placeholder.position, placeholder.position + placeholder.length)));
       placeholderSelectionArmed = true;
+      // 确保终端保持焦点，用户可立即输入替换占位符
+      term.focus();
     }
 
     /** 获取当前命令行的 buffer 坐标信息，用于选中计算。 */
@@ -557,66 +912,115 @@ export default defineComponent({
       selAnchorY = null;
       selCursorX = null;
       selCursorY = null;
+      selAnchorIndex = null;
+      selCursorIndex = null;
     }
 
-    /** 根据锚点和虚拟光标位置执行 term.select()。 */
-    function performSelection() {
-      if (!term || selAnchorX === null || selAnchorY === null || selCursorX === null || selCursorY === null) return;
+    /**
+     * 删除当前选区覆盖的文本。
+     * 将 buffer 级选中坐标（selAnchorX/Y、selCursorX/Y）映射到 currentLine
+     * 中的文本区间，一次性删除选中范围内的所有字符（用于 Ctrl+A 全选后退格等）。
+     * 返回 true 表示已处理删除，调用方应 return。
+     */
+    function deleteSelectionRange(): boolean {
+      if (!term) return false;
+      if (selAnchorX === null || selAnchorY === null || selCursorX === null || selCursorY === null) return false;
       const cols = term.cols;
+      // 行起始的 linear 坐标（与 getCommandLineBounds 一致）
+      const bounds = getCommandLineBounds();
+      if (!bounds) return false;
+      const lineStartLinear = bounds.lineStartLinear;
+
       const anchorLinear = selAnchorY * cols + selAnchorX;
       const cursorLinear = selCursorY * cols + selCursorX;
-      const startLinear = Math.min(anchorLinear, cursorLinear);
-      const length = Math.abs(cursorLinear - anchorLinear);
+      const selStartLinear = Math.min(anchorLinear, cursorLinear);
+      const selEndLinear = Math.max(anchorLinear, cursorLinear);
+
+      // 映射到 currentLine 的字符偏移
+      const startCell = selStartLinear - lineStartLinear;
+      const endCell = selEndLinear - lineStartLinear;
+      if (endCell <= 0) return false;
+
+      const startIdx = textIndexAtCell(currentLine, Math.max(0, startCell));
+      const endIdx = textIndexAtCell(currentLine, endCell);
+      if (startIdx >= endIdx) return false;
+
+      const oldLine = currentLine;
+      const oldCursor = cursorPos;
+      const removedLength = endIdx - startIdx;
+      currentLine = currentLine.slice(0, startIdx) + currentLine.slice(endIdx);
+      cursorPos = startIdx;
+      applyTrackedEdit(startIdx, removedLength, 0);
+      clearSelectionAnchor();
+      term.clearSelection();
+
+      void rewriteShellLine(oldLine, oldCursor, currentLine, cursorPos);
+      onInputChanged(currentLine);
+      return true;
+    }
+
+    /** Render a selection whose endpoints are always inside the tracked command text. */
+    function selectCommandRange(anchorIndex: number, cursorIndex: number): boolean {
+      if (!term) return false;
+      const bounds = getCommandLineBounds();
+      if (!bounds) return false;
+      const safeAnchor = Math.max(0, Math.min(currentLine.length, anchorIndex));
+      const safeCursor = Math.max(0, Math.min(currentLine.length, cursorIndex));
+      const startIndex = Math.min(safeAnchor, safeCursor);
+      const endIndex = Math.max(safeAnchor, safeCursor);
+      const startLinear = bounds.lineStartLinear + textCellWidth(currentLine.slice(0, startIndex));
+      const endLinear = bounds.lineStartLinear + textCellWidth(currentLine.slice(0, endIndex));
+      const length = Math.max(0, endLinear - startLinear);
       if (length <= 0) {
         term.clearSelection();
-        return;
+        clearSelectionAnchor();
+        return false;
       }
-      const startRow = Math.floor(startLinear / cols);
-      const startCol = startLinear % cols;
+      const startRow = Math.max(0, Math.floor(startLinear / bounds.cols));
+      const startCol = ((startLinear % bounds.cols) + bounds.cols) % bounds.cols;
       term.select(startCol, startRow, length);
+      // Keep buffer coordinates for deletion/copy paths, but derive both from
+      // the constrained command indices rather than the terminal prompt row.
+      const anchorLinear = bounds.lineStartLinear + textCellWidth(currentLine.slice(0, safeAnchor));
+      const cursorLinear = bounds.lineStartLinear + textCellWidth(currentLine.slice(0, safeCursor));
+      selAnchorX = ((anchorLinear % bounds.cols) + bounds.cols) % bounds.cols;
+      selAnchorY = Math.max(0, Math.floor(anchorLinear / bounds.cols));
+      selCursorX = ((cursorLinear % bounds.cols) + bounds.cols) % bounds.cols;
+      selCursorY = Math.max(0, Math.floor(cursorLinear / bounds.cols));
+      selAnchorIndex = safeAnchor;
+      selCursorIndex = safeCursor;
+      return true;
     }
 
     /** Shift+方向键：在 buffer 坐标空间移动虚拟光标并选中文本。 */
     function handleShiftArrow(event: KeyboardEvent): boolean {
       if (!term) return true;
-      const buffer = term.buffer.active;
-      const cols = term.cols;
-      // 如果锚点不存在，或者之前的选区已被外部清除（如 term.clearSelection()），
-      // 则以当前光标位置重新初始化锚点。
-      const hasSelection = !!term.getSelection();
-      if (selAnchorX === null || !hasSelection) {
-        selAnchorX = buffer.cursorX;
-        selAnchorY = buffer.baseY + buffer.cursorY;
-        selCursorX = buffer.cursorX;
-        selCursorY = buffer.baseY + buffer.cursorY;
-      }
+      const bounds = getCommandLineBounds();
+      if (!bounds) return true;
+      // 首次 Shift 操作的锚点是当前命令中的光标位置，绝不使用 prompt 的 buffer 坐标。
+      const anchor = selAnchorIndex ?? cursorPos;
+      let cursor = selCursorIndex ?? cursorPos;
       switch (event.key) {
         case 'ArrowLeft':
-          if (selCursorX! > 0) {
-            selCursorX = selCursorX! - 1;
-          } else if (selCursorY! > 0) {
-            selCursorY = selCursorY! - 1;
-            selCursorX = cols - 1;
-          }
+          cursor = previousTextBoundary(currentLine, cursor);
           break;
         case 'ArrowRight':
-          if (selCursorX! < cols - 1) {
-            selCursorX = selCursorX! + 1;
-          } else {
-            selCursorY = selCursorY! + 1;
-            selCursorX = 0;
-          }
+          cursor = nextTextBoundary(currentLine, cursor);
           break;
-        case 'ArrowUp':
-          if (selCursorY! > 0) selCursorY = selCursorY! - 1;
+        case 'ArrowUp': {
+          const cursorCell = textCellWidth(currentLine.slice(0, cursor));
+          cursor = textIndexAtCell(currentLine, Math.max(0, cursorCell - bounds.cols));
           break;
-        case 'ArrowDown':
-          selCursorY = selCursorY! + 1;
+        }
+        case 'ArrowDown': {
+          const cursorCell = textCellWidth(currentLine.slice(0, cursor));
+          cursor = textIndexAtCell(currentLine, Math.min(bounds.lineLength, cursorCell + bounds.cols));
           break;
+        }
         default:
           return true;
       }
-      performSelection();
+      selectCommandRange(anchor, cursor);
       return false;
     }
 
@@ -624,22 +1028,12 @@ export default defineComponent({
     function handleSelectAll(): boolean {
       if (!term) return true;
       const buffer = term.buffer.active;
-      const cols = term.cols;
       const cursorRow = buffer.baseY + buffer.cursorY;
       let startCol: number;
       let length: number;
       if (currentLine.length > 0) {
-        const bounds = getCommandLineBounds();
-        if (!bounds) return true;
-        if (bounds.lineLength <= 0) return false;
-        const row = Math.max(0, Math.floor(bounds.lineStartLinear / cols));
-        startCol = ((bounds.lineStartLinear % cols) + cols) % cols;
-        length = bounds.lineLength;
-        term.select(startCol, row, length);
-        selAnchorX = startCol;
-        selAnchorY = row;
-        selCursorX = startCol + length;
-        selCursorY = row;
+        selectCommandRange(0, currentLine.length);
+        return false;
       } else {
         // currentLine 为空时（PTY 未初始化），回退到选中当前行的非空内容
         const lineText = buffer.getLine(cursorRow)?.translateToString(false) || '';
@@ -659,46 +1053,43 @@ export default defineComponent({
     /** Shift+Home：选中从命令开头到当前光标。 */
     function handleShiftHome(): boolean {
       if (!term) return true;
+      if (currentLine.length > 0) {
+        selectCommandRange(cursorPos, 0);
+        return false;
+      }
       const buffer = term.buffer.active;
-      const cols = term.cols;
       const cursorRow = buffer.baseY + buffer.cursorY;
       const cursorX = buffer.cursorX;
       // currentLine 为空时（PTY 未初始化），回退到 buffer 当前行行首
-      const lineStartCol = currentLine.length > 0
-        ? ((getCommandLineBounds()?.lineStartLinear ?? 0) % cols + cols) % cols
-        : 0;
+      const lineStartCol = 0;
       selAnchorX = lineStartCol;
       selAnchorY = cursorRow;
       selCursorX = cursorX;
       selCursorY = cursorRow;
-      performSelection();
+      term.select(lineStartCol, cursorRow, Math.max(0, cursorX - lineStartCol));
       return false;
     }
 
     /** Shift+End：选中从当前光标到命令结尾。 */
     function handleShiftEnd(): boolean {
       if (!term) return true;
+      if (currentLine.length > 0) {
+        selectCommandRange(cursorPos, currentLine.length);
+        return false;
+      }
       const buffer = term.buffer.active;
-      const cols = term.cols;
       const cursorRow = buffer.baseY + buffer.cursorY;
       const cursorX = buffer.cursorX;
       // currentLine 为空时（PTY 未初始化），回退到 buffer 当前行行尾
       let endCol: number;
-      if (currentLine.length > 0) {
-        const bounds = getCommandLineBounds();
-        if (!bounds) return true;
-        const endLinear = bounds.lineStartLinear + bounds.lineLength;
-        endCol = endLinear % cols;
-      } else {
-        // 读取当前行实际文本，找到最后一个非空字符
-        const lineText = buffer.getLine(cursorRow)?.translateToString(false) || '';
-        endCol = lineText.replace(/\s+$/, '').length;
-      }
+      // 读取当前行实际文本，找到最后一个非空字符
+      const lineText = buffer.getLine(cursorRow)?.translateToString(false) || '';
+      endCol = lineText.replace(/\s+$/, '').length;
       selAnchorX = cursorX;
       selAnchorY = cursorRow;
       selCursorX = endCol;
       selCursorY = cursorRow;
-      performSelection();
+      term.select(Math.min(cursorX, endCol), cursorRow, Math.abs(endCol - cursorX));
       return false;
     }
 
@@ -728,6 +1119,8 @@ export default defineComponent({
 
     function clearInvalidTemplateSession(afterEditData: string): boolean {
       if (!templateBodyWasRemoved() || !sessionId) return false;
+      const lineAfterEdit = currentLine;
+      const cursorAfterEdit = cursorPos;
       currentLine = '';
       cursorPos = 0;
       activePlaceholders = [];
@@ -736,8 +1129,9 @@ export default defineComponent({
       placeholderSelectionArmed = false;
       term?.clearSelection();
       hideSuggestions();
-      // Apply the user's edit, then clear the complete readline buffer from end to start.
-      void enqueuePtyWrite(`${afterEditData}\x05\x15`);
+      // Apply the user's edit first, then rewrite the remaining template line portably.
+      void enqueuePtyWrite(afterEditData)
+        .then(() => rewriteShellLine(lineAfterEdit, cursorAfterEdit, '', 0));
       return true;
     }
 
@@ -793,16 +1187,16 @@ export default defineComponent({
     }
 
     async function initTerminal() {
-      if (disposed || !bodyRef.value) return;
+      if (disposed || !bodyRef.value || !xtermHostRef.value) return;
 
-      const fontSize = calcFontSize(props.initialWidth, props.initialHeight);
+      const fontSize = resolveFontSize();
       term = new Terminal({
         theme: getTheme(),
         fontFamily: getTermFontFamily(),
         fontSize,
         fontWeight: '400',
         fontWeightBold: '600',
-        lineHeight: 1.2,
+        lineHeight: 1,
         cursorBlink: true,
         cursorStyle: 'bar',
         cursorWidth: 1,
@@ -820,28 +1214,39 @@ export default defineComponent({
       term.loadAddon(unicode11Addon);
       term.unicode.activeVersion = '11';
 
-      term.open(bodyRef.value);
+      term.open(xtermHostRef.value);
+      installTerminalOverscroll();
       term.onRender(() => {
         if (suggestVisible.value || ghostText.value) scheduleSuggestPosition();
       });
 
       // 自定义键盘拦截：在普通命令行模式下处理选中快捷键。
-      // TUI 模式（vim/htop/less 等）下全部放行，交由应用程序自行处理。
+      // 字号缩放是终端容器级操作，即使 TUI 模式也优先处理；其余按键交给 TUI 程序。
       const isMacPlatform = /Mac/i.test(navigator.platform);
       term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
         if (event.type !== 'keydown') return true;
+        const hasFontZoomModifier = (event.ctrlKey || event.metaKey) && !event.altKey;
+        const zoomIn = event.key === '+' || event.key === '=' || event.code === 'NumpadAdd';
+        const zoomOut = event.key === '-' || event.key === '_' || event.code === 'NumpadSubtract';
+        if (hasFontZoomModifier && (zoomIn || zoomOut)) {
+          event.preventDefault();
+          adjustTerminalFontSize(zoomIn ? 1 : -1);
+          return false;
+        }
+
         // TUI 模式放行
         if (isTuiMode()) return true;
-
-        // Ctrl+A：选中整行命令（覆盖默认的"移动到行首"语义）
-        if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'a') {
-          return handleSelectAll();
-        }
 
         // Shift+方向键：逐字符/逐行选中
         if (event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
             && (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
           return handleShiftArrow(event);
+        }
+
+        // Ctrl/Cmd+A 的语义固定为选中当前整条命令，而不是交给 shell 当作行首快捷键。
+        if (!event.shiftKey && !event.altKey && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+          event.preventDefault();
+          return handleSelectAll();
         }
 
         // Shift+Home / Shift+End：选中到行首/行尾
@@ -876,6 +1281,12 @@ export default defineComponent({
           }
         }
 
+        if (!event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey
+            && (event.key === 'ArrowUp' || event.key === 'ArrowDown')
+            && navigateSuggestionByKey(event.key)) {
+          return false;
+        }
+
         return true;
       });
       try {
@@ -889,7 +1300,7 @@ export default defineComponent({
       }
 
       const theme = getTheme();
-      const viewportEl = bodyRef.value.querySelector('.xterm-viewport') as HTMLElement;
+      const viewportEl = xtermHostRef.value.querySelector('.xterm-viewport') as HTMLElement;
       if (viewportEl) {
         viewportEl.style.backgroundColor = theme.background;
       }
@@ -913,6 +1324,8 @@ export default defineComponent({
       let rows = term.rows;
       if (!cols || cols <= 0 || !Number.isFinite(cols)) cols = 80;
       if (!rows || rows <= 0 || !Number.isFinite(rows)) rows = 24;
+      lastPtyCols = cols;
+      lastPtyRows = rows;
 
       try {
         sessionId = await invoke<string>('create_pty', { cols, rows, cwd: props.launchOptions.cwd || null });
@@ -921,17 +1334,33 @@ export default defineComponent({
         return;
       }
 
-      if (disposed) return;
+      // The component may have been closed while the backend created the PTY.
+      // In that case no later destroy() call will see this session ID, so tear
+      // it down here instead of retaining its child process in PtyManager.
+      if (disposed) {
+        void invoke('kill_pty', { sessionId });
+        sessionId = '';
+        return;
+      }
 
       function flushOutput() {
         if (!disposed && term && outputBuffer) {
-          try { term.write(outputBuffer); } catch { /* disposed */ }
+          const output = outputBuffer;
           outputBuffer = '';
+          try {
+            term.write(output, () => {
+              if (!term || disposed || pendingShellAutosuggestionClears <= 0) return;
+              pendingShellAutosuggestionClears--;
+              // CSI K only removes cells to the right of the real cursor. It keeps the
+              // accepted command intact while removing the shell's stale ghost suffix.
+              void clearShellAutosuggestion();
+            });
+          } catch { /* disposed */ }
         }
         outputFlushTimer = null;
       }
 
-      unlisten = await listen('pty-output', (event) => {
+      const nextUnlisten = await listen('pty-output', (event) => {
         if (disposed || !term) return;
         const payload = event.payload as { session_id: string; data: string };
         if (payload.session_id !== sessionId) return;
@@ -940,6 +1369,13 @@ export default defineComponent({
           outputFlushTimer = setTimeout(flushOutput, 0);
         }
       });
+      // listen() is asynchronous. If the window closed while it was pending,
+      // dispose the newly registered global listener immediately.
+      if (disposed) {
+        nextUnlisten();
+        return;
+      }
+      unlisten = nextUnlisten;
 
       term.onTitleChange((title: string) => {
         const cwd = normalizeTitleCwd(title);
@@ -962,6 +1398,21 @@ export default defineComponent({
       term.onData((data) => {
         if (!sessionId || disposed) return;
 
+        // 用户在底部空白区开始输入时，立刻回到真实的最后一行。
+        scrollToLatestTerminalContent();
+
+        if (previewInputLocked) {
+          if (data === '\x03') {
+            cancelPendingPreview();
+            resetLineTracking();
+            void enqueuePtyWrite(data);
+          } else if (data === '\x1b') {
+            cancelPendingPreview();
+            hideSuggestions();
+          }
+          return;
+        }
+
         // TUI 模式（vim/htop/less/claude/codex 等）：所有按键直接透传 PTY，
         // 不做命令跟踪、补全拦截、占位符跳转等任何行编辑逻辑。
         if (isTuiMode()) {
@@ -969,7 +1420,7 @@ export default defineComponent({
           return;
         }
 
-        if (suggestVisible.value && suggestItems.value.length > 0 && (data === '\x1b[A' || data === '\x1b[B')) {
+        if (suggestVisible.value && suggestIndex.value >= 0 && (data === '\x1b[A' || data === '\x1b[B')) {
           return;
         }
 
@@ -996,24 +1447,32 @@ export default defineComponent({
             }
             // Last placeholder: strip every unresolved token before execution.
             const sanitizedLine = removeUnresolvedPlaceholderRanges(currentLine, activePlaceholders);
-            if (sanitizedLine !== currentLine) {
-              const command = sanitizedLine.trim();
-              resetLineTracking();
-              if (command) emit('command-executed', command, '');
-              void enqueuePtyWrite(`\x01\x0b${sanitizedLine}\r`);
-              return;
-            }
+            const oldLine = currentLine;
+            const oldCursor = cursorPos;
+            const command = sanitizedLine.trim();
+            resetLineTracking();
+            if (command) emit('command-executed', command, '');
+            void rewriteShellLine(oldLine, oldCursor, sanitizedLine, sanitizedLine.length, '\r');
+            return;
           }
           const command = currentLine.trim();
-          resetLineTracking();
           if (command) {
-            emit('command-executed', command, '');
+            void tryHandleFilePreview(command);
+          } else {
+            resetLineTracking();
+            void enqueuePtyWrite(data);
           }
-          void enqueuePtyWrite(data);
         } else if (data === '\x7f' || data === '\b') {
           // 组合输入期间由输入法消费退格；compositionend 后不再吞键。
           if (imeComposing) return;
           if (deleteActivePlaceholder()) return;
+
+          // 如果存在选区（Ctrl+A 选中 / Shift+方向键选中），删除整个选中范围
+          if (term?.hasSelection() && selAnchorX !== null && selCursorX !== null) {
+            const deleted = deleteSelectionRange();
+            if (deleted) return;
+          }
+
           if (cursorPos > 0) {
             const editStart = previousTextBoundary(currentLine, cursorPos);
             const removedLength = cursorPos - editStart;
@@ -1114,6 +1573,10 @@ export default defineComponent({
           jumpToPlaceholder(-1, true);
         } else if (data === '\x1b[3~') {
           if (deleteActivePlaceholder()) return;
+          // 如果存在选区，删除整个选中范围
+          if (term?.hasSelection() && selAnchorX !== null && selCursorX !== null) {
+            if (deleteSelectionRange()) return;
+          }
           if (cursorPos < currentLine.length) {
             const nextPosition = nextTextBoundary(currentLine, cursorPos);
             currentLine = currentLine.slice(0, cursorPos) + currentLine.slice(nextPosition);
@@ -1134,7 +1597,7 @@ export default defineComponent({
           cursorPos++;
           applyTrackedEdit(editStart, 0, data.length);
           clearSelectionAnchor();
-          onInputChanged(currentLine);
+          onInputChanged(currentLine, data === ' ');
           void enqueuePtyWrite(data);
         } else if (data.length > 1 && !data.startsWith('\x1b') && !data.includes('\r') && !data.includes('\n') && !data.includes('\x7f') && !data.includes('\b')) {
           // IME 输入（中文/日文等）：onData 收到的是完整输入文本（多字符），
@@ -1175,37 +1638,12 @@ export default defineComponent({
         }
       });
 
-      // Handle key events for suggestion navigation
+      // Escape is observed here because xterm still delivers it to onData for
+      // normal line input. Arrow selection is handled earlier in the custom
+      // key handler so the shell-history fallback remains deterministic.
       term.onKey(({ domEvent }) => {
-        if (suggestVisible.value && suggestItems.value.length > 0) {
-          if (domEvent.key === 'ArrowDown') {
-            domEvent.preventDefault();
-            suggestSelectionMode.value = 'keyboard';
-            lastSuggestMouseX = Number.NaN;
-            lastSuggestMouseY = Number.NaN;
-            suggestIndex.value = suggestIndex.value < 0
-              ? 0
-              : (suggestIndex.value + 1) % suggestItems.value.length;
-            scrollSuggestIntoView(suggestIndex.value);
-            refreshGhostText();
-            return;
-          }
-          if (domEvent.key === 'ArrowUp') {
-            domEvent.preventDefault();
-            suggestSelectionMode.value = 'keyboard';
-            lastSuggestMouseX = Number.NaN;
-            lastSuggestMouseY = Number.NaN;
-            suggestIndex.value = suggestIndex.value < 0
-              ? suggestItems.value.length - 1
-              : (suggestIndex.value - 1 + suggestItems.value.length) % suggestItems.value.length;
-            scrollSuggestIntoView(suggestIndex.value);
-            refreshGhostText();
-            return;
-          }
-          if (domEvent.key === 'Escape') {
-            hideSuggestions();
-            return;
-          }
+        if (suggestVisible.value && domEvent.key === 'Escape') {
+          hideSuggestions();
         }
       });
 
@@ -1255,36 +1693,14 @@ export default defineComponent({
       void ensureIntel();
 
       setTimeout(() => {
-        if (disposed || !term || !fitAddon || !sessionId) return;
-        try {
-          fitAddon.fit();
-          const c = term.cols;
-          const r = term.rows;
-          if (c > 0 && r > 0 && Number.isFinite(c) && Number.isFinite(r)) {
-            void invoke('resize_pty', { sessionId, cols: c, rows: r });
-          }
-          if (bodyRef.value) {
-            const vp = bodyRef.value.querySelector('.xterm-viewport') as HTMLElement;
-            if (vp) vp.style.backgroundColor = getTheme().background;
-          }
-        } catch { /* ignore */ }
+        if (disposed || !sessionId) return;
+        scheduleResize();
       }, 50);
 
       setTimeout(() => {
-        if (disposed || !term || !fitAddon || !sessionId) return;
-        try {
-          fitAddon.fit();
-          term.options.theme = getTheme();
-          const c = term.cols;
-          const r = term.rows;
-          if (c > 0 && r > 0 && Number.isFinite(c) && Number.isFinite(r)) {
-            void invoke('resize_pty', { sessionId, cols: c, rows: r });
-          }
-          if (bodyRef.value) {
-            const vp = bodyRef.value.querySelector('.xterm-viewport') as HTMLElement;
-            if (vp) vp.style.backgroundColor = getTheme().background;
-          }
-        } catch { /* ignore */ }
+        if (disposed || !term || !sessionId) return;
+        term.options.theme = getTheme();
+        scheduleResize();
       }, 300);
     }
 
@@ -1374,55 +1790,40 @@ export default defineComponent({
       // Use the insertText that includes placeholder tokens (e.g. <src>) so
       // the user can see and replace them. Fall back to raw text if no placeholders.
       const newText = hasPlaceholders ? ph!.insertText : (item.insertText || item.executeText);
+      const oldLine = currentLine;
+      const oldCursor = cursorPos;
 
       hideSuggestions();
+      // Arm before rewriting: zsh may emit the autosuggestion in the same PTY batch
+      // as the accepted command, after the shell has already processed our input.
+      armShellAutosuggestionClear();
 
-      // Move to the beginning and kill to the end so cursor edits cannot leave a suffix behind.
-      void enqueuePtyWrite('\x01\x0b');
+      activePlaceholders = [];
+      currentPlaceholderIdx = -1;
+      templateSession = null;
+      placeholderSelectionArmed = false;
+      currentLine = newText;
 
-      setTimeout(() => {
-        if (!sessionId || disposed) return;
+      if (hasPlaceholders && ph!.placeholders.length > 0) {
+        activePlaceholders = ph!.placeholders.map((placeholder) => ({ ...placeholder }));
+        currentPlaceholderIdx = 0;
+        const firstPlaceholder = activePlaceholders[0];
+        cursorPos = firstPlaceholder.position;
+        templateSession = {
+          bodyEnd: newText.slice(0, firstPlaceholder.position).trimEnd().length,
+          ownedEnd: newText.length,
+        };
+      } else {
+        cursorPos = newText.length;
+      }
 
-        // Set up placeholder state before writing
-        activePlaceholders = [];
-        currentPlaceholderIdx = -1;
-        templateSession = null;
-        placeholderSelectionArmed = false;
-
-        if (hasPlaceholders && ph!.placeholders.length > 0) {
-          activePlaceholders = ph!.placeholders.map((placeholder) => ({ ...placeholder }));
-          currentPlaceholderIdx = 0;
-          currentLine = newText;
-          cursorPos = newText.length;
-          const firstPlaceholder = activePlaceholders[0];
-          templateSession = {
-            bodyEnd: newText.slice(0, firstPlaceholder.position).trimEnd().length,
-            ownedEnd: newText.length,
-          };
-        } else {
-          currentLine = newText;
-          cursorPos = newText.length;
-        }
-
-        void enqueuePtyWrite(newText).then(() => {
-          if (disposed || !sessionId) return;
-          // Move cursor to first placeholder position after PTY has echoed the text
-          if (hasPlaceholders && activePlaceholders.length > 0 && currentPlaceholderIdx >= 0) {
-            setTimeout(() => {
-              if (disposed || !sessionId) return;
-              const targetPos = activePlaceholders[currentPlaceholderIdx].position;
-              const moveLeft = cursorPos - targetPos;
-              if (moveLeft > 0) {
-                const moveSteps = textCursorDistance(currentLine, cursorPos, targetPos);
-                cursorPos = targetPos;
-                const seq = '\x1b[D'.repeat(moveSteps);
-                void enqueuePtyWrite(seq);
-              }
-              setTimeout(highlightActivePlaceholder, 20);
-            }, 80);
-          }
+      void clearShellAutosuggestion()
+        .then(() => rewriteShellLine(oldLine, oldCursor, newText, cursorPos))
+        .then(() => {
+          clearShellAutosuggestionAfterSuggestionWrite();
+          if (disposed || !sessionId || activePlaceholders.length === 0) return;
+          requestAnimationFrame(() => requestAnimationFrame(highlightActivePlaceholder));
         });
-      }, 40);
     }
 
     // 选中并应用某条建议到命令行（委托给 applySuggestion）
@@ -1440,13 +1841,17 @@ export default defineComponent({
       if (!moved) return;
       suggestSelectionMode.value = 'mouse';
       suggestIndex.value = index;
+      void clearShellAutosuggestion();
       refreshGhostText();
     }
 
     function handleResize() {
       if (disposed || !fitAddon || !term) return;
       try {
-        const newFontSize = calcFontSize(rectState.value.w, rectState.value.h);
+        const buffer = term.buffer.active;
+        const wasAtBottom = buffer.viewportY >= buffer.baseY;
+        const previousViewportY = buffer.viewportY;
+        const newFontSize = resolveFontSize();
         if (term.options.fontSize !== newFontSize) {
           term.options.fontSize = newFontSize;
         }
@@ -1454,7 +1859,10 @@ export default defineComponent({
         if (sessionId) {
           const c = term.cols;
           const r = term.rows;
-          if (c > 0 && r > 0 && Number.isFinite(c) && Number.isFinite(r)) {
+          if (c > 0 && r > 0 && Number.isFinite(c) && Number.isFinite(r)
+              && (c !== lastPtyCols || r !== lastPtyRows)) {
+            lastPtyCols = c;
+            lastPtyRows = r;
             void invoke('resize_pty', {
               sessionId,
               cols: c,
@@ -1462,8 +1870,23 @@ export default defineComponent({
             });
           }
         }
+        if (wasAtBottom) term.scrollToBottom();
+        else term.scrollToLine(previousViewportY);
+        applyTerminalOverscroll();
         scheduleSuggestPosition();
       } catch { /* ignore */ }
+    }
+
+    function scheduleResize() {
+      const generation = ++resizeGeneration;
+      if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+      resizeRafId = requestAnimationFrame(() => {
+        resizeRafId = requestAnimationFrame(() => {
+          resizeRafId = null;
+          if (generation !== resizeGeneration) return;
+          handleResize();
+        });
+      });
     }
 
     // 开始拖拽终端窗口：监听全局鼠标移动，按视口缩放换算坐标并触发吸附
@@ -1474,7 +1897,8 @@ export default defineComponent({
       const startY = e.clientY;
       const startLeft = rectState.value.x;
       const startTop = rectState.value.y;
-      const inset = props.filePanelOpen ? props.filePanelInset : 0;
+      const leftInset = props.filePanelOpen ? props.filePanelInset : 0;
+      const rightInset = props.performancePanelOpen ? props.performancePanelInset : 0;
 
       function onMove(ev: MouseEvent) {
         const zoom = props.viewportZoom || 1;
@@ -1484,16 +1908,16 @@ export default defineComponent({
           w: rectState.value.w,
           h: rectState.value.h,
         };
-        const rawGroupRect: Rect = inset > 0
-          ? { x: rawTerminalRect.x - inset, y: rawTerminalRect.y, w: rawTerminalRect.w + inset, h: rawTerminalRect.h }
+        const rawGroupRect: Rect = leftInset > 0 || rightInset > 0
+          ? { x: rawTerminalRect.x - leftInset, y: rawTerminalRect.y, w: rawTerminalRect.w + leftInset + rightInset, h: rawTerminalRect.h }
           : rawTerminalRect;
         const snappedGroup = props.snapRect ? props.snapRect(rawGroupRect, {
           mode: 'drag',
           sourceId: props.terminalId,
-          minW: inset + 200,
+          minW: leftInset + rightInset + 200,
           minH: 100,
         }) : rawGroupRect;
-        const nextX = snappedGroup.x + inset;
+        const nextX = snappedGroup.x + leftInset;
         const nextY = snappedGroup.y;
         rectState.value = { ...rectState.value, x: nextX, y: nextY };
         emit('rect-change', props.terminalId, { x: nextX, y: nextY, w: rectState.value.w, h: rectState.value.h });
@@ -1519,7 +1943,8 @@ export default defineComponent({
       const startX = e.clientX;
       const startY = e.clientY;
       const startRect = { ...rectState.value };
-      const inset = props.filePanelOpen ? props.filePanelInset : 0;
+      const leftInset = props.filePanelOpen ? props.filePanelInset : 0;
+      const rightInset = props.performancePanelOpen ? props.performancePanelInset : 0;
 
       function onMove(ev: MouseEvent) {
         const zoom = props.viewportZoom || 1;
@@ -1544,28 +1969,24 @@ export default defineComponent({
           }
         }
 
-        const rawGroupRect: Rect = inset > 0
-          ? { x: newRect.x - inset, y: newRect.y, w: newRect.w + inset, h: newRect.h }
+        const rawGroupRect: Rect = leftInset > 0 || rightInset > 0
+          ? { x: newRect.x - leftInset, y: newRect.y, w: newRect.w + leftInset + rightInset, h: newRect.h }
           : newRect;
         const snappedGroup = props.snapRect ? props.snapRect(rawGroupRect, {
           mode: 'resize',
           direction,
           sourceId: props.terminalId,
-          minW: inset + 200,
+          minW: leftInset + rightInset + 200,
           minH: 100,
         }) : rawGroupRect;
-        const snapped: Rect = inset > 0
-          ? { x: snappedGroup.x + inset, y: snappedGroup.y, w: Math.max(200, snappedGroup.w - inset), h: snappedGroup.h }
+        const snapped: Rect = leftInset > 0 || rightInset > 0
+          ? { x: snappedGroup.x + leftInset, y: snappedGroup.y, w: Math.max(200, snappedGroup.w - leftInset - rightInset), h: snappedGroup.h }
           : snappedGroup;
         rectState.value = snapped;
         emit('rect-change', props.terminalId, { x: snapped.x, y: snapped.y, w: snapped.w, h: snapped.h });
         scheduleSuggestPosition();
         // 用 requestAnimationFrame 节流，避免拖动缩放时每帧都调用 resize_pty（60+次/秒）
-        if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
-        resizeRafId = requestAnimationFrame(() => {
-          handleResize();
-          resizeRafId = null;
-        });
+        scheduleResize();
       }
 
       function onUp() {
@@ -1608,7 +2029,32 @@ export default defineComponent({
 
     // 外部向当前终端 PTY 注入数据（用于「在终端执行 cd」等场景）
     function writeToTerminal(data: string) {
-      if (sessionId) void enqueuePtyWrite(data);
+      if (sessionId) {
+        scrollToLatestTerminalContent();
+        void enqueuePtyWrite(data);
+      }
+    }
+
+    async function copyText(): Promise<boolean> {
+      if (!term || disposed) return false;
+      const text = term.getSelection() || (isTuiMode() ? '' : currentLine);
+      if (!text) return false;
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    async function pasteText(): Promise<boolean> {
+      if (!term || disposed || previewInputLocked) return false;
+      const text = await navigator.clipboard.readText();
+      if (!text) return false;
+      // xterm's paste path normalizes line endings and honors bracketed-paste mode.
+      term.paste(text);
+      return true;
+    }
+
+    function selectInputLine(): boolean {
+      if (isTuiMode() || previewInputLocked) return false;
+      return handleSelectAll() === false;
     }
 
     // 切换 SSH 连接：null 表示切回本地终端
@@ -1653,8 +2099,12 @@ export default defineComponent({
 
     function destroy() {
       disposed = true;
+      cancelPendingPreview();
       themeObserver?.disconnect();
       themeObserver = null;
+      resizeObserver?.disconnect();
+      resizeObserver = null;
+      removeTerminalOverscrollListener?.();
       window.removeEventListener('resize', handleResize);
       if (resizeRafId !== null) {
         cancelAnimationFrame(resizeRafId);
@@ -1668,9 +2118,14 @@ export default defineComponent({
         cancelAnimationFrame(suggestPositionRafId);
         suggestPositionRafId = null;
       }
+      onCompletionScrollbarDragEnd();
       if (outputFlushTimer) {
         clearTimeout(outputFlushTimer);
         outputFlushTimer = null;
+      }
+      if (shellAutosuggestionClearTimer) {
+        clearTimeout(shellAutosuggestionClearTimer);
+        shellAutosuggestionClearTimer = null;
       }
       outputBuffer = '';
       if (onTermFontSizeChange) {
@@ -1737,16 +2192,12 @@ export default defineComponent({
 
       // 监听设置面板派发的终端字号/字体族变化事件，实时更新 xterm
       onTermFontSizeChange = () => {
-        if (disposed || !term) return;
-        term.options.fontSize = calcFontSize(rectState.value.w, rectState.value.h);
-        fitAddon?.fit();
-        scheduleSuggestPosition();
+        scheduleResize();
       };
       onTermFontFamilyChange = () => {
         if (disposed || !term) return;
         term.options.fontFamily = getTermFontFamily();
-        fitAddon?.fit();
-        scheduleSuggestPosition();
+        scheduleResize();
       };
       window.addEventListener('term-font-size-change', onTermFontSizeChange);
       window.addEventListener('term-font-family-change', onTermFontFamilyChange);
@@ -1764,16 +2215,23 @@ export default defineComponent({
         }
       };
       window.addEventListener('term-flags-change', onTermFlagsChange);
+      if (xtermHostRef.value) {
+        resizeObserver = new ResizeObserver(() => scheduleResize());
+        resizeObserver.observe(xtermHostRef.value);
+      }
     });
 
-    watch(() => props.filePanelOpen, () => {
+    watch(() => [props.filePanelOpen, props.performancePanelOpen, props.unifiedPanelOpen], () => {
       void nextTick(() => {
-        handleResize();
+        scheduleResize();
         scheduleSuggestPosition();
       });
     });
 
-    watch(() => props.viewportZoom, scheduleSuggestPosition);
+    watch(() => props.viewportZoom, () => {
+      scheduleResize();
+      scheduleSuggestPosition();
+    });
 
     onUnmounted(() => {
       document.removeEventListener('click', onSshMenuOutsideClick);
@@ -1781,10 +2239,14 @@ export default defineComponent({
     });
 
     // 暴露命令式能力，供父组件统一标题栏和文件面板调用
-    expose({ writeToTerminal, startDrag, startResize, minimize, toggleMaximize, requestClose, hideSuggestions, blur });
+    expose({
+      writeToTerminal, copyText, pasteText, selectInputLine,
+      startDrag, startResize, minimize, toggleMaximize, requestClose, hideSuggestions, blur,
+    });
 
     return {
       bodyRef,
+      xtermHostRef,
       rootRef,
       terminalName,
       currentCwd,
@@ -1800,8 +2262,13 @@ export default defineComponent({
       suggestStyle,
       suggestPlacement,
       completionPopupRef,
+      completionListRef,
+      showCompletionScrollbar,
+      completionScrollbarTop,
+      completionScrollbarHeight,
       ghostText,
       ghostStyle,
+      ghostPreviewMode,
       containerClasses,
       containerStyle,
       startDrag,
@@ -1819,15 +2286,18 @@ export default defineComponent({
       selectSuggestion,
       selectSuggestionByMouse,
       activeSuggestion,
-      suggestHeaderText,
       suggestIconSvg,
       suggestKbdHint,
+      updateCompletionScrollbar,
+      onCompletionScrollbarTrackMouseDown,
+      onCompletionScrollbarThumbMouseDown,
       // SSH 切换
       sshMenuOpen,
       emitSwitchSsh,
       // 文件面板 tab
       filePanelExpanded,
       toggleFilePanel,
+      togglePerformancePanel,
     };
   },
 });

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use std::time::Duration;
 
 use crate::path_util;
 
@@ -88,6 +89,45 @@ pub fn read_dir_entries(dir_path: &str) -> Result<Vec<FileEntry>, String> {
             .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(entries)
+}
+
+/// 并行递归计算目录总大小（所有文件字节累加）。
+///
+/// 使用 jwalk（Rayon 并行遍历）递归扫描目录树，累加每个文件的逻辑大小。
+/// - `follow_links(false)`：不跟随符号链接，避免环路和重复计数。
+/// - 周期性调用 `is_cancelled`，返回 true 时立即提前结束并返回 0。
+/// - 与 file_index::start_background_scan 使用相同的并行引擎，适合大量文件场景。
+pub fn dir_size_parallel(path: &Path, is_cancelled: &dyn Fn() -> bool) -> u64 {
+    let walker = jwalk::WalkDir::new(path)
+        .parallelism(jwalk::Parallelism::RayonDefaultPool {
+            busy_timeout: Duration::from_secs(1),
+        })
+        .skip_hidden(false)
+        .follow_links(false);
+
+    let mut total: u64 = 0;
+    let mut since_check: u32 = 0;
+    for entry in walker {
+        if since_check >= 4096 {
+            if is_cancelled() {
+                return 0;
+            }
+            since_check = 0;
+        }
+        since_check += 1;
+
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue, // 跳过权限错误等
+        };
+        // 仅累加文件大小，目录元数据（inode bookkeeping）不计入
+        let metadata = match entry.metadata() {
+            Ok(m) if m.is_file() => m,
+            _ => continue,
+        };
+        total = total.saturating_add(metadata.len());
+    }
+    total
 }
 
 pub fn create_file_entry(path: &str) -> Result<(), String> {
@@ -182,10 +222,7 @@ fn unique_path(path: &Path) -> std::path::PathBuf {
     if !path.exists() {
         return path.to_path_buf();
     }
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("file");
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("file");
     let ext = path.extension().and_then(|s| s.to_str());
     let parent = path.parent().unwrap_or(Path::new("."));
     let mut counter = 2;
@@ -279,11 +316,75 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
     }
     #[cfg(all(not(target_os = "macos"), not(windows)))]
     {
-        let dir = if p.is_dir() { &p } else { p.parent().unwrap_or(Path::new(".")) };
+        let dir = if p.is_dir() {
+            &p
+        } else {
+            p.parent().unwrap_or(Path::new("."))
+        };
         std::process::Command::new("xdg-open")
             .arg(dir)
             .spawn()
             .map_err(|e| format!("Failed to reveal: {e}"))?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickAccessLocation {
+    pub id: String,
+    pub path: String,
+}
+
+/// 返回当前平台存在且可访问的常用目录，避免前端依赖硬编码路径拼接。
+pub fn get_quick_access_locations() -> Result<Vec<QuickAccessLocation>, String> {
+    let home = dirs::home_dir().ok_or_else(|| "Home directory not found".to_string())?;
+    let candidates = [
+        ("home", Some(home.clone())),
+        ("desktop", dirs::desktop_dir()),
+        ("documents", dirs::document_dir()),
+        ("downloads", dirs::download_dir()),
+        ("pictures", dirs::picture_dir()),
+    ];
+
+    Ok(candidates
+        .into_iter()
+        .filter_map(|(id, path)| {
+            let path = path?;
+            if path.is_dir() {
+                Some(QuickAccessLocation {
+                    id: id.to_string(),
+                    path: path.to_string_lossy().to_string(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect())
+}
+
+/// 使用操作系统文件管理器打开垃圾桶/回收站。
+pub fn open_system_trash() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("trash:")
+            .spawn()
+            .map_err(|e| format!("Failed to open Trash: {e}"))?;
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg("shell:RecycleBinFolder")
+            .spawn()
+            .map_err(|e| format!("Failed to open Recycle Bin: {e}"))?;
+    }
+    #[cfg(all(not(target_os = "macos"), not(windows)))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg("trash:///")
+            .spawn()
+            .map_err(|e| format!("Failed to open Trash: {e}"))?;
     }
     Ok(())
 }

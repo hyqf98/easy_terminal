@@ -88,6 +88,7 @@ export default defineComponent({
 
     let pollTimer: number | null = null;
     let mutationObserver: MutationObserver | null = null;
+    let resizeObserver: ResizeObserver | null = null;
 
     function render() {
       const canvas = document.getElementById('canvas');
@@ -278,6 +279,11 @@ export default defineComponent({
     onMounted(() => {
       render();
       pollTimer = window.setInterval(render, POLL_INTERVAL);
+      const stage = document.querySelector<HTMLElement>('.canvas-stage');
+      if (stage && typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(() => render());
+        resizeObserver.observe(stage);
+      }
       const canvas = document.getElementById('canvas');
       if (canvas && typeof MutationObserver !== 'undefined') {
         mutationObserver = new MutationObserver(() => render());
@@ -293,6 +299,10 @@ export default defineComponent({
       if (mutationObserver) {
         mutationObserver.disconnect();
         mutationObserver = null;
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+        resizeObserver = null;
       }
     });
 

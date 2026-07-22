@@ -12,7 +12,7 @@
 import { defineComponent, ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import * as svc from './fileManagerService';
-import type { FileEntry, FileSearchResult, IndexStatus, DiskInfo } from './fileManagerService';
+import type { FileEntry, FileSearchResult, IndexStatus, DiskInfo, ContentSearchResult, QuickAccessLocation } from './fileManagerService';
 import { undoStack, type FileOperation } from './UndoStack';
 import { fileClipboard } from './ClipboardManager';
 import { showMessage } from '../../composables/useAppMessage';
@@ -64,7 +64,17 @@ export default defineComponent({
     const searchQuery = ref('');
     const searchResults = ref<FileSearchResult[]>([]);
     const searchLoading = ref(false);
+    const searchLimited = ref(false);
     let searchTimer: ReturnType<typeof setTimeout> | null = null;
+    let activeSearchId = '';
+    let searchSequence = 0;
+
+    // 内容搜索状态
+    const searchMode = ref<'filename' | 'content'>('filename');
+    const contentResults = ref<ContentSearchResult[]>([]);
+    const contentLoading = ref(false);
+    const contentLimited = ref(false);
+    let contentTimer: ReturnType<typeof setTimeout> | null = null;
 
     const searchActive = computed(() => searchQuery.value.trim().length > 0);
 
@@ -74,8 +84,12 @@ export default defineComponent({
     let unsubLang: (() => void) | null = null;
 
     // === 排序状态 ===
-    const sortKey = ref<'name' | 'date' | 'type' | 'size'>('name');
-    const sortDir = ref<'asc' | 'desc'>('asc');
+    const SORT_KEY_STORAGE = 'easy_terminal_fm_sort_key';
+    const SORT_DIR_STORAGE = 'easy_terminal_fm_sort_dir';
+    const sortKey = ref<'name' | 'date' | 'type' | 'size'>(
+      (localStorage.getItem(SORT_KEY_STORAGE) as 'name' | 'date' | 'type' | 'size') || 'name',
+    );
+    const sortDir = ref<'asc' | 'desc'>((localStorage.getItem(SORT_DIR_STORAGE) as 'asc' | 'desc') || 'asc');
 
     function setSort(key: typeof sortKey.value) {
       if (sortKey.value === key) {
@@ -84,48 +98,71 @@ export default defineComponent({
         sortKey.value = key;
         sortDir.value = 'asc';
       }
+      localStorage.setItem(SORT_KEY_STORAGE, sortKey.value);
+      localStorage.setItem(SORT_DIR_STORAGE, sortDir.value);
     }
 
     // === 磁盘状态 ===
     const disks = ref<DiskInfo[]>([]);
-    const homeDir = ref('');
+    const quickAccessLocations = ref<QuickAccessLocation[]>([]);
+    const disksRefreshing = ref(false);
+
+    function normalizeDiskPath(path: string): string {
+      const normalized = path.replace(/\\/g, '/').replace(/\/+$/, '');
+      return normalized || '/';
+    }
+
+    function isDiskMountForPath(mountPoint: string, path: string): boolean {
+      const mount = normalizeDiskPath(mountPoint).toLowerCase();
+      const current = normalizeDiskPath(path).toLowerCase();
+      return mount === '/' || current === mount || current.startsWith(`${mount}/`);
+    }
 
     const currentDisk = computed<DiskInfo | null>(() => {
       if (!currentPath.value) return null;
-      return (
-        disks.value.find((d) => {
-          const mp = d.mount_point.replace(/\\/g, '/').replace(/\/$/, '');
-          const cp = currentPath.value.replace(/\\/g, '/');
-          return mp.length > 0 && cp.toLowerCase().startsWith(mp.toLowerCase());
-        }) || null
-      );
+      return disks.value
+        .filter((disk) => isDiskMountForPath(disk.mount_point, currentPath.value))
+        .sort((left, right) => normalizeDiskPath(right.mount_point).length - normalizeDiskPath(left.mount_point).length)[0] || null;
     });
 
-    const totalCapacity = computed(() => disks.value.reduce((s, d) => s + d.total, 0));
-    const totalUsed = computed(() => disks.value.reduce((s, d) => s + d.used, 0));
+    const totalCapacity = computed(() => disks.value.reduce((sum, disk) => sum + disk.total, 0));
+    const totalAvailable = computed(() => disks.value.reduce((sum, disk) => sum + disk.available, 0));
     const totalPercent = computed(() =>
-      totalCapacity.value > 0 ? Math.round((totalUsed.value / totalCapacity.value) * 100) : 0,
+      totalCapacity.value > 0 ? Math.round(((totalCapacity.value - totalAvailable.value) / totalCapacity.value) * 100) : 0,
     );
 
-    const quickAccess = computed(() => {
-      const h = homeDir.value;
-      if (!h) return [];
-      const sep = h.includes('\\') ? '\\' : '/';
-      const join = (sub: string) => (h.endsWith(sep) ? h + sub : h + sep + sub);
-      return [
-        { label: t('filemanager.quick.home'), path: h, icon: 'home' },
-        { label: t('filemanager.quick.downloads'), path: join('Downloads'), icon: 'download' },
-        { label: t('filemanager.quick.documents'), path: join('Documents'), icon: 'document' },
-        { label: t('filemanager.quick.desktop'), path: join('Desktop'), icon: 'desktop' },
-        { label: t('filemanager.quick.pictures'), path: join('Pictures'), icon: 'picture' },
-      ];
-    });
+    const quickAccess = computed(() => quickAccessLocations.value.map((location) => ({
+      ...location,
+      label: t(`filemanager.quick.${location.id}`),
+      icon: location.id === 'downloads'
+        ? 'download'
+        : location.id === 'documents'
+          ? 'document'
+          : location.id === 'pictures'
+            ? 'picture'
+            : location.id,
+    })));
+
+    const trashQuickAccess = computed(() => ({
+      label: t('filemanager.quick.trash'),
+      icon: 'trash',
+    }));
+
+    // === 文件夹大小缓存（渐进式后台计算） ===
+    // path -> { size, mtime }；命中且 mtime 未变则直接复用，无需重新递归
+    const folderSizeCache = ref<Map<string, { size: number; mtime: number }>>(new Map());
+    // 正在计算中的路径集合，用于显示「计算中…」
+    const folderSizePending = ref<Set<string>>(new Set());
+    // 当前文件夹大小请求 id（非响应式）；切换目录时用于取消上一个请求
+    let currentSizeRequestId: string | null = null;
 
     // === 显示条目（应用排序：目录优先，再按当前列排序） ===
     const displayEntries = computed(() => {
       void langTick.value; // i18n 响应性：type 列排序依赖 fileTypeLabel -> t()
+      void folderSizeCache.value; // 响应性：文件夹大小更新后触发重排
+      void folderSizePending.value;
       let list: FileEntry[];
-      if (searchActive.value && searchQuery.value) {
+      if (searchMode.value === 'filename' && searchActive.value && searchQuery.value) {
         list = searchResults.value.map((r) => ({
           name: r.name,
           path: r.path,
@@ -142,7 +179,7 @@ export default defineComponent({
       const cmp = (a: FileEntry, b: FileEntry) => {
         let r = 0;
         if (sortKey.value === 'name') r = a.name.localeCompare(b.name);
-        else if (sortKey.value === 'size') r = a.size - b.size;
+        else if (sortKey.value === 'size') r = effectiveSize(a) - effectiveSize(b);
         else if (sortKey.value === 'date') r = a.modified - b.modified;
         else if (sortKey.value === 'type') r = fileTypeLabel(a).localeCompare(fileTypeLabel(b));
         return sortDir.value === 'asc' ? r : -r;
@@ -152,10 +189,16 @@ export default defineComponent({
       return [...dirs, ...files];
     });
 
+    /** 条目的有效大小：文件取自身 size，文件夹取缓存大小（未算出则为 0） */
+    function effectiveSize(e: FileEntry): number {
+      if (!e.is_dir) return e.size;
+      return folderSizeCache.value.get(e.path)?.size ?? 0;
+    }
+
     const selectedSize = computed(() =>
       displayEntries.value
-        .filter((e) => selectedPaths.value.has(e.path) && !e.is_dir)
-        .reduce((s, e) => s + e.size, 0),
+        .filter((e) => selectedPaths.value.has(e.path))
+        .reduce((s, e) => s + effectiveSize(e), 0),
     );
 
     const dirCount = computed(() => entries.value.filter((e) => e.is_dir).length);
@@ -185,6 +228,7 @@ export default defineComponent({
       x: 0,
       y: 0,
       targetPath: null as string | null,
+      targetEntry: null as FileEntry | null,
       isBlank: false,
     });
 
@@ -230,6 +274,7 @@ export default defineComponent({
 
     async function navigateTo(path: string, pushHistory = true) {
       if (!path) return;
+      if (searchActive.value) clearSearch();
       loading.value = true;
       try {
         const result = await svc.readDir(path);
@@ -241,6 +286,8 @@ export default defineComponent({
           history.value.push(path);
           historyIndex.value = history.value.length - 1;
         }
+        // 后台渐进式计算各子文件夹大小（不阻塞列表展示）
+        requestFolderSizes(result);
       } catch (e) {
         showMessage(t('filemanager.err.openDir', String(e)), 'error');
       } finally {
@@ -287,14 +334,14 @@ export default defineComponent({
     }
 
     function openFile(entry: FileEntry) {
-      if (svc.isPreviewable(entry.icon)) {
-        // 通过自定义事件通知 AppLayout 打开 PreviewPanel
-        window.dispatchEvent(new CustomEvent('fm-open-preview', { detail: entry.path }));
-      } else {
-        // 系统默认程序打开
+      if (svc.shouldOpenExternally(entry.icon)) {
+        // 特定二进制类型调用系统程序打开
         svc.openWithDefaultApp(entry.path).catch((e) => {
           showMessage(t('filemanager.err.openFile', String(e)), 'error');
         });
+      } else {
+        // 其余所有文件一律用当前软件预览
+        window.dispatchEvent(new CustomEvent('fm-open-preview', { detail: entry.path }));
       }
     }
 
@@ -303,6 +350,8 @@ export default defineComponent({
     function onNodeClick(entry: FileEntry, event: MouseEvent) {
       // 阻止冒泡到 .fm-files-list 的 onBlankClick，否则选择会被立即清除
       event.stopPropagation();
+      // 右键菜单打开时，点击其他条目应关闭菜单（stopPropagation 会阻止 document click）
+      if (contextMenu.visible) closeContextMenu();
       if (renamingPath.value === entry.path) return;
 
       if (event.ctrlKey || event.metaKey) {
@@ -363,6 +412,7 @@ export default defineComponent({
       contextMenu.x = event.clientX;
       contextMenu.y = event.clientY;
       contextMenu.targetPath = entry.path;
+      contextMenu.targetEntry = entry;
       contextMenu.isBlank = false;
     }
 
@@ -377,6 +427,17 @@ export default defineComponent({
 
     function closeContextMenu() {
       contextMenu.visible = false;
+    }
+
+    // 右键菜单「打开」：目录→进入，文件→预览或系统打开
+    function onContextOpen() {
+      const entry = contextMenu.targetEntry;
+      if (!entry) return;
+      if (entry.is_dir) {
+        navigateTo(entry.path);
+      } else {
+        openFile(entry);
+      }
     }
 
     // ========== 文件操作 ==========
@@ -593,42 +654,117 @@ export default defineComponent({
 
     // ========== 搜索 ==========
 
+    function cancelActiveSearch() {
+      if (activeSearchId) {
+        void svc.cancelFileSearch(activeSearchId);
+        activeSearchId = '';
+      }
+    }
+
+    function resetSearchResults() {
+      cancelActiveSearch();
+      searchResults.value = [];
+      contentResults.value = [];
+      searchLimited.value = false;
+      contentLimited.value = false;
+      searchLoading.value = false;
+      contentLoading.value = false;
+    }
+
+    function nextSearchId() {
+      searchSequence += 1;
+      return `file-search-${Date.now()}-${searchSequence}`;
+    }
+
     function onSearchInput() {
       if (searchTimer) clearTimeout(searchTimer);
-      if (!searchQuery.value.trim()) {
-        searchResults.value = [];
-        searchLoading.value = false;
-        return;
-      }
-      searchLoading.value = true;
-      // 500ms debounce：避免每按一键就发请求
-      searchTimer = setTimeout(async () => {
-        const currentQuery = searchQuery.value.trim();
-        if (!currentQuery) {
-          searchLoading.value = false;
+      if (contentTimer) clearTimeout(contentTimer);
+      resetSearchResults();
+
+      if (!searchQuery.value.trim()) return;
+
+      const mode = searchMode.value;
+      const timer = setTimeout(() => {
+        const query = searchQuery.value.trim();
+        if (!query || mode !== searchMode.value) return;
+
+        const searchId = nextSearchId();
+        activeSearchId = searchId;
+        if (mode === 'filename') {
+          searchLoading.value = true;
+          void svc.searchFilesStream(query, searchId, (event) => {
+            if (event.searchId !== activeSearchId) return;
+            if (event.kind === 'batch') {
+              const knownPaths = new Set(searchResults.value.map((result) => result.path));
+              searchResults.value.push(...event.results.filter((result) => !knownPaths.has(result.path)));
+              return;
+            }
+            searchLoading.value = false;
+            searchLimited.value = event.limited;
+            activeSearchId = '';
+          }).catch((error) => {
+            if (searchId === activeSearchId) {
+              searchLoading.value = false;
+              activeSearchId = '';
+              showMessage(`${t('filemanager.search.failed')}: ${String(error)}`, 'error');
+            }
+          });
           return;
         }
-        try {
-          const results = await svc.searchFiles(currentQuery);
-          // 只在查询未变化时更新结果（取消过期请求的结果）
-          if (currentQuery === searchQuery.value.trim()) {
-            searchResults.value = results;
+
+        contentLoading.value = true;
+        void svc.searchContentStream(query, currentPath.value, searchId, (event) => {
+          if (event.searchId !== activeSearchId) return;
+          if (event.kind === 'batch') {
+            const knownPaths = new Set(contentResults.value.map((result) => result.path));
+            contentResults.value.push(...event.results.filter((result) => !knownPaths.has(result.path)));
+            return;
           }
-        } catch {
-          if (currentQuery === searchQuery.value.trim()) {
-            searchResults.value = [];
+          contentLoading.value = false;
+          contentLimited.value = event.limited;
+          activeSearchId = '';
+        }).catch((error) => {
+          if (searchId === activeSearchId) {
+            contentLoading.value = false;
+            activeSearchId = '';
+            showMessage(`${t('filemanager.search.failed')}: ${String(error)}`, 'error');
           }
-        } finally {
-          if (currentQuery === searchQuery.value.trim()) {
-            searchLoading.value = false;
-          }
-        }
-      }, 500);
+        });
+      }, mode === 'filename' ? 300 : 500);
+
+      if (mode === 'filename') searchTimer = timer;
+      else contentTimer = timer;
     }
 
     function clearSearch() {
+      if (searchTimer) clearTimeout(searchTimer);
+      if (contentTimer) clearTimeout(contentTimer);
       searchQuery.value = '';
-      searchResults.value = [];
+      resetSearchResults();
+    }
+
+    function toggleSearchMode() {
+      searchMode.value = searchMode.value === 'filename' ? 'content' : 'filename';
+      clearSearch();
+    }
+
+    /** 将匹配行文本按 matchStart/matchEnd 分割为三段，用于高亮渲染 */
+    function splitMatchLine(lineText: string, matchStart: number, matchEnd: number) {
+      if (matchStart >= matchEnd || matchEnd > lineText.length) {
+        return { before: lineText, match: '', after: '' };
+      }
+      return {
+        before: lineText.slice(0, matchStart),
+        match: lineText.slice(matchStart, matchEnd),
+        after: lineText.slice(matchEnd),
+      };
+    }
+
+    /** 内容搜索结果适配：构造 FileEntry 后调用 openFile */
+    function openContentFile(filePath: string) {
+      const sep = filePath.includes('\\') ? '\\' : '/';
+      const name = filePath.split(sep).pop() || filePath;
+      openFile({ name, path: filePath, is_dir: false, size: 0, modified: 0, icon: guessIcon(name, false) });
     }
 
     async function refreshIndexStatus() {
@@ -636,6 +772,27 @@ export default defineComponent({
         indexStatus.value = await svc.getIndexStatus();
       } catch {
         /* ignore */
+      }
+    }
+
+    async function refreshDisks() {
+      if (disksRefreshing.value) return;
+      disksRefreshing.value = true;
+      try {
+        disks.value = await svc.listDisks();
+        showToast(t('filemanager.disk.refreshSuccess'));
+      } catch (error) {
+        showMessage(`${t('filemanager.disk.refreshFailed')}: ${String(error)}`, 'error');
+      } finally {
+        disksRefreshing.value = false;
+      }
+    }
+
+    async function openSystemTrash() {
+      try {
+        await svc.openSystemTrash();
+      } catch (error) {
+        showMessage(`${t('filemanager.trash.openFailed')}: ${String(error)}`, 'error');
       }
     }
 
@@ -737,6 +894,24 @@ export default defineComponent({
     function onKeydown(event: KeyboardEvent) {
       if (!focused.value) return;
       const mod = event.ctrlKey || event.metaKey;
+
+      // 当焦点在输入框（搜索框/重命名/新建）时，除 Cmd+Shift+F 外的快捷键
+      // 都放行给浏览器原生处理，避免拦截 Backspace、Cmd+A 等编辑操作
+      const eventTarget = event.target;
+      const isEditingText =
+        eventTarget instanceof HTMLInputElement ||
+        eventTarget instanceof HTMLTextAreaElement ||
+        (eventTarget instanceof HTMLElement && eventTarget.isContentEditable);
+
+      // Cmd/Ctrl+Shift+F 切换搜索模式（即使在输入框中也生效）
+      if (mod && event.shiftKey && (event.key === 'f' || event.key === 'F')) {
+        event.preventDefault();
+        toggleSearchMode();
+        return;
+      }
+
+      // 输入框聚焦时，其余快捷键不拦截
+      if (isEditingText) return;
 
       // Ctrl+C
       if (mod && event.key === 'c' && !event.shiftKey) {
@@ -888,17 +1063,21 @@ export default defineComponent({
       await refreshIndexStatus();
       if (indexStatus.value.indexing) startPolling();
 
-      // 加载磁盘列表
+      // 加载磁盘列表与快速访问目录
       try {
-        disks.value = await svc.listDisks();
+        const [loadedDisks, locations] = await Promise.all([
+          svc.listDisks(),
+          svc.getQuickAccessLocations(),
+        ]);
+        disks.value = loadedDisks;
+        quickAccessLocations.value = locations;
       } catch (e) {
-        console.error('[FileManager] Failed to load disks:', e);
+        console.error('[FileManager] Failed to load file manager locations:', e);
       }
 
       // 初始化：打开用户主目录
       try {
         const home = await svc.getHomeDir();
-        homeDir.value = home;
         await navigateTo(home);
       } catch (err) {
         console.error('[FileManager] init failed:', err);
@@ -927,6 +1106,9 @@ export default defineComponent({
         unsubLang();
         unsubLang = null;
       }
+      cancelActiveSearch();
+      if (searchTimer) clearTimeout(searchTimer);
+      if (contentTimer) clearTimeout(contentTimer);
     });
 
     // ========== 工具函数 ==========
@@ -974,6 +1156,85 @@ export default defineComponent({
       if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
       if (bytes < 1024 * 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
       return `${(bytes / 1024 / 1024 / 1024 / 1024).toFixed(2)} TB`;
+    }
+
+    // === 文件夹大小：后台渐进式计算编排 ===
+
+    /**
+     * 对列表中的子文件夹发起后台大小计算。
+     * - 跳过缓存命中（mtime 未变）的文件夹。
+     * - 切换目录时先取消上一个未完成的请求，避免浪费 CPU。
+     * - 每算完一个文件夹即通过 Channel 推送，前端渐进式填充。
+     */
+    function requestFolderSizes(list: FileEntry[]) {
+      // 取所有目录条目，过滤掉缓存命中（mtime 未变）的
+      const toCompute = list.filter((e) => {
+        if (!e.is_dir) return false;
+        const cached = folderSizeCache.value.get(e.path);
+        return !cached || cached.mtime !== e.modified;
+      });
+      if (toCompute.length === 0) return;
+
+      // 取消上一个未完成的请求
+      if (currentSizeRequestId) {
+        svc.cancelFileSearch(currentSizeRequestId).catch(() => {});
+      }
+      // 清理上一个请求遗留的 pending（未推送结果的目录）
+      if (folderSizePending.value.size > 0) {
+        folderSizePending.value = new Set();
+      }
+
+      const requestId = (crypto.randomUUID?.() ?? `fs-${Date.now()}-${Math.random()}`);
+      currentSizeRequestId = requestId;
+
+      // 记录待算目录的 path -> mtime（收到结果时写入缓存）
+      const mtimeMap = new Map<string, number>();
+      const pending = new Set<string>();
+      for (const e of toCompute) {
+        pending.add(e.path);
+        mtimeMap.set(e.path, e.modified);
+      }
+      folderSizePending.value = pending;
+
+      const paths = toCompute.map((e) => e.path);
+      svc
+        .computeFolderSizesStream(paths, requestId, (ev) => {
+          // 仅处理当前请求的事件（切换目录后旧请求的事件忽略）
+          if (ev.requestId !== currentSizeRequestId) return;
+          if (ev.kind === 'size') {
+            const mtime = mtimeMap.get(ev.path) ?? 0;
+            const next = new Map(folderSizeCache.value);
+            next.set(ev.path, { size: ev.size, mtime });
+            folderSizeCache.value = next;
+            const pend = new Set(folderSizePending.value);
+            pend.delete(ev.path);
+            folderSizePending.value = pend;
+          } else if (ev.kind === 'completed' || ev.kind === 'cancelled') {
+            folderSizePending.value = new Set();
+            if (ev.kind === 'completed' && currentSizeRequestId === requestId) {
+              currentSizeRequestId = null;
+            }
+          }
+        })
+        .catch(() => {
+          if (currentSizeRequestId === requestId) {
+            currentSizeRequestId = null;
+          }
+        });
+    }
+
+    /** 大小列展示文本：文件直接显示，文件夹优先缓存、其次「计算中…」、否则空 */
+    function folderSizeLabel(e: FileEntry): string {
+      if (!e.is_dir) return formatSize(e.size);
+      const cached = folderSizeCache.value.get(e.path);
+      if (cached) return formatSize(cached.size);
+      if (folderSizePending.value.has(e.path)) return t('filemanager.size.calculating');
+      return '';
+    }
+
+    /** 该文件夹大小是否正在计算中（用于 CSS 淡色） */
+    function isSizeCalculating(e: FileEntry): boolean {
+      return !!e.is_dir && folderSizePending.value.has(e.path);
     }
 
     // 相对时间格式化：今天/昨天/N 天前/具体日期
@@ -1061,7 +1322,7 @@ export default defineComponent({
       selectedPaths, selectedArray, selectedSize,
       onNodeClick, onNodeDblClick, selectAll, clearSelection, onBlankClick,
       // 右键菜单
-      contextMenu, onNodeContext, onBlankContext, closeContextMenu,
+      contextMenu, onNodeContext, onBlankContext, closeContextMenu, onContextOpen,
       // 操作
       copySelection, cutSelection, paste, deleteSelection,
       renameNode, commitRename, cancelRename, renamingPath, renamingText,
@@ -1070,14 +1331,15 @@ export default defineComponent({
       // 撤销
       undo, redo, undoEmpty,
       // 搜索
-      searchActive, searchQuery, searchResults, searchLoading,
-      onSearchInput, clearSearch,
+      searchActive, searchQuery, searchResults, searchLoading, searchLimited,
+      searchMode, contentResults, contentLoading, contentLimited,
+      onSearchInput, clearSearch, toggleSearchMode, splitMatchLine, openContentFile,
       indexStatus,
       // 索引设置面板
       indexSettingsVisible, openIndexSettings,
       // 磁盘
-      disks, currentDisk, totalCapacity, totalUsed, totalPercent,
-      quickAccess, diskPercent, diskBarClass, fileTypeLabel,
+      disks, currentDisk, totalCapacity, totalAvailable, totalPercent, disksRefreshing,
+      quickAccess, trashQuickAccess, refreshDisks, openSystemTrash, diskPercent, diskBarClass, fileTypeLabel,
       // 排序
       sortKey, sortDir, setSort,
       // 拖拽
@@ -1091,6 +1353,7 @@ export default defineComponent({
       clipboardEmpty, fileClipboard,
       // 工具
       basename, formatSize, formatTime,
+      folderSizeLabel, isSizeCalculating,
       openFile,
     };
   },

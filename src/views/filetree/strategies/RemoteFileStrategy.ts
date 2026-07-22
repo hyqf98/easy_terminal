@@ -1,4 +1,4 @@
-import type { IFileOperationStrategy, FileEntry, FilePreviewData } from './FileOperationStrategy';
+import type { IFileOperationStrategy, FileEntry, FilePreviewData, RemoteDirectoryCursor, RemoteDirectoryPage } from './FileOperationStrategy';
 import { sshService } from '../../ssh/sshService';
 import type { SSHProfile } from '../../../types';
 
@@ -20,7 +20,11 @@ export class RemoteFileStrategy implements IFileOperationStrategy {
   }
 
   async readDir(path: string): Promise<FileEntry[]> {
-    return sshService.readRemoteDir(this.profile, path, this.profiles) as Promise<FileEntry[]>;
+    return (await this.readDirPage(path)).entries;
+  }
+
+  async readDirPage(path: string, cursor: RemoteDirectoryCursor | null = null, nameFilter = ''): Promise<RemoteDirectoryPage> {
+    return sshService.readRemoteDirPage(this.profile, path, cursor, this.profiles, nameFilter);
   }
 
   async readFilePreview(path: string): Promise<FilePreviewData> {

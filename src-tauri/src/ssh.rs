@@ -1,14 +1,51 @@
 use crate::path_util;
 use crate::{fs, settings};
-use serde::Serialize;
+use crate::performance::{self, PerformanceSnapshot};
+use serde::{Deserialize, Serialize};
 use ssh2::{RenameFlags, Session, Sftp};
 use std::fs::{self as local_fs, File as LocalFile};
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
+
+const REMOTE_DIRECTORY_PAGE_SIZE: usize = 200;
+const SSH_SESSION_IDLE: Duration = Duration::from_secs(60);
+const SSH_SESSION_CACHE_LIMIT: usize = 4;
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDirectoryCursor {
+    pub is_dir: bool,
+    pub name: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteDirectoryPage {
+    pub entries: Vec<fs::FileEntry>,
+    pub next_cursor: Option<RemoteDirectoryCursor>,
+}
+
+struct CachedSession {
+    session: Session,
+    last_used: Instant,
+}
+
+#[derive(Default)]
+struct SessionCaches {
+    monitor: std::collections::HashMap<String, CachedSession>,
+    file: std::collections::HashMap<String, CachedSession>,
+}
+
+static SESSION_CACHES: std::sync::OnceLock<std::sync::Mutex<SessionCaches>> = std::sync::OnceLock::new();
+
+enum SessionPurpose {
+    Monitor,
+    File,
+}
 
 struct ConvertedKey {
     path: PathBuf,
@@ -308,47 +345,136 @@ pub fn get_remote_home(
     Ok(normalize_remote_path(home))
 }
 
+/// 复用已建立的 SSH session 获取远程 home 目录，避免重复连接。
+fn get_remote_home_from_session(session: &Session) -> Result<String, String> {
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("无法创建 SSH 通道: {}", e))?;
+    channel
+        .exec("printf %s \"$HOME\"")
+        .map_err(|e| format!("无法获取远程 HOME: {}", e))?;
+    let mut output = String::new();
+    channel
+        .read_to_string(&mut output)
+        .map_err(|e| format!("无法读取远程 HOME: {}", e))?;
+    let _ = channel.wait_close();
+    let home = output.trim();
+    if home.is_empty() {
+        return Ok("/".to_string());
+    }
+    Ok(normalize_remote_path(home))
+}
+
+fn directory_sort_key(entry: &fs::FileEntry) -> (u8, String, String) {
+    (
+        if entry.is_dir { 0 } else { 1 },
+        entry.name.to_lowercase(),
+        entry.name.clone(),
+    )
+}
+
+fn cursor_sort_key(cursor: &RemoteDirectoryCursor) -> (u8, String, String) {
+    (
+        if cursor.is_dir { 0 } else { 1 },
+        cursor.name.to_lowercase(),
+        cursor.name.clone(),
+    )
+}
+
+/// Read a bounded, sorted remote directory page without materializing the
+/// whole SFTP directory in memory. Later pages rescan the directory using the
+/// last sort key, trading a little remote I/O for stable application memory.
+pub fn read_remote_dir_page(
+    profile: settings::SSHProfile,
+    path: String,
+    cursor: Option<RemoteDirectoryCursor>,
+    limit: Option<usize>,
+    name_filter: Option<String>,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<RemoteDirectoryPage, String> {
+    let page_size = limit.unwrap_or(REMOTE_DIRECTORY_PAGE_SIZE).clamp(1, REMOTE_DIRECTORY_PAGE_SIZE);
+    let normalized_name_filter = name_filter
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_lowercase);
+    with_cached_session(&profile, SessionPurpose::File, |session| {
+        let sftp = session
+            .sftp()
+            .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
+        // Shell titles commonly report `~` / `~/project`. Resolve both against
+        // the connected account, rather than treating every non-absolute path
+        // as the home directory and silently losing the requested subfolder.
+        let home = get_remote_home_from_session(session)?;
+        let target = if path.trim().is_empty() || path.trim() == "~" {
+            home
+        } else if let Some(relative) = path.trim().strip_prefix("~/") {
+            join_remote_path(&home, relative)
+        } else if path.starts_with('/') {
+            normalize_remote_path(&path)
+        } else {
+            home
+        };
+        let after = cursor.as_ref().map(cursor_sort_key);
+        let mut candidates: Vec<fs::FileEntry> = Vec::with_capacity(page_size + 1);
+        let mut matching_entries = 0usize;
+        let mut directory = sftp
+            .opendir(Path::new(&target))
+            .map_err(|e| format!("读取远程目录失败: {}", e))?;
+
+        while let Ok((entry_path, stat)) = directory.readdir() {
+            let name = entry_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("")
+                .to_string();
+            if name.is_empty() || name == "." || name == ".." {
+                continue;
+            }
+            if normalized_name_filter
+                .as_ref()
+                .is_some_and(|filter| !name.to_lowercase().contains(filter))
+            {
+                continue;
+            }
+            let entry = fs::FileEntry {
+                name: name.clone(),
+                path: join_remote_path(&target, &name),
+                is_dir: stat.is_dir(),
+                size: stat.size.unwrap_or(0),
+                modified: stat.mtime.unwrap_or(0),
+                icon: remote_icon(&name, stat.is_dir()),
+            };
+            if after.as_ref().is_some_and(|last| directory_sort_key(&entry) <= *last) {
+                continue;
+            }
+            matching_entries += 1;
+            candidates.push(entry);
+            candidates.sort_by_key(directory_sort_key);
+            if candidates.len() > page_size {
+                candidates.pop();
+            }
+        }
+
+        let next_cursor = if matching_entries > page_size {
+            candidates.last().map(|entry| RemoteDirectoryCursor {
+                is_dir: entry.is_dir,
+                name: entry.name.clone(),
+            })
+        } else {
+            None
+        };
+        Ok(RemoteDirectoryPage { entries: candidates, next_cursor })
+    })
+}
+
+/// Compatibility wrapper for callers that have not yet adopted pagination.
 pub fn read_remote_dir(
     profile: settings::SSHProfile,
     path: String,
-    _profiles: Vec<settings::SSHProfile>,
+    profiles: Vec<settings::SSHProfile>,
 ) -> Result<Vec<fs::FileEntry>, String> {
-    let session = connect_session(&profile)?;
-    let sftp = session
-        .sftp()
-        .map_err(|e| format!("无法创建 SFTP 会话: {}", e))?;
-    let target = normalize_remote_path(&path);
-    let mut entries = Vec::new();
-
-    for (entry_path, stat) in sftp
-        .readdir(Path::new(&target))
-        .map_err(|e| format!("读取远程目录失败: {}", e))?
-    {
-        let name = entry_path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("")
-            .to_string();
-        if name.is_empty() || name == "." || name == ".." {
-            continue;
-        }
-        let full_path = normalize_remote_path(&entry_path.to_string_lossy());
-        entries.push(fs::FileEntry {
-            name: name.clone(),
-            path: full_path,
-            is_dir: stat.is_dir(),
-            size: stat.size.unwrap_or(0),
-            modified: stat.mtime.unwrap_or(0),
-            icon: remote_icon(&name, stat.is_dir()),
-        });
-    }
-
-    entries.sort_by(|a, b| {
-        b.is_dir
-            .cmp(&a.is_dir)
-            .then(a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-    });
-    Ok(entries)
+    Ok(read_remote_dir_page(profile, path, None, Some(REMOTE_DIRECTORY_PAGE_SIZE), None, profiles)?.entries)
 }
 
 pub fn download_remote_entries(
@@ -356,6 +482,7 @@ pub fn download_remote_entries(
     profile: settings::SSHProfile,
     remote_paths: Vec<String>,
     local_dir: String,
+    conflict_policy: Option<String>,
     _profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
     if remote_paths.is_empty() {
@@ -386,12 +513,21 @@ pub fn download_remote_entries(
         ),
     );
 
+    let policy = normalize_conflict_policy(conflict_policy.as_deref());
     for remote_path in &remote_paths {
         let name = Path::new(remote_path)
             .file_name()
             .and_then(|value| value.to_str())
             .unwrap_or("remote-item");
         let local_target = destination.join(name);
+        if local_target.exists() && policy == "skip" {
+            continue;
+        }
+        let local_target = if local_target.exists() && policy == "rename" {
+            next_local_name(&local_target)
+        } else {
+            local_target
+        };
         download_entry_recursive(
             &sftp,
             Path::new(remote_path),
@@ -421,6 +557,7 @@ pub fn upload_local_entries(
     profile: settings::SSHProfile,
     local_paths: Vec<String>,
     remote_dir: String,
+    conflict_policy: Option<String>,
     _profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
     if local_paths.is_empty() {
@@ -451,6 +588,7 @@ pub fn upload_local_entries(
         ),
     );
 
+    let policy = normalize_conflict_policy(conflict_policy.as_deref());
     for local_path in &local_paths {
         let local = PathBuf::from(local_path);
         let file_name = local
@@ -459,6 +597,14 @@ pub fn upload_local_entries(
             .to_string_lossy()
             .to_string();
         let remote_target = remote_dir_path.join(file_name);
+        if sftp.stat(&remote_target).is_ok() && policy == "skip" {
+            continue;
+        }
+        let remote_target = if sftp.stat(&remote_target).is_ok() && policy == "rename" {
+            next_remote_name(&sftp, &remote_target)?
+        } else {
+            remote_target
+        };
         upload_entry_recursive(
             &sftp,
             &local,
@@ -758,6 +904,121 @@ fn connect_session(profile: &settings::SSHProfile) -> Result<Session, String> {
     Ok(session)
 }
 
+fn session_cache_key(profile: &settings::SSHProfile) -> String {
+    // Exclude password and display-only fields. Connection-affecting changes
+    // produce a new key, while cached sessions never expose credentials.
+    format!(
+        "{}|{}|{}|{}|{}|{}",
+        profile.id, profile.host, profile.port, profile.user, profile.auth_type, profile.private_key_path
+    )
+}
+
+fn session_map(caches: &mut SessionCaches, purpose: SessionPurpose) -> &mut std::collections::HashMap<String, CachedSession> {
+    match purpose {
+        SessionPurpose::Monitor => &mut caches.monitor,
+        SessionPurpose::File => &mut caches.file,
+    }
+}
+
+fn with_cached_session<T, F>(
+    profile: &settings::SSHProfile,
+    purpose: SessionPurpose,
+    operation: F,
+) -> Result<T, String>
+where
+    F: Fn(&Session) -> Result<T, String>,
+{
+    let key = session_cache_key(profile);
+    let cache_lock = SESSION_CACHES.get_or_init(|| std::sync::Mutex::new(SessionCaches::default()));
+    let mut caches = cache_lock.lock().map_err(|_| "SSH 会话缓存已锁定".to_string())?;
+    let sessions = session_map(&mut caches, purpose);
+    let now = Instant::now();
+    sessions.retain(|_, cached| now.duration_since(cached.last_used) < SSH_SESSION_IDLE);
+
+    if let Some(cached) = sessions.get_mut(&key) {
+        cached.last_used = now;
+        match operation(&cached.session) {
+            Ok(value) => return Ok(value),
+            Err(_) => {
+                // A broken channel/session must not be retained. Reconnect once
+                // below; repeated failures return to the caller normally.
+                sessions.remove(&key);
+            }
+        }
+    }
+
+    let session = connect_session(profile)?;
+    let value = operation(&session)?;
+    while sessions.len() >= SSH_SESSION_CACHE_LIMIT {
+        if let Some(oldest) = sessions
+            .iter()
+            .min_by_key(|(_, cached)| cached.last_used)
+            .map(|(key, _)| key.clone())
+        {
+            sessions.remove(&oldest);
+        } else {
+            break;
+        }
+    }
+    sessions.insert(key, CachedSession { session, last_used: now });
+    Ok(value)
+}
+
+/// 通过与远程文件管理相同的认证链路采集 Linux 主机性能信息。
+/// 采集脚本固定在 performance 模块中，避免将任何前端输入拼接进 shell 命令。
+pub fn get_performance_snapshot(
+    profile: settings::SSHProfile,
+    _profiles: Vec<settings::SSHProfile>,
+) -> Result<PerformanceSnapshot, String> {
+    with_cached_session(&profile, SessionPurpose::Monitor, |session| {
+        let mut channel = session
+            .channel_session()
+            .map_err(|e| format!("无法创建 SSH 采集通道: {}", e))?;
+        channel
+            .exec(performance::remote_script())
+            .map_err(|e| format!("无法执行远端性能采集: {}", e))?;
+        let mut output = String::new();
+        channel
+            .read_to_string(&mut output)
+            .map_err(|e| format!("读取远端性能数据失败: {}", e))?;
+        let _ = channel.wait_close();
+        performance::parse_remote_snapshot(&output)
+    })
+}
+
+/// Stop a listener process on the connected Linux host.
+/// The PID is numeric at the IPC boundary, so the emitted command has no user-controlled shell content.
+pub fn stop_port_process(
+    profile: settings::SSHProfile,
+    _profiles: Vec<settings::SSHProfile>,
+    pid: u32,
+) -> Result<(), String> {
+    if pid == 0 {
+        return Err("无效的远程进程 PID".to_string());
+    }
+    let session = connect_session(&profile)?;
+    let mut channel = session
+        .channel_session()
+        .map_err(|e| format!("无法创建 SSH 停止进程通道: {}", e))?;
+    channel
+        .exec(&format!("kill -TERM {}", pid))
+        .map_err(|e| format!("无法执行远程停止进程命令: {}", e))?;
+    let mut stderr = String::new();
+    use std::io::Read;
+    channel
+        .stderr()
+        .read_to_string(&mut stderr)
+        .map_err(|e| format!("读取远程停止进程错误失败: {}", e))?;
+    let _ = channel.wait_close();
+    if channel.exit_status().unwrap_or(1) == 0 {
+        Ok(())
+    } else if stderr.trim().is_empty() {
+        Err(format!("远程停止 PID {} 失败", pid))
+    } else {
+        Err(stderr.trim().to_string())
+    }
+}
+
 fn collect_remote_size(sftp: &Sftp, remote_path: &Path) -> Result<u64, String> {
     let stat = sftp
         .stat(remote_path)
@@ -1027,6 +1288,43 @@ fn progress_payload(
 
 fn emit_transfer(app_handle: &AppHandle, payload: FileTransferProgress) {
     let _ = app_handle.emit("file-transfer-progress", payload);
+}
+
+/// Normalize untrusted UI input to the three supported, non-destructive policies.
+fn normalize_conflict_policy(value: Option<&str>) -> &str {
+    match value.unwrap_or("overwrite") {
+        "skip" => "skip",
+        "rename" => "rename",
+        _ => "overwrite",
+    }
+}
+
+/// Produce a non-existing sibling path such as `report (1).log`.
+fn next_local_name(path: &Path) -> PathBuf {
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or("item");
+    let ext = path.extension().and_then(|v| v.to_str()).map(|v| format!(".{v}")).unwrap_or_default();
+    for suffix in 1..10_000 {
+        let candidate = parent.join(format!("{stem} ({suffix}){ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    parent.join(format!("{stem}-copy{ext}"))
+}
+
+/// Produce a non-existing SFTP sibling path using the same stable naming rule.
+fn next_remote_name(sftp: &Sftp, path: &Path) -> Result<PathBuf, String> {
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or("item");
+    let ext = path.extension().and_then(|v| v.to_str()).map(|v| format!(".{v}")).unwrap_or_default();
+    for suffix in 1..10_000 {
+        let candidate = parent.join(format!("{stem} ({suffix}){ext}"));
+        if sftp.stat(&candidate).is_err() {
+            return Ok(candidate);
+        }
+    }
+    Err("无法生成不冲突的远程文件名".to_string())
 }
 
 fn expand_home(path: String) -> Result<PathBuf, String> {

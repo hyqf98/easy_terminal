@@ -250,6 +250,9 @@ export default defineComponent({
     async function persistBindings() {
       try {
         await invoke('save_shortcuts', { entries: draftBindings.value.map((b) => ({ ...b })) });
+        window.dispatchEvent(new CustomEvent('shortcut-bindings-change', {
+          detail: draftBindings.value.map((binding) => ({ ...binding })),
+        }));
         showMessage(t('cmd.save') + ' ✓', 'success');
       } catch (error) {
         showMessage(String(error), 'error');
@@ -261,6 +264,9 @@ export default defineComponent({
         const defaults = await invoke<ShortcutBinding[]>('load_default_shortcuts');
         draftBindings.value = defaults;
         await invoke('save_shortcuts', { entries: defaults.map((b) => ({ ...b })) });
+        window.dispatchEvent(new CustomEvent('shortcut-bindings-change', {
+          detail: defaults.map((binding) => ({ ...binding })),
+        }));
         showMessage(t('shortcut.reset') + ' ✓', 'success');
       } catch (error) {
         showMessage(String(error), 'error');

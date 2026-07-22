@@ -15,10 +15,11 @@ pub const APP_DIR_NAME: &str = ".easy-terminal";
 /// 避免多次替换导致的 `~` 二次展开问题。展开失败时返回原始路径。
 ///
 /// # 示例
-/// ```
-/// expand_path("~/Documents");     // -> /home/user/Documents
-/// expand_path("$HOME/.config");   // -> /home/user/.config
-/// expand_path("/etc/hosts");      // -> /etc/hosts（无变化）
+/// ```ignore
+/// use easy_terminal_lib::path_util::expand_path;
+/// let _ = expand_path("~/Documents");     // -> /home/user/Documents
+/// let _ = expand_path("$HOME/.config");   // -> /home/user/.config
+/// let _ = expand_path("/etc/hosts");      // -> /etc/hosts（无变化）
 /// ```
 pub fn expand_path(path: &str) -> PathBuf {
     let expanded = shellexpand::full(path).unwrap_or_else(|_| path.into());

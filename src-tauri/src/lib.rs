@@ -1,18 +1,25 @@
 mod commands;
+mod content_search;
 mod db;
 mod disks;
 mod file_index;
 mod fs;
 mod path_util;
+mod performance;
 mod pty;
 mod settings;
 mod shell_setup;
 mod ssh;
+mod vpn;
 
 use pty::PtyManager;
-use settings::AppSettings;
 use serde::Deserialize;
-use std::sync::Mutex;
+use settings::AppSettings;
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use sysinfo::System;
+use tauri::ipc::Channel;
 use tauri::webview::{Color, PageLoadEvent};
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
@@ -22,6 +29,47 @@ struct AppState {
     settings: Mutex<AppSettings>,
     command_db: db::Db,
     desktop_draw_shortcut: Mutex<Option<String>>,
+    search_cancellations: Mutex<HashMap<String, Arc<AtomicBool>>>,
+    performance_system: Mutex<System>,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FileSearchStreamEvent {
+    search_id: String,
+    kind: String,
+    results: Vec<file_index::FileSearchResult>,
+    limited: bool,
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ContentSearchStreamEvent {
+    search_id: String,
+    kind: String,
+    results: Vec<content_search::ContentSearchResult>,
+    limited: bool,
+}
+
+fn start_search(state: &AppState, search_id: &str) -> Arc<AtomicBool> {
+    let cancellation = Arc::new(AtomicBool::new(false));
+    if let Ok(mut searches) = state.search_cancellations.lock() {
+        if let Some(previous) = searches.insert(search_id.to_string(), cancellation.clone()) {
+            previous.store(true, Ordering::Relaxed);
+        }
+    }
+    cancellation
+}
+
+fn finish_search(state: &AppState, search_id: &str, cancellation: &Arc<AtomicBool>) {
+    if let Ok(mut searches) = state.search_cancellations.lock() {
+        if searches
+            .get(search_id)
+            .is_some_and(|current| Arc::ptr_eq(current, cancellation))
+        {
+            searches.remove(search_id);
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -157,20 +205,21 @@ fn sync_desktop_draw_shortcut_inner(
     }
 
     for candidate in requested_shortcuts {
-        match app_handle
-            .global_shortcut()
-            .on_shortcut(candidate.as_str(), |app, _shortcut, event| {
-            if event.state != ShortcutState::Pressed {
-                return;
-            }
-
-            let app_handle = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = open_desktop_draw_window(app_handle).await {
-                    eprintln!("open desktop draw window failed: {error}");
+        match app_handle.global_shortcut().on_shortcut(
+            candidate.as_str(),
+            |app, _shortcut, event| {
+                if event.state != ShortcutState::Pressed {
+                    return;
                 }
-            });
-        }) {
+
+                let app_handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(error) = open_desktop_draw_window(app_handle).await {
+                        eprintln!("open desktop draw window failed: {error}");
+                    }
+                });
+            },
+        ) {
             Ok(()) => {
                 let state = app_handle.state::<AppState>();
                 let mut active = state
@@ -389,6 +438,16 @@ fn get_home_dir() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn get_quick_access_locations() -> Result<Vec<fs::QuickAccessLocation>, String> {
+    fs::get_quick_access_locations()
+}
+
+#[tauri::command]
+fn open_system_trash() -> Result<(), String> {
+    fs::open_system_trash()
+}
+
+#[tauri::command]
 fn list_drives() -> Result<Vec<fs::FileEntry>, String> {
     fs::list_drives()
 }
@@ -426,12 +485,13 @@ fn reveal_in_file_manager(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn search_files(query: String, limit: Option<i64>) -> Result<Vec<file_index::FileSearchResult>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        file_index::search(&query, limit.unwrap_or(200))
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))?
+async fn search_files(
+    query: String,
+    limit: Option<i64>,
+) -> Result<Vec<file_index::FileSearchResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || file_index::search(&query, limit.unwrap_or(200)))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -453,11 +513,261 @@ fn get_index_config() -> Result<file_index::IndexConfig, String> {
 fn save_index_config(config: file_index::IndexConfig) -> Result<(), String> {
     file_index::save_index_config(&config)?;
     // 保存后触发重建索引，使用指定配置而非默认读取
-    file_index::start_background_scan(
-        move |_, _, _| {},
-        Some(config),
-    );
+    file_index::start_background_scan(move |_, _, _| {}, Some(config));
     Ok(())
+}
+
+#[tauri::command]
+async fn search_content(
+    query: String,
+    root: String,
+    limit: Option<usize>,
+    max_matches_per_file: Option<usize>,
+) -> Result<Vec<content_search::ContentSearchResult>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        content_search::search_content(
+            &query,
+            &root,
+            limit.unwrap_or(200),
+            max_matches_per_file.unwrap_or(5),
+        )
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+fn cancel_file_search(search_id: String, state: State<'_, AppState>) {
+    if let Ok(searches) = state.search_cancellations.lock() {
+        if let Some(cancellation) = searches.get(&search_id) {
+            cancellation.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+#[tauri::command]
+async fn search_files_stream(
+    query: String,
+    search_id: String,
+    limit: Option<i64>,
+    on_event: Channel<FileSearchStreamEvent>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let cancellation = start_search(&state, &search_id);
+    let batch_size = 1;
+    let capped_limit = limit.unwrap_or(200).clamp(1, 200);
+    let fetch_limit = capped_limit.saturating_add(1);
+    let stream_search_id = search_id.clone();
+    let cancellation_for_task = cancellation.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let cancellation_for_query = cancellation_for_task.clone();
+        let channel_for_result = on_event.clone();
+        let stream_id_for_result = stream_search_id.clone();
+        let mut batch = Vec::with_capacity(batch_size);
+        let mut emitted_results = 0usize;
+        let mut limited = false;
+        let mut send_error = None;
+        file_index::search_with_callback(
+            &query,
+            fetch_limit,
+            || cancellation_for_query.load(Ordering::Relaxed),
+            |result| {
+                if emitted_results >= capped_limit as usize {
+                    limited = true;
+                    return;
+                }
+                batch.push(result);
+                emitted_results += 1;
+                if batch.len() < batch_size {
+                    return;
+                }
+                if let Err(error) = channel_for_result.send(FileSearchStreamEvent {
+                    search_id: stream_id_for_result.clone(),
+                    kind: "batch".to_string(),
+                    results: std::mem::take(&mut batch),
+                    limited: false,
+                }) {
+                    send_error = Some(error.to_string());
+                }
+            },
+        )?;
+        if let Some(error) = send_error {
+            return Err(error);
+        }
+        if cancellation_for_task.load(Ordering::Relaxed) {
+            let _ = on_event.send(FileSearchStreamEvent {
+                search_id: stream_search_id,
+                kind: "cancelled".to_string(),
+                results: Vec::new(),
+                limited: false,
+            });
+            return Ok(());
+        }
+        if !batch.is_empty() {
+            on_event
+                .send(FileSearchStreamEvent {
+                    search_id: stream_search_id.clone(),
+                    kind: "batch".to_string(),
+                    results: batch,
+                    limited: false,
+                })
+                .map_err(|error| error.to_string())?;
+        }
+        on_event
+            .send(FileSearchStreamEvent {
+                search_id: stream_search_id,
+                kind: "completed".to_string(),
+                results: Vec::new(),
+                limited,
+            })
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?;
+    finish_search(&state, &search_id, &cancellation);
+    result
+}
+
+#[tauri::command]
+async fn search_content_stream(
+    query: String,
+    root: String,
+    search_id: String,
+    limit: Option<usize>,
+    max_matches_per_file: Option<usize>,
+    on_event: Channel<ContentSearchStreamEvent>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let cancellation = start_search(&state, &search_id);
+    let capped_limit = limit.unwrap_or(200).clamp(1, 200);
+    let fetch_limit = capped_limit.saturating_add(1);
+    let max_matches = max_matches_per_file.unwrap_or(5).clamp(1, 20);
+    let stream_search_id = search_id.clone();
+    let cancellation_for_task = cancellation.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let cancellation_for_walk = cancellation_for_task.clone();
+        let stream_id_for_result = stream_search_id.clone();
+        let channel_for_result = on_event.clone();
+        let mut send_error = None;
+        let mut emitted_results = 0usize;
+        let mut limited = false;
+        content_search::search_content_with_callback(
+            &query,
+            &root,
+            fetch_limit,
+            max_matches,
+            &mut || cancellation_for_walk.load(Ordering::Relaxed),
+            |result| {
+                if emitted_results >= capped_limit {
+                    limited = true;
+                    return;
+                }
+                emitted_results += 1;
+                if let Err(error) = channel_for_result.send(ContentSearchStreamEvent {
+                    search_id: stream_id_for_result.clone(),
+                    kind: "batch".to_string(),
+                    results: vec![result],
+                    limited: false,
+                }) {
+                    send_error = Some(error.to_string());
+                }
+            },
+        )?;
+        if let Some(error) = send_error {
+            return Err(error);
+        }
+        if cancellation_for_task.load(Ordering::Relaxed) {
+            let _ = on_event.send(ContentSearchStreamEvent {
+                search_id: stream_search_id,
+                kind: "cancelled".to_string(),
+                results: Vec::new(),
+                limited: false,
+            });
+            return Ok(());
+        }
+
+        on_event
+            .send(ContentSearchStreamEvent {
+                search_id: stream_search_id,
+                kind: "completed".to_string(),
+                results: Vec::new(),
+                limited,
+            })
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?;
+    finish_search(&state, &search_id, &cancellation);
+    result
+}
+
+#[derive(serde::Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct FolderSizeStreamEvent {
+    request_id: String,
+    kind: String, // "size" | "completed" | "cancelled"
+    path: String,
+    size: u64,
+}
+
+/// 流式计算多个文件夹的递归总大小。
+///
+/// 对 `paths` 中的每个目录调用 `fs::dir_size_parallel`（jwalk 并行遍历），
+/// 每算完一个立即通过 `on_event` 推送 `{ kind: "size", path, size }`，
+/// 前端可渐进式填充列表。切换目录时前端取消上一个请求即可中止未完成的计算。
+#[tauri::command]
+async fn compute_folder_sizes_stream(
+    paths: Vec<String>,
+    request_id: String,
+    on_event: Channel<FolderSizeStreamEvent>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let cancellation = start_search(&state, &request_id);
+    let stream_request_id = request_id.clone();
+    let cancellation_for_task = cancellation.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        for path_str in &paths {
+            if cancellation_for_task.load(Ordering::Relaxed) {
+                break;
+            }
+            let path = std::path::Path::new(path_str);
+            let size = fs::dir_size_parallel(path, &|| {
+                cancellation_for_task.load(Ordering::Relaxed)
+            });
+            if cancellation_for_task.load(Ordering::Relaxed) {
+                break;
+            }
+            on_event
+                .send(FolderSizeStreamEvent {
+                    request_id: stream_request_id.clone(),
+                    kind: "size".to_string(),
+                    path: path_str.clone(),
+                    size,
+                })
+                .map_err(|error| error.to_string())?;
+        }
+        if cancellation_for_task.load(Ordering::Relaxed) {
+            let _ = on_event.send(FolderSizeStreamEvent {
+                request_id: stream_request_id,
+                kind: "cancelled".to_string(),
+                path: String::new(),
+                size: 0,
+            });
+            return Ok(());
+        }
+        on_event
+            .send(FolderSizeStreamEvent {
+                request_id: stream_request_id,
+                kind: "completed".to_string(),
+                path: String::new(),
+                size: 0,
+            })
+            .map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| format!("Task join error: {error}"))?;
+    finish_search(&state, &request_id, &cancellation);
+    result
 }
 
 #[derive(serde::Serialize)]
@@ -561,6 +871,18 @@ fn save_ssh_profiles(entries: Vec<settings::SSHProfile>) -> Result<(), String> {
     settings::save_ssh_profiles(entries)
 }
 
+/// 加载持久化的 VPN 配置列表。
+#[tauri::command]
+fn load_vpn_profiles() -> Result<Vec<settings::VpnProfile>, String> {
+    settings::load_vpn_profiles()
+}
+
+/// 持久化 VPN 配置列表到本地存储。
+#[tauri::command]
+fn save_vpn_profiles(entries: Vec<settings::VpnProfile>) -> Result<(), String> {
+    settings::save_vpn_profiles(entries)
+}
+
 #[tauri::command]
 async fn test_ssh_connection(
     host: String,
@@ -589,6 +911,40 @@ async fn test_ssh_connection(
 }
 
 #[tauri::command]
+fn get_local_performance_snapshot(
+    state: State<'_, AppState>,
+) -> Result<performance::PerformanceSnapshot, String> {
+    let mut system = state.performance_system.lock().map_err(|e| e.to_string())?;
+    Ok(performance::local_snapshot(&mut system))
+}
+
+#[tauri::command]
+fn stop_local_port_process(pid: u32) -> Result<(), String> {
+    performance::stop_local_port_process(pid)
+}
+
+#[tauri::command]
+async fn get_remote_performance_snapshot(
+    profile: settings::SSHProfile,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<performance::PerformanceSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || ssh::get_performance_snapshot(profile, profiles))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+async fn stop_remote_port_process(
+    profile: settings::SSHProfile,
+    profiles: Vec<settings::SSHProfile>,
+    pid: u32,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || ssh::stop_port_process(profile, profiles, pid))
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
 async fn get_remote_home(
     profile: settings::SSHProfile,
     profiles: Vec<settings::SSHProfile>,
@@ -610,15 +966,32 @@ async fn read_remote_dir(
 }
 
 #[tauri::command]
+async fn read_remote_dir_page(
+    profile: settings::SSHProfile,
+    path: String,
+    cursor: Option<ssh::RemoteDirectoryCursor>,
+    limit: Option<usize>,
+    name_filter: Option<String>,
+    profiles: Vec<settings::SSHProfile>,
+) -> Result<ssh::RemoteDirectoryPage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::read_remote_dir_page(profile, path, cursor, limit, name_filter, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
 async fn download_remote_entries(
     app_handle: tauri::AppHandle,
     profile: settings::SSHProfile,
     remote_paths: Vec<String>,
     local_dir: String,
+    conflict_policy: Option<String>,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        ssh::download_remote_entries(app_handle, profile, remote_paths, local_dir, profiles)
+        ssh::download_remote_entries(app_handle, profile, remote_paths, local_dir, conflict_policy, profiles)
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
@@ -630,10 +1003,11 @@ async fn upload_local_entries(
     profile: settings::SSHProfile,
     local_paths: Vec<String>,
     remote_dir: String,
+    conflict_policy: Option<String>,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        ssh::upload_local_entries(app_handle, profile, local_paths, remote_dir, profiles)
+        ssh::upload_local_entries(app_handle, profile, local_paths, remote_dir, conflict_policy, profiles)
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
@@ -673,9 +1047,11 @@ async fn delete_remote_entries(
     paths: Vec<String>,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || ssh::delete_remote_entries(profile, paths, profiles))
-        .await
-        .map_err(|e| format!("Task join error: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::delete_remote_entries(profile, paths, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -695,9 +1071,11 @@ async fn read_remote_file_preview(
     path: String,
     profiles: Vec<settings::SSHProfile>,
 ) -> Result<fs::FilePreviewData, String> {
-    tauri::async_runtime::spawn_blocking(move || ssh::read_remote_file_preview(profile, path, profiles))
-        .await
-        .map_err(|e| format!("Task join error: {}", e))?
+    tauri::async_runtime::spawn_blocking(move || {
+        ssh::read_remote_file_preview(profile, path, profiles)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 #[tauri::command]
@@ -843,6 +1221,59 @@ fn reset_builtin_library(
     state.command_db.reset_builtin_library(&library_id)
 }
 
+#[tauri::command]
+fn list_terminal_favorites(
+    state: State<'_, AppState>,
+    ssh_profile_id: String,
+) -> Result<Vec<db::TerminalFavoriteRecord>, String> {
+    state.command_db.list_favorites(&ssh_profile_id)
+}
+
+#[tauri::command]
+fn add_terminal_favorite(
+    state: State<'_, AppState>,
+    ssh_profile_id: String,
+    path: String,
+    name: String,
+    icon: String,
+    color: String,
+) -> Result<i64, String> {
+    state
+        .command_db
+        .add_favorite(&ssh_profile_id, &path, &name, &icon, &color)
+}
+
+#[tauri::command]
+fn remove_terminal_favorite(
+    state: State<'_, AppState>,
+    ssh_profile_id: String,
+    path: String,
+) -> Result<(), String> {
+    state.command_db.remove_favorite(&ssh_profile_id, &path)
+}
+
+#[tauri::command]
+fn update_terminal_favorite(
+    state: State<'_, AppState>,
+    id: i64,
+    name: String,
+    icon: String,
+    color: String,
+) -> Result<(), String> {
+    state.command_db.update_favorite(id, &name, &icon, &color)
+}
+
+#[tauri::command]
+fn reorder_terminal_favorites(
+    state: State<'_, AppState>,
+    ssh_profile_id: String,
+    ordered_ids: Vec<i64>,
+) -> Result<(), String> {
+    state
+        .command_db
+        .reorder_favorites(&ssh_profile_id, &ordered_ids)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let loaded_settings = settings::load_settings().unwrap_or_default();
@@ -864,31 +1295,41 @@ pub fn run() {
             settings: Mutex::new(loaded_settings),
             command_db,
             desktop_draw_shortcut: Mutex::new(None),
+            search_cancellations: Mutex::new(HashMap::new()),
+            performance_system: Mutex::new(System::new_all()),
         })
         .setup(|app| {
             let shortcut = load_desktop_draw_shortcut();
-            let registered =
-                sync_desktop_draw_shortcut_inner(app.handle(), normalize_global_shortcut(&shortcut))?;
+            let registered = sync_desktop_draw_shortcut_inner(
+                app.handle(),
+                normalize_global_shortcut(&shortcut),
+            )?;
             if !shortcut.trim().is_empty() && registered.is_none() {
                 eprintln!("failed to register desktop draw shortcut on startup: {shortcut}");
             }
 
             // 启动文件索引后台扫描
             let app_handle = app.handle().clone();
-            file_index::start_background_scan(move |count, estimated, current_path| {
-                use tauri::Emitter;
-                let progress = if estimated > 0 {
-                    ((count as f64 / estimated as f64) * 100.0).min(99.0) as u8
-                } else {
-                    0
-                };
-                let _ = app_handle.emit("index-progress", serde_json::json!({
-                    "totalFiles": count,
-                    "estimatedTotal": estimated,
-                    "currentPath": current_path,
-                    "progress": progress,
-                }));
-            }, None);
+            file_index::start_background_scan(
+                move |count, estimated, current_path| {
+                    use tauri::Emitter;
+                    let progress = if estimated > 0 {
+                        ((count as f64 / estimated as f64) * 100.0).min(99.0) as u8
+                    } else {
+                        0
+                    };
+                    let _ = app_handle.emit(
+                        "index-progress",
+                        serde_json::json!({
+                            "totalFiles": count,
+                            "estimatedTotal": estimated,
+                            "currentPath": current_path,
+                            "progress": progress,
+                        }),
+                    );
+                },
+                None,
+            );
 
             Ok(())
         })
@@ -907,6 +1348,8 @@ pub fn run() {
             move_entries,
             delete_entries,
             get_home_dir,
+            get_quick_access_locations,
+            open_system_trash,
             list_drives,
             disks::list_disks,
             get_os_platform,
@@ -921,6 +1364,11 @@ pub fn run() {
             rebuild_index,
             get_index_config,
             save_index_config,
+            search_content,
+            search_files_stream,
+            search_content_stream,
+            compute_folder_sizes_stream,
+            cancel_file_search,
             get_settings,
             save_settings,
             save_terminal_state,
@@ -934,10 +1382,21 @@ pub fn run() {
             save_command_mappings,
             load_ssh_profiles,
             save_ssh_profiles,
+            load_vpn_profiles,
+            save_vpn_profiles,
+            vpn::vpn_connect,
+            vpn::vpn_disconnect,
+            vpn::vpn_get_status,
+            vpn::vpn_test_connection,
             test_ssh_connection,
+            get_local_performance_snapshot,
+            stop_local_port_process,
+            get_remote_performance_snapshot,
+            stop_remote_port_process,
             prepare_ssh_key,
             get_remote_home,
             read_remote_dir,
+            read_remote_dir_page,
             download_remote_entries,
             upload_local_entries,
             rename_remote_entry,
@@ -966,11 +1425,22 @@ pub fn run() {
             reset_builtin_library,
             list_bundled_command_libraries,
             read_bundled_command_file,
+            list_terminal_favorites,
+            add_terminal_favorite,
+            remove_terminal_favorite,
+            update_terminal_favorite,
+            reorder_terminal_favorites,
             open_desktop_draw_window,
             sync_desktop_draw_shortcut,
             show_desktop_draw_window,
             create_detached_terminal_window,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app_handle, event| {
+            // 应用退出时：杀掉所有 openvpn 子进程，清理路由表，不留残余
+            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
+                vpn::shutdown_all_vpn();
+            }
+        });
 }

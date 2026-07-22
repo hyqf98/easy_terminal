@@ -260,11 +260,14 @@ export async function initDetachedTerminalMode() {
 
   const themeName = document.documentElement.getAttribute('data-theme') || 'dark';
   const theme = getTerminalThemeStrategy(themeName).getTheme();
+  const storedFontSize = Number.parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--term-font-size'),
+  );
 
   const term = new Terminal({
     theme,
     fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace',
-    fontSize: 14,
+    fontSize: Number.isFinite(storedFontSize) && storedFontSize > 0 ? Math.ceil(storedFontSize) : 13,
     fontWeight: '400',
     fontWeightBold: '600',
     lineHeight: 1.2,
@@ -278,6 +281,29 @@ export async function initDetachedTerminalMode() {
   term.loadAddon(new WebLinksAddon());
   term.open(canvasEl);
   fitAddon.fit();
+
+  term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+    if (event.type !== 'keydown') return true;
+    if (shortcutManager.matches('terminal.copyText', event)) {
+      const selection = term.getSelection();
+      if (selection) void navigator.clipboard.writeText(selection).catch(() => undefined);
+      return false;
+    }
+    if (shortcutManager.matches('terminal.pasteText', event)) {
+      void navigator.clipboard.readText().then((text) => {
+        if (text) term.paste(text);
+      }).catch(() => undefined);
+      return false;
+    }
+    if (shortcutManager.matches('terminal.selectLine', event) && term.buffer.active.type !== 'alternate') {
+      const buffer = term.buffer.active;
+      const row = buffer.baseY + buffer.cursorY;
+      const line = buffer.getLine(row)?.translateToString(false).replace(/\s+$/, '') || '';
+      if (line) term.select(0, row, line.length);
+      return false;
+    }
+    return true;
+  });
 
   const { invoke: tauriInvoke } = await import('@tauri-apps/api/core');
 
@@ -304,16 +330,39 @@ export async function initDetachedTerminalMode() {
 
   term.focus();
 
+  let lastCols = term.cols;
+  let lastRows = term.rows;
+  let resizeRaf: number | null = null;
+  let resizeGeneration = 0;
   const syncSize = () => {
-    fitAddon.fit();
-    void tauriInvoke('resize_pty', {
-      sessionId: realSessionId,
-      cols: term.cols,
-      rows: term.rows,
-    }).catch(() => {});
+    const generation = ++resizeGeneration;
+    if (resizeRaf !== null) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = requestAnimationFrame(() => {
+        resizeRaf = null;
+        if (generation !== resizeGeneration) return;
+        const buffer = term.buffer.active;
+        const wasAtBottom = buffer.viewportY >= buffer.baseY;
+        const previousViewportY = buffer.viewportY;
+        fitAddon.fit();
+        if (term.cols !== lastCols || term.rows !== lastRows) {
+          lastCols = term.cols;
+          lastRows = term.rows;
+          void tauriInvoke('resize_pty', {
+            sessionId: realSessionId,
+            cols: term.cols,
+            rows: term.rows,
+          }).catch(() => {});
+        }
+        if (wasAtBottom) term.scrollToBottom();
+        else term.scrollToLine(previousViewportY);
+      });
+    });
   };
 
   window.addEventListener('resize', syncSize);
+  const resizeObserver = new ResizeObserver(syncSize);
+  resizeObserver.observe(canvasEl);
   syncSize();
 
   let closing = false;
@@ -323,6 +372,8 @@ export async function initDetachedTerminalMode() {
     event.preventDefault();
     try {
       await tauriInvoke('kill_pty', { sessionId: realSessionId }).catch(() => {});
+      resizeObserver.disconnect();
+      if (resizeRaf !== null) cancelAnimationFrame(resizeRaf);
       unlisten();
       term.dispose();
     } finally {

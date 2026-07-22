@@ -11,16 +11,16 @@
     <!-- ═══ 工具栏 ═══ -->
     <header class="fm-toolbar">
       <div class="fm-nav-btns">
-        <button class="fm-nav-btn" :disabled="!canGoBack" :title="t('filemanager.nav.back')" @click="goBack">
+        <button class="fm-nav-btn" :disabled="!canGoBack" :data-tooltip="t('filemanager.nav.back')" @click="goBack">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-        <button class="fm-nav-btn" :disabled="!canGoForward" :title="t('filemanager.nav.forward')" @click="goForward">
+        <button class="fm-nav-btn" :disabled="!canGoForward" :data-tooltip="t('filemanager.nav.forward')" @click="goForward">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
         </button>
-        <button class="fm-nav-btn" :disabled="!canGoUp" :title="t('filemanager.nav.up')" @click="goUp">
+        <button class="fm-nav-btn" :disabled="!canGoUp" :data-tooltip="t('filemanager.nav.up')" @click="goUp">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
-        <button class="fm-nav-btn" :title="t('filemanager.nav.refresh')" @click="refresh">
+        <button class="fm-nav-btn" :data-tooltip="t('filemanager.nav.refresh')" @click="refresh">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/><path d="M21 3v6h-6"/></svg>
         </button>
       </div>
@@ -41,20 +41,25 @@
       </div>
 
       <!-- 搜索框 -->
-      <div class="fm-searchbox">
-        <svg v-if="!searchLoading" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <div class="fm-searchbox" :class="{ 'content-mode': searchMode === 'content' }">
+        <svg v-if="(searchMode === 'filename' && !searchLoading) || (searchMode === 'content' && !contentLoading)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
         <svg v-else class="fm-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
         <input
           v-model="searchQuery"
           type="text"
-          :placeholder="t('filemanager.search.placeholder')"
+          :placeholder="searchMode === 'content' ? t('filemanager.search.contentPlaceholder') : t('filemanager.search.filenamePlaceholder')"
           @input="onSearchInput"
           @keydown.esc="clearSearch"
         />
+        <!-- 模式切换按钮 -->
+        <button class="fm-mode-toggle" :class="{ active: searchMode === 'content' }" :data-tooltip="searchMode === 'filename' ? t('filemanager.search.switchToContent') : t('filemanager.search.switchToFilename')" @click="toggleSearchMode">
+          <svg v-if="searchMode === 'filename'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+        </button>
       </div>
 
       <div class="fm-toolbar-tail">
-        <button class="fm-nav-btn" :title="t('filemanager.index.settings')" @click="openIndexSettings">
+        <button class="fm-nav-btn" :data-tooltip="t('filemanager.index.settings')" @click="openIndexSettings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         </button>
       </div>
@@ -83,11 +88,20 @@
             </svg>
             <span>{{ qa.label }}</span>
           </div>
+          <div class="fm-nav-quick" @click="openSystemTrash">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 15h10l1-15"/><path d="M10 10v7M14 10v7"/></svg>
+            <span>{{ trashQuickAccess.label }}</span>
+          </div>
         </div>
 
         <!-- 此电脑：磁盘列表 -->
         <div class="fm-nav-group">
-          <div class="fm-nav-group-title">{{ t('filemanager.sidebar.thisPc') }}</div>
+          <div class="fm-nav-group-title fm-disk-title">
+            <span>{{ t('filemanager.sidebar.thisPc') }}</span>
+            <button class="fm-disk-refresh" :class="{ spinning: disksRefreshing }" :disabled="disksRefreshing" :aria-label="t('filemanager.disk.refresh')" :data-tooltip="t('filemanager.disk.refresh')" @click="refreshDisks">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-15.5-6.2L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 15.5 6.2L21 16"/><path d="M21 21v-5h-5"/></svg>
+            </button>
+          </div>
           <div
             v-for="disk in disks"
             :key="disk.mount_point"
@@ -107,7 +121,7 @@
               </div>
               <div class="fm-disk-info">
                 <div class="fm-disk-name">{{ disk.name }}</div>
-                <div class="fm-disk-meta">{{ disk.fs_type }} · {{ diskPercent(disk) }}% {{ t('filemanager.disk.used') }}</div>
+                <div class="fm-disk-meta">{{ disk.fs_type }} · {{ t('filemanager.disk.free') }} {{ formatSize(disk.available) }}</div>
               </div>
             </div>
             <div class="fm-disk-bar-wrap">
@@ -115,7 +129,8 @@
                 <div class="fm-disk-bar-fill" :class="diskBarClass(disk)" :style="{ width: diskPercent(disk) + '%' }"></div>
               </div>
               <div class="fm-disk-bar-text">
-                <span class="used">{{ formatSize(disk.used) }}</span>
+                <span class="used">{{ formatSize(disk.available) }}</span>
+                <span class="sep">/</span>
                 <span>{{ formatSize(disk.total) }}</span>
               </div>
             </div>
@@ -125,7 +140,7 @@
         <!-- 总容量 -->
         <div class="fm-sidebar-foot">
           <div class="fm-foot-label">{{ t('filemanager.sidebar.allDisks') }}</div>
-          <div class="fm-foot-total">{{ formatSize(totalUsed) }} <span class="sub">/ {{ formatSize(totalCapacity) }}</span></div>
+          <div class="fm-foot-total">{{ formatSize(totalAvailable) }} <span class="sub">/ {{ formatSize(totalCapacity) }}</span></div>
           <div class="fm-foot-bar">
             <i :class="{ danger: totalPercent >= 75 }" :style="{ width: totalPercent + '%' }"></i>
           </div>
@@ -140,8 +155,8 @@
         </div>
 
         <template v-else>
-          <!-- 列头 -->
-          <div class="fm-files-header">
+          <!-- 列头（仅文件名模式和浏览模式显示） -->
+          <div v-if="!(searchMode === 'content' && searchActive)" class="fm-files-header">
             <div class="fm-col" :class="{ sorted: sortKey === 'name', [sortDir]: sortKey === 'name' }" @click="setSort('name')">
               {{ t('filemanager.col.name') }}<span class="fm-sort-arrow"></span>
             </div>
@@ -156,8 +171,41 @@
             </div>
           </div>
 
-          <!-- 文件列表 -->
-          <div class="fm-files-list" @contextmenu="onBlankContext" @click="onBlankClick">
+          <!-- 内容搜索结果视图 -->
+          <div v-if="searchMode === 'content' && searchActive" class="fm-content-list">
+            <!-- 加载中（首次加载） -->
+            <div v-if="contentLoading && contentResults.length === 0" class="fm-content-loading">
+              <svg class="fm-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              <span>{{ t('filemanager.search.searchingContent') }}</span>
+            </div>
+
+            <!-- 搜索结果 -->
+            <div v-for="result in contentResults" :key="result.path" class="fm-content-file">
+              <!-- 文件名行 -->
+              <div class="fm-content-filename" @dblclick="openContentFile(result.path)">
+                <svg class="fm-content-file-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span class="fm-content-name">{{ result.name }}</span>
+                <span class="fm-content-path">{{ result.path }}</span>
+                <span class="fm-content-count">{{ result.matchCount }} {{ t('filemanager.search.matches') }}<template v-if="result.hasMoreMatches">{{ t('filemanager.search.matchesTruncated') }}</template></span>
+              </div>
+              <!-- 匹配行 -->
+              <div v-for="m in result.matches" :key="m.lineNumber" class="fm-content-match">
+                <span class="fm-line-num">{{ m.lineNumber }}</span>
+                <span class="fm-line-text"><span>{{ splitMatchLine(m.lineText, m.matchStart, m.matchEnd).before }}</span><mark class="fm-hl">{{ splitMatchLine(m.lineText, m.matchStart, m.matchEnd).match }}</mark><span>{{ splitMatchLine(m.lineText, m.matchStart, m.matchEnd).after }}</span></span>
+              </div>
+            </div>
+
+            <div v-if="contentLimited" class="fm-search-limit">{{ t('filemanager.search.limitReached') }}</div>
+
+            <!-- 空结果 -->
+            <div v-if="!contentLoading && contentResults.length === 0 && searchQuery.trim()" class="fm-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+              <div class="fm-empty-title">{{ t('filemanager.search.noContentResults') }}</div>
+            </div>
+          </div>
+
+          <!-- 文件列表（浏览模式 / 文件名搜索模式） -->
+          <div v-else class="fm-files-list" @contextmenu="onBlankContext" @click="onBlankClick">
             <!-- 内联新建行 -->
             <div v-if="creating.active" class="fm-frow fm-creating-row">
               <div class="fm-cell fm-cell-name">
@@ -211,15 +259,20 @@
                   @dblclick.stop
                   v-focus
                 />
-                <span v-else class="fm-cell-name-text">{{ entry.name }}</span>
+                <div v-else class="fm-cell-name-copy">
+                  <span class="fm-cell-name-text">{{ entry.name }}</span>
+                  <span v-if="searchMode === 'filename' && searchActive" class="fm-cell-path" :title="entry.path">{{ entry.path }}</span>
+                </div>
               </div>
               <div class="fm-cell fm-cell-date">{{ formatTime(entry.modified) }}</div>
               <div class="fm-cell fm-cell-type">{{ fileTypeLabel(entry) }}</div>
-              <div class="fm-cell fm-cell-size">{{ entry.is_dir ? '' : formatSize(entry.size) }}</div>
+              <div class="fm-cell fm-cell-size" :class="{ 'is-calculating': isSizeCalculating(entry) }">{{ folderSizeLabel(entry) }}</div>
             </div>
 
+            <div v-if="searchLimited" class="fm-search-limit">{{ t('filemanager.search.limitReached') }}</div>
+
             <!-- 空状态 -->
-            <div v-if="displayEntries.length === 0 && !creating.active" class="fm-empty">
+            <div v-if="displayEntries.length === 0 && !creating.active && !searchLoading" class="fm-empty">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
               <div class="fm-empty-title">{{ searchQuery ? t('filemanager.empty.search') : t('filemanager.empty.title') }}</div>
             </div>
@@ -250,7 +303,7 @@
         </template>
       </template>
       <span class="fm-st-spacer"></span>
-      <span v-if="currentDisk" class="mono">{{ currentDisk.name }} · {{ formatSize(currentDisk.used) }}/{{ formatSize(currentDisk.total) }}</span>
+      <span v-if="currentDisk" class="mono">{{ currentDisk.name }} · {{ t('filemanager.disk.free') }} {{ formatSize(currentDisk.available) }}/{{ formatSize(currentDisk.total) }}</span>
     </footer>
 
     <!-- ═══ 索引进度芯片（右上角浮动） ═══ -->
@@ -272,7 +325,7 @@
       @click.stop
     >
       <template v-if="!contextMenu.isBlank">
-        <button class="fm-ctx" @click="contextMenu.targetPath && navigateTo(contextMenu.targetPath); closeContextMenu()">{{ t('filemanager.ctx.open') }}</button>
+        <button class="fm-ctx" @click="onContextOpen(); closeContextMenu()">{{ t('filemanager.ctx.open') }}</button>
         <button class="fm-ctx" @click="openWithSystem(); closeContextMenu()">{{ t('filemanager.ctx.openWith') }}</button>
         <button class="fm-ctx" @click="revealInFM(); closeContextMenu()">{{ t('filemanager.ctx.reveal') }}</button>
         <div class="fm-ctx-sep"></div>

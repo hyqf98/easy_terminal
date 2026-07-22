@@ -18,29 +18,38 @@
   box-shadow: var(--shadow-focus);
 }
 
-/* 文件面板展开时：统一外框由父级 .terminal-unified-window 绘制 */
-.terminal-window.has-file-panel {
+/* 任一侧栏展开后，统一外框与标题栏由父级窗口组绘制。 */
+.terminal-window.has-side-panel {
+  background: var(--term-bg);
   border-color: transparent;
-  border-left: none;
-  border-radius: 0 0 8px 0;
+  border-radius: 0;
   box-shadow: none;
 }
 
-.terminal-window.has-file-panel .title-bar {
+.terminal-window.has-side-panel .title-bar {
   display: none;
 }
+
+.terminal-window .terminal-performance-tab { position:absolute; right:0; left:auto; bottom:auto; top:50%; transform:translateY(-50%); width:8px; height:36px; border:none; border-radius:6px 0 0 6px; background:var(--craft-surface-muted, var(--surface-muted)); color:var(--text-sub); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0; overflow:hidden; z-index:25; transition:width 200ms cubic-bezier(0.22, 1, 0.36, 1), background 160ms ease, color 160ms ease; }
+.terminal-window .terminal-performance-tab svg { width:0; height:12px; flex-shrink:0; opacity:0; transition:width 200ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms ease 60ms; }
+.terminal-window .terminal-performance-tab:hover { width:20px; color:var(--accent); background:color-mix(in srgb,var(--accent) 14%,var(--craft-surface-muted,var(--surface-muted))); }
+.terminal-window .terminal-performance-tab:hover svg { width:12px; opacity:1; }
+.terminal-window .terminal-performance-tab.expanded { width:20px; color:var(--text-sub); background:var(--craft-surface-muted, var(--surface-muted)); }
+.terminal-window .terminal-performance-tab.expanded svg { width:12px; opacity:1; }
+.terminal-window .terminal-performance-tab.expanded:hover { color:var(--accent); background:color-mix(in srgb,var(--accent) 14%,var(--craft-surface-muted,var(--surface-muted))); }
+.terminal-window.minimized .terminal-performance-tab { display:none; }
 
 .terminal-window:hover {
   border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
   box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-.terminal-window.has-file-panel:hover,
-.terminal-window.has-file-panel.focused,
-.terminal-window.has-file-panel.dragging,
-.terminal-window.has-file-panel.resizing,
-.terminal-window.has-file-panel.focused.dragging,
-.terminal-window.has-file-panel.focused.resizing {
+.terminal-window.has-side-panel:hover,
+.terminal-window.has-side-panel.focused,
+.terminal-window.has-side-panel.dragging,
+.terminal-window.has-side-panel.resizing,
+.terminal-window.has-side-panel.focused.dragging,
+.terminal-window.has-side-panel.focused.resizing {
   border-color: transparent;
   box-shadow: none;
 }
@@ -62,10 +71,10 @@
   box-shadow: 0 6px 18px color-mix(in srgb, var(--shadow) 48%, transparent);
 }
 
-.terminal-window.has-file-panel.dragging,
-.terminal-window.has-file-panel.resizing,
-.terminal-window.has-file-panel.focused.dragging,
-.terminal-window.has-file-panel.focused.resizing {
+.terminal-window.has-side-panel.dragging,
+.terminal-window.has-side-panel.resizing,
+.terminal-window.has-side-panel.focused.dragging,
+.terminal-window.has-side-panel.focused.resizing {
   border-color: transparent;
   box-shadow: none;
 }
@@ -265,11 +274,21 @@
 }
 
 .terminal-window .terminal-body {
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   padding: 10px 12px;
   background: var(--term-bg);
   position: relative;
+}
+
+/* FitAddon 以 xterm 的直接父节点为测量对象。这个承载层的尺寸恰好等于
+   terminal-body 的内容盒，故底部 10px 留白不会被误算为可绘制行数。 */
+.terminal-window .terminal-xterm-host {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* 箭头把手：小药丸，absolute 定位在终端左边缘垂直居中 */
@@ -333,12 +352,11 @@
 
 .terminal-window.minimized .terminal-file-tab { display: none; }
 
-.terminal-window .terminal-body .xterm {
+.terminal-window .terminal-xterm-host .xterm {
   height: 100%;
-  font-size: var(--term-font-size, 13px);
 }
 
-.terminal-window .terminal-body .xterm canvas {
+.terminal-window .terminal-xterm-host .xterm canvas {
   image-rendering: optimizeQuality;
   -webkit-font-smoothing: antialiased;
 }
@@ -380,7 +398,8 @@
 .completion-popup {
   position: fixed;
   z-index: 99999;
-  background: var(--surface);
+  /* 与 xterm 内容区同色，亮色主题下不再出现突兀的纯白卡片。 */
+  background: var(--term-bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
@@ -412,40 +431,61 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.completion-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 7px;
-  background: var(--surface-muted);
-  border-bottom: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.completion-count {
-  color: var(--text-muted);
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
 .completion-list {
   position: relative;
   padding: 2px;
+  padding-right: 8px;
   max-height: var(--completion-list-max-height, 232px);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar) transparent;
+  /* 仅使用下面的自绘滑块，避免 macOS overlay scrollbar 露出白色原生滑块。 */
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
 }
 
-.completion-list::-webkit-scrollbar { width: 4px; }
-.completion-list::-webkit-scrollbar-track { background: transparent; }
-.completion-list::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 2px; }
+.completion-list::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+.completion-scrollbar-track {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  bottom: 0;
+  width: 7px;
+  z-index: 2;
+  cursor: pointer;
+  background: transparent;
+}
+
+.completion-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 3px;
+  min-height: 24px;
+  border-radius: 999px;
+  /* 与文件树 tree-scrollbar-thumb 使用同一组主题变量。 */
+  background: color-mix(in srgb, var(--scrollbar) 85%, transparent);
+  opacity: 0.72;
+  transition: width 120ms ease, opacity 120ms ease, background 120ms ease;
+  cursor: grab;
+}
+
+.completion-popup:hover .completion-scrollbar-thumb,
+.completion-scrollbar-thumb:hover,
+body.completion-scrollbar-dragging .completion-scrollbar-thumb {
+  width: 4px;
+  opacity: 1;
+  background: var(--scrollbar-hover);
+}
+
+body.completion-scrollbar-dragging {
+  user-select: none !important;
+  cursor: grabbing !important;
+}
 
 .completion-item {
   display: flex;
@@ -530,21 +570,6 @@
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
 }
 
-.completion-footer {
-  padding: 3px 7px;
-  border-top: 1px solid var(--border);
-  font-size: 10px;
-  color: var(--text-muted);
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  flex-shrink: 0;
-}
-
-.completion-source {
-  color: var(--accent);
-}
-
 .terminal-ghost-text {
   z-index: 99998;
   display: block;
@@ -556,6 +581,11 @@
   text-overflow: clip;
   pointer-events: none;
   user-select: none;
+}
+
+/* 完整替换预览覆盖用户当前输入，明确表达“当前选中的列表命令”。 */
+.terminal-ghost-text.replacement {
+  color: color-mix(in srgb, var(--text) 72%, var(--term-bg));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -576,11 +606,11 @@
   pointer-events: none;
 }
 .terminal-window:hover .resize-handle::before { opacity: 0.7; }
-.terminal-window.has-file-panel:hover .resize-handle::before { opacity: 0; }
-.terminal-window.has-file-panel .resize-handle:hover::before { opacity: 0.7; }
-.terminal-window.has-file-panel .resize-w,
-.terminal-window.has-file-panel .resize-nw,
-.terminal-window.has-file-panel .resize-sw {
+.terminal-window.has-side-panel:hover .resize-handle::before { opacity: 0; }
+.terminal-window.has-side-panel .resize-handle:hover::before { opacity: 0.7; }
+.terminal-window.has-side-panel .resize-w,
+.terminal-window.has-side-panel .resize-nw,
+.terminal-window.has-side-panel .resize-sw {
   display: none;
 }
 

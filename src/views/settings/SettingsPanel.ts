@@ -16,6 +16,7 @@ interface AppSettings {
   lastUpdateCheck: string;
   uiFontSize?: number;
   termFontSize?: number;
+  performanceRefreshSeconds?: number;
 }
 
 type SettingsSection =
@@ -78,6 +79,7 @@ export default defineComponent({
     const restoreSession = ref(true);
     const uiFontSize = ref(13);
     const termFontSize = ref(13);
+    const performanceRefreshSeconds = ref(3);
     // Shell 美化组件安装状态
     const shellStatus = ref<ShellSetupStatus | null>(null);
     const shellInstalling = ref(false);
@@ -182,6 +184,9 @@ export default defineComponent({
       { value: 15, label: '15px' },
       { value: 16, label: '16px' },
     ];
+    const performanceRefreshOptions: SelectOption[] = [
+      { value: 1, label: '1 秒' }, { value: 3, label: '3 秒（默认）' }, { value: 5, label: '5 秒' }, { value: 10, label: '10 秒' }, { value: 30, label: '30 秒' },
+    ];
     const radiusOptions: SelectOption[] = [
       { value: '0', label: '方形 (0px)' },
       { value: '8', label: '柔和 (8px)' },
@@ -229,6 +234,14 @@ export default defineComponent({
     function onTermFontSizeChange(value: string | number) {
       const size = Number(value);
       if (size) applyTermFontSize(size);
+    }
+
+    function onPerformanceRefreshChange(value: string | number) {
+      const seconds = Number(value);
+      if (![1, 3, 5, 10, 30].includes(seconds)) return;
+      performanceRefreshSeconds.value = seconds;
+      window.dispatchEvent(new CustomEvent('performance-refresh-seconds-change', { detail: seconds }));
+      void saveSettings();
     }
 
     /** 应用界面字体：设置 --font-sans CSS 变量，叠加中文字体回退链 */
@@ -345,6 +358,7 @@ export default defineComponent({
             lastUpdateCheck: updateState.value.lastChecked,
             uiFontSize: uiFontSize.value,
             termFontSize: termFontSize.value,
+            performanceRefreshSeconds: performanceRefreshSeconds.value,
           },
         });
       } catch { /* 静默 */ }
@@ -376,6 +390,7 @@ export default defineComponent({
         restoreSession.value = settings.restoreSession ?? true;
         uiFontSize.value = settings.uiFontSize ?? 13;
         termFontSize.value = settings.termFontSize ?? 13;
+        performanceRefreshSeconds.value = settings.performanceRefreshSeconds ?? 3;
         setLang(currentLang.value);
         applyCraftTheme(currentTheme.value);
         document.documentElement.style.setProperty('--font-size-md', `${uiFontSize.value}px`);
@@ -413,6 +428,7 @@ export default defineComponent({
       restoreSession,
       uiFontSize,
       termFontSize,
+      performanceRefreshSeconds, performanceRefreshOptions, onPerformanceRefreshChange,
       commandSuggest,
       ghostText,
       alignGuides,

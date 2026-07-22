@@ -5,7 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { t } from '../../i18n';
 import type { SSHProfile } from '../../types';
 import { createLocalFileStrategy, createRemoteFileStrategy } from './strategies';
-import type { IFileOperationStrategy, FileEntry } from './strategies/FileOperationStrategy';
+import type { IFileOperationStrategy, FileEntry, RemoteDirectoryCursor, RemoteDirectoryPage } from './strategies/FileOperationStrategy';
 import { showMessage } from '../../composables/useAppMessage';
 import { showConfirm } from '../../composables/useAppDialog';
 import { expandTilde, joinPath, parentOf, baseName } from '../../utils/path';
@@ -13,9 +13,13 @@ import FileModal from '../../components/modals/FileModal.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import type { SelectOption } from '../../components/AppSelect';
 import type { FileModalCreatePayload } from '../../components/modals/FileModal';
+import FileTransferModal from './FileTransferModal.vue';
+import { sshService } from '../ssh/sshService';
 
 /** 收藏夹条目：支持自定义显示名称和图标 */
 interface FavoriteItem {
+  /** 数据库记录 id（数据库持久化后回填） */
+  id?: number;
   path: string;
   name: string;
   /** 自定义图标标识（内置图标集的 key），默认 'folder' */
@@ -24,16 +28,29 @@ interface FavoriteItem {
   color?: string;
 }
 
+/** 数据库 terminal_favorites 表的记录类型（驼峰命名） */
+interface TerminalFavoriteRecord {
+  id: number;
+  sshProfileId: string;
+  path: string;
+  name: string;
+  icon: string;
+  color: string;
+  sortOrder: number;
+}
+
 interface TreeNode {
   entry: FileEntry;
   children: TreeNode[];
   loaded: boolean;
   expanded: boolean;
+  nextCursor: RemoteDirectoryCursor | null;
 }
 
 interface FlattenedNode {
   node: TreeNode;
   depth: number;
+  loadMore?: boolean;
 }
 
 interface ContextMenuState {
@@ -47,8 +64,8 @@ const MAX_FAVORITES = 20;
 
 export default defineComponent({
   name: 'FileTree',
-  components: { FileModal, Icon, Refresh, Target, AppSelect },
-  emits: ['open-terminal', 'open-preview', 'locate-cwd', 'cd-to', 'ready', 'strategy-change'],
+  components: { FileModal, FileTransferModal, Icon, Refresh, Target, AppSelect },
+  emits: ['open-terminal', 'open-current-terminal', 'open-preview', 'locate-cwd', 'ready', 'strategy-change'],
   setup(_, { emit, expose }) {
     const tree = reactive<{ roots: TreeNode[] }>({ roots: [] });
     const filterText = ref('');
@@ -57,6 +74,10 @@ export default defineComponent({
     const currentPath = ref('');
     const selectedPath = ref('');
     const favorites = ref<FavoriteItem[]>([]);
+    // 当前 SSH profile id（空字符串表示本地终端共享收藏夹）
+    let currentSshProfileId = '';
+    // localStorage 迁移标记，避免重复执行
+    let localFavoritesMigrated = false;
     // 收藏夹网格：默认显示 2 行（每行 3 个 = 6 个），展开时每次 +2 行
     const FAV_DEFAULT_ROWS = 2;
     const FAV_COLS = 3;
@@ -85,12 +106,19 @@ export default defineComponent({
     const renamingValue = ref('');
     const contextMenu = ref<ContextMenuState | null>(null);
     const sshProfiles = ref<SSHProfile[]>([]);
+    const currentRemoteProfile = ref<SSHProfile | null>(null);
+    const transferOpen = ref(false);
+    const transferMode = ref<'upload' | 'download'>('upload');
+    const transferRemotePath = ref('');
+    const externalDropActive = ref(false);
 
     // 文件策略：默认本地，支持运行时切换为远程（SSH）策略；使用 shallowRef 避免对策略实例做深度响应式代理
     const strategy = shallowRef<IFileOperationStrategy>(createLocalFileStrategy());
 
     // ===== 国际化标签 =====
     const filterPlaceholder = computed(() => t('file.filterPlaceholder'));
+    const filterScopeLabel = computed(() => t('file.filterScope'));
+    const clearSearchLabel = computed(() => t('file.clearSearch'));
     const favoritesLabel = computed(() => t('file.favorites'));
     const favoritesEmptyLabel = computed(() => t('file.favoritesEmpty'));
     const emptyLabel = computed(() => t('file.noResults'));
@@ -130,7 +158,96 @@ export default defineComponent({
     }
 
     function toTreeNode(entry: FileEntry): TreeNode {
-      return { entry, children: [], loaded: false, expanded: false };
+      return { entry, children: [], loaded: false, expanded: false, nextCursor: null };
+    }
+
+    const rootLoadMoreNode = toTreeNode({ name: '加载更多', path: '__root_load_more__', is_dir: false, size: 0, modified: 0, icon: 'more' });
+    let rootNextCursor: RemoteDirectoryCursor | null = null;
+    // Search results are deliberately separate from the tree. This keeps a
+    // current-directory name search from collapsing or mutating expanded nodes.
+    const currentPathSearchRoots = ref<TreeNode[] | null>(null);
+    let currentPathSearchNextCursor: RemoteDirectoryCursor | null = null;
+    let fileNameSearchTimer: number | null = null;
+    let treeRequestVersion = 0;
+    let disposed = false;
+
+    function startTreeRequest(): number {
+      treeRequestVersion += 1;
+      return treeRequestVersion;
+    }
+
+    function isCurrentTreeRequest(version: number): boolean {
+      return !disposed && version === treeRequestVersion;
+    }
+
+    async function readDirectory(
+      path: string,
+      cursor: RemoteDirectoryCursor | null,
+      version: number,
+      nameFilter = '',
+    ): Promise<RemoteDirectoryPage | null> {
+      // Do not detach a strategy method: RemoteFileStrategy relies on `this`
+      // for its SSH profile and profile collection.
+      const activeStrategy = strategy.value;
+      const page = activeStrategy.readDirPage
+        ? await activeStrategy.readDirPage(path, cursor, nameFilter)
+        : { entries: await activeStrategy.readDir(path), nextCursor: null };
+      if (!isCurrentTreeRequest(version)) return null;
+      if (activeStrategy.readDirPage || !nameFilter) return page;
+      const normalizedFilter = nameFilter.toLocaleLowerCase();
+      return {
+        ...page,
+        entries: page.entries.filter((entry) => entry.name.toLocaleLowerCase().includes(normalizedFilter)),
+      };
+    }
+
+    /** Return the normalized current-directory file-name query. */
+    function currentFileNameQuery(): string {
+      return filterText.value.trim();
+    }
+
+    /** Clear only the current-directory search state without navigating away. */
+    function clearFileNameSearch() {
+      filterText.value = '';
+      currentPathSearchRoots.value = null;
+      currentPathSearchNextCursor = null;
+      if (fileNameSearchTimer !== null) {
+        window.clearTimeout(fileNameSearchTimer);
+        fileNameSearchTimer = null;
+      }
+      scheduleTreeScrollbarUpdate();
+    }
+
+    /** Discard a search when changing directory or switching file strategy. */
+    function resetFileNameSearch() {
+      clearFileNameSearch();
+    }
+
+    /**
+     * Search direct children of the current path by name.
+     * Remote strategies receive the query over SFTP so results are not limited
+     * to the entries that happened to be rendered before searching.
+     */
+    async function searchCurrentPathFileNames(query = currentFileNameQuery()) {
+      if (!query || !currentPath.value) {
+        currentPathSearchRoots.value = null;
+        currentPathSearchNextCursor = null;
+        scheduleTreeScrollbarUpdate();
+        return;
+      }
+      const version = startTreeRequest();
+      try {
+        const page = await readDirectory(currentPath.value, null, version, query);
+        if (!page || query !== currentFileNameQuery()) return;
+        currentPathSearchRoots.value = page.entries.map(toTreeNode);
+        currentPathSearchNextCursor = page.nextCursor;
+        sortNodes(currentPathSearchRoots.value);
+        scheduleTreeScrollbarUpdate();
+      } catch (err) {
+        if (query === currentFileNameQuery()) {
+          showMessage(`搜索文件失败: ${err}`, 'error');
+        }
+      }
     }
 
     function sortNodes(nodes: TreeNode[]) {
@@ -161,15 +278,22 @@ export default defineComponent({
         if (node.expanded && node.children.length) {
           flatten(node.children, depth + 1, acc);
         }
+        if (node.expanded && node.nextCursor) acc.push({ node, depth: depth + 1, loadMore: true });
       }
       return acc;
     }
 
     const visibleNodes = computed<FlattenedNode[]>(() => {
+      const query = currentFileNameQuery();
+      if (query) {
+        const matchedRoots = currentPathSearchRoots.value ?? [];
+        const matched: FlattenedNode[] = matchedRoots.map((node) => ({ node, depth: 0 }));
+        if (currentPathSearchNextCursor) matched.push({ node: rootLoadMoreNode, depth: 0, loadMore: true });
+        return matched;
+      }
       const flattened = flatten(tree.roots);
-      if (!filterText.value) return flattened;
-      const lower = filterText.value.toLowerCase();
-      return flattened.filter((item) => item.node.entry.name.toLowerCase().includes(lower));
+      if (rootNextCursor) flattened.push({ node: rootLoadMoreNode, depth: 0, loadMore: true });
+      return flattened;
     });
 
     function findNode(nodes: TreeNode[], path: string): TreeNode | null {
@@ -193,43 +317,100 @@ export default defineComponent({
     // joinPath / parentOf / baseName 已抽取到 utils/path.ts
 
     // ===== 收藏夹 =====
-    function loadFavorites() {
+
+    /** 迁移 localStorage 旧收藏夹到数据库（仅本地 ssh_profile_id='' 且首次执行） */
+    async function migrateLocalFavoritesIfNeeded() {
+      if (localFavoritesMigrated) return;
+      localFavoritesMigrated = true;
       const saved = localStorage.getItem(FAVORITES_KEY);
       if (!saved) return;
       try {
         const parsed = JSON.parse(saved) as FavoriteItem[];
-        if (Array.isArray(parsed)) favorites.value = parsed;
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+          localStorage.removeItem(FAVORITES_KEY);
+          return;
+        }
+        // 若数据库已有本地收藏夹记录，直接清理 localStorage，不重复导入
+        const existing = await invoke<TerminalFavoriteRecord[]>('list_terminal_favorites', {
+          sshProfileId: '',
+        });
+        if (existing.length > 0) {
+          localStorage.removeItem(FAVORITES_KEY);
+          return;
+        }
+        for (const item of parsed) {
+          await invoke('add_terminal_favorite', {
+            sshProfileId: '',
+            path: item.path,
+            name: item.name || '',
+            icon: item.icon || 'folder',
+            color: item.color || '#e0a030',
+          });
+        }
+        localStorage.removeItem(FAVORITES_KEY);
       } catch {
-        /* ignore */
+        // 迁移失败时保留 localStorage，下次启动可重试
+        localFavoritesMigrated = false;
       }
     }
 
-    function persistFavorites() {
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites.value));
+    async function loadFavorites() {
+      await migrateLocalFavoritesIfNeeded();
+      try {
+        const records = await invoke<TerminalFavoriteRecord[]>('list_terminal_favorites', {
+          sshProfileId: currentSshProfileId,
+        });
+        favorites.value = records.map((r) => ({
+          id: r.id,
+          path: r.path,
+          name: r.name,
+          icon: r.icon,
+          color: r.color,
+        }));
+      } catch {
+        favorites.value = [];
+      }
     }
 
     function isFavorite(path: string): boolean {
       return favorites.value.some((item) => item.path === path);
     }
 
-    function toggleFavorite(node: TreeNode) {
+    async function toggleFavorite(node: TreeNode) {
       if (!node.entry.is_dir) return;
       if (isFavorite(node.entry.path)) {
-        favorites.value = favorites.value.filter((item) => item.path !== node.entry.path);
+        await removeFavorite(node.entry.path);
       } else {
         if (favorites.value.length >= MAX_FAVORITES) {
           showMessage(t('file.favoritesFull'), 'warning');
           return;
         }
-        favorites.value.push({ path: node.entry.path, name: node.entry.name, icon: 'folder', color: '#e0a030' });
+        try {
+          await invoke('add_terminal_favorite', {
+            sshProfileId: currentSshProfileId,
+            path: node.entry.path,
+            name: node.entry.name,
+            icon: 'folder',
+            color: '#e0a030',
+          });
+          await loadFavorites();
+        } catch (err) {
+          showMessage(`添加收藏失败: ${err}`, 'error');
+        }
       }
-      persistFavorites();
       contextMenu.value = null;
     }
 
-    function removeFavorite(path: string) {
-      favorites.value = favorites.value.filter((item) => item.path !== path);
-      persistFavorites();
+    async function removeFavorite(path: string) {
+      try {
+        await invoke('remove_terminal_favorite', {
+          sshProfileId: currentSshProfileId,
+          path,
+        });
+        await loadFavorites();
+      } catch (err) {
+        showMessage(`移除收藏失败: ${err}`, 'error');
+      }
     }
 
     // ===== 收藏夹编辑：自定义名称 + 图标 =====
@@ -269,13 +450,20 @@ export default defineComponent({
     }
 
     /** 保存收藏夹编辑 */
-    function saveFavEdit() {
+    async function saveFavEdit() {
       const target = favorites.value.find((f) => f.path === favEditPath.value);
-      if (target) {
-        target.name = favEditName.value.trim() || target.name;
-        target.icon = favEditIcon.value;
-        target.color = favIconColor(favEditIcon.value);
-        persistFavorites();
+      if (target && target.id != null) {
+        try {
+          await invoke('update_terminal_favorite', {
+            id: target.id,
+            name: favEditName.value.trim() || target.name,
+            icon: favEditIcon.value,
+            color: favIconColor(favEditIcon.value),
+          });
+          await loadFavorites();
+        } catch (err) {
+          showMessage(`更新收藏失败: ${err}`, 'error');
+        }
       }
       favEditOpen.value = false;
     }
@@ -383,21 +571,54 @@ export default defineComponent({
     }
 
     // ===== 目录加载 =====
-    async function loadChildren(node: TreeNode) {
-      const entries = await strategy.value.readDir(node.entry.path);
-      node.children = entries.map(toTreeNode);
+    async function loadChildren(node: TreeNode, version = startTreeRequest()) {
+      const page = await readDirectory(node.entry.path, null, version);
+      if (!page) return;
+      node.children = page.entries.map(toTreeNode);
       node.loaded = true;
       node.expanded = true;
+      node.nextCursor = page.nextCursor;
       sortNodes(node.children);
+    }
+
+    async function loadMore(node: TreeNode) {
+      const version = startTreeRequest();
+      const nameFilter = node === rootLoadMoreNode ? currentFileNameQuery() : '';
+      const cursor = node === rootLoadMoreNode
+        ? (nameFilter ? currentPathSearchNextCursor : rootNextCursor)
+        : node.nextCursor;
+      if (!cursor) return;
+      const path = node === rootLoadMoreNode ? currentPath.value : node.entry.path;
+      const page = await readDirectory(path, cursor, version, nameFilter);
+      if (!page) return;
+      if (node === rootLoadMoreNode) {
+        if (nameFilter && currentPathSearchRoots.value) {
+          currentPathSearchRoots.value.push(...page.entries.map(toTreeNode));
+          currentPathSearchNextCursor = page.nextCursor;
+          sortNodes(currentPathSearchRoots.value);
+        } else {
+          tree.roots.push(...page.entries.map(toTreeNode));
+          rootNextCursor = page.nextCursor;
+          sortNodes(tree.roots);
+        }
+      } else {
+        node.children.push(...page.entries.map(toTreeNode));
+        node.nextCursor = page.nextCursor;
+        sortNodes(node.children);
+      }
+      scheduleTreeScrollbarUpdate();
     }
 
     // 初始化文件树：Windows 多盘符环境下以每个盘符作为根节点，其余平台沿用家目录
     async function init() {
+      resetFileNameSearch();
+      const version = startTreeRequest();
       try {
         // 探测当前系统平台，仅在 Windows 且策略支持 listDrives 时启用多盘符
         const platform = await invoke<string>('get_os_platform');
         if (platform === 'windows' && strategy.value.listDrives) {
           const drives = await strategy.value.listDrives();
+          if (!isCurrentTreeRequest(version)) return;
           if (drives.length > 1) {
             currentPath.value = drives[0];
             tree.roots = drives.map((drive) => toTreeNode({
@@ -409,17 +630,20 @@ export default defineComponent({
               icon: 'drive',
             }));
             sortNodes(tree.roots);
-            loadFavorites();
+            await loadFavorites();
             return;
           }
         }
         // 非 Windows 或单盘符：回落到家目录
         const home = await strategy.value.getHomePath();
+        if (!isCurrentTreeRequest(version)) return;
         currentPath.value = home;
-        const entries = await strategy.value.readDir(home);
-        tree.roots = entries.map(toTreeNode);
+        const page = await readDirectory(home, null, version);
+        if (!page) return;
+        tree.roots = page.entries.map(toTreeNode);
+        rootNextCursor = page.nextCursor;
         sortNodes(tree.roots);
-        loadFavorites();
+        await loadFavorites();
         scheduleTreeScrollbarUpdate();
       } catch (err) {
         showMessage(`初始化文件树失败: ${err}`, 'error');
@@ -440,28 +664,38 @@ export default defineComponent({
 
     // 刷新当前目录树，并保留此前已展开的目录节点状态
     async function refreshTree() {
+      const activeSearchQuery = currentFileNameQuery();
+      const version = startTreeRequest();
       try {
         const expandedPaths = collectExpanded(tree.roots);
-        const entries = await strategy.value.readDir(currentPath.value);
-        tree.roots = entries.map(toTreeNode);
+        const page = await readDirectory(currentPath.value, null, version);
+        if (!page) return;
+        tree.roots = page.entries.map(toTreeNode);
+        rootNextCursor = page.nextCursor;
         sortNodes(tree.roots);
         for (const path of expandedPaths) {
+          if (!isCurrentTreeRequest(version)) return;
           const node = findNode(tree.roots, path);
           if (node && node.entry.is_dir && !node.loaded) {
-            await loadChildren(node);
+            await loadChildren(node, version);
           }
         }
         scheduleTreeScrollbarUpdate();
+        if (activeSearchQuery) void searchCurrentPathFileNames(activeSearchQuery);
       } catch (err) {
         showMessage(`刷新失败: ${err}`, 'error');
       }
     }
 
     async function navigateTo(path: string) {
+      resetFileNameSearch();
+      const version = startTreeRequest();
       try {
         currentPath.value = path;
-        const entries = await strategy.value.readDir(path);
-        tree.roots = entries.map(toTreeNode);
+        const page = await readDirectory(path, null, version);
+        if (!page) return;
+        tree.roots = page.entries.map(toTreeNode);
+        rootNextCursor = page.nextCursor;
         sortNodes(tree.roots);
         selectedPath.value = '';
         scheduleTreeScrollbarUpdate();
@@ -481,7 +715,16 @@ export default defineComponent({
           showMessage(`加载目录失败: ${err}`, 'error');
         }
       } else {
-        node.expanded = !node.expanded;
+        if (node.expanded && strategy.value.readDirPage) {
+          // Remote children are intentionally released on collapse so deep
+          // browsing cannot retain an unbounded tree in the renderer.
+          node.children = [];
+          node.loaded = false;
+          node.nextCursor = null;
+          node.expanded = false;
+        } else {
+          node.expanded = !node.expanded;
+        }
         scheduleTreeScrollbarUpdate();
       }
     }
@@ -489,11 +732,17 @@ export default defineComponent({
     async function onNodeClick(node: TreeNode) {
       selectedPath.value = node.entry.path;
       if (node.entry.is_dir) {
+        if (currentFileNameQuery()) {
+          clearFileNameSearch();
+          await navigateTo(node.entry.path);
+          return;
+        }
         await toggleNode(node);
-      } else {
-        // 点击文件：通过 open-preview 事件弹出独立 PreviewPanel 预览
-        emit('open-preview', node.entry.path);
       }
+    }
+
+    function onNodeDblClick(node: TreeNode) {
+      if (!node.entry.is_dir) emit('open-preview', node.entry.path);
     }
 
     function onNodeContext(event: MouseEvent, node: TreeNode) {
@@ -501,6 +750,55 @@ export default defineComponent({
       event.stopPropagation();
       selectedPath.value = node.entry.path;
       contextMenu.value = { x: event.clientX, y: event.clientY, node };
+    }
+
+    function isRemoteTree(): boolean {
+      return currentRemoteProfile.value !== null;
+    }
+
+    function openTransfer(mode: 'upload' | 'download', node?: TreeNode) {
+      if (!currentRemoteProfile.value) return;
+      transferMode.value = mode;
+      transferRemotePath.value = node
+        ? (node.entry.is_dir ? node.entry.path : parentOf(node.entry.path))
+        : currentPath.value;
+      transferOpen.value = true;
+      contextMenu.value = null;
+    }
+
+    /** Desktop-file drops are accepted only while a remote SSH tree is active. */
+    function onExternalDragOver(event: DragEvent) {
+      if (!isRemoteTree() || !event.dataTransfer?.types.includes('Files')) return;
+      event.preventDefault();
+      externalDropActive.value = true;
+      event.dataTransfer.dropEffect = 'copy';
+    }
+
+    function onExternalDragLeave(event: DragEvent) {
+      const related = event.relatedTarget;
+      if (related instanceof Node && event.currentTarget instanceof Node && event.currentTarget.contains(related)) return;
+      externalDropActive.value = false;
+    }
+
+    async function onExternalDrop(event: DragEvent, target?: TreeNode) {
+      externalDropActive.value = false;
+      if (!isRemoteTree() || !event.dataTransfer?.files.length || !currentRemoteProfile.value) return;
+      event.preventDefault();
+      const paths = Array.from(event.dataTransfer.files)
+        .map((file) => (file as File & { path?: string }).path || '')
+        .filter(Boolean);
+      if (!paths.length) {
+        showMessage('无法读取拖放文件路径，请使用“上传到此目录”。', 'warning');
+        return;
+      }
+      const remoteDir = target ? (target.entry.is_dir ? target.entry.path : parentOf(target.entry.path)) : currentPath.value;
+      try {
+        await sshService.uploadLocalEntries(currentRemoteProfile.value, paths, remoteDir, sshProfiles.value);
+        showMessage(`已上传 ${paths.length} 项`, 'success');
+        await refreshTree();
+      } catch (err) {
+        showMessage(`上传失败: ${err}`, 'error');
+      }
     }
 
     // ===== 新建 =====
@@ -592,15 +890,16 @@ export default defineComponent({
       }
     }
 
-    // ===== 在终端中打开 =====
+    // ===== 新开终端 =====
     function openTerminalHere(node: TreeNode) {
       if (node.entry.is_dir) emit('open-terminal', node.entry.path);
       contextMenu.value = null;
     }
 
-    // 在当前激活终端执行 cd 到该目录（不新建终端）
-    function onCdToTerminal(node: TreeNode) {
-      emit('cd-to', node.entry.path);
+    /** Reuse the terminal paired with this file panel instead of creating one. */
+    function openInCurrentTerminal(node: TreeNode) {
+      const dirPath = node.entry.is_dir ? node.entry.path : parentOf(node.entry.path);
+      if (dirPath) emit('open-current-terminal', dirPath);
       contextMenu.value = null;
     }
 
@@ -615,11 +914,15 @@ export default defineComponent({
     function onDragOver(event: DragEvent, node: TreeNode) {
       if (!node.entry.is_dir) return;
       event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      if (event.dataTransfer) event.dataTransfer.dropEffect = event.dataTransfer.types.includes('Files') ? 'copy' : 'move';
     }
 
     async function onDrop(event: DragEvent, node: TreeNode) {
       event.preventDefault();
+      if (event.dataTransfer?.types.includes('Files')) {
+        await onExternalDrop(event, node);
+        return;
+      }
       const sourcePath = event.dataTransfer?.getData('text/plain');
       if (!sourcePath || sourcePath === node.entry.path || !node.entry.is_dir) return;
       try {
@@ -664,6 +967,9 @@ export default defineComponent({
     });
 
     onBeforeUnmount(() => {
+      disposed = true;
+      startTreeRequest();
+      if (fileNameSearchTimer !== null) window.clearTimeout(fileNameSearchTimer);
       document.removeEventListener('click', onGlobalClick);
       document.removeEventListener('keydown', onKeydown, true);
       window.removeEventListener('resize', updateTreeScrollbar);
@@ -673,6 +979,20 @@ export default defineComponent({
     });
 
     watch(visibleNodes, scheduleTreeScrollbarUpdate, { flush: 'post' });
+    watch(filterText, () => {
+      if (fileNameSearchTimer !== null) window.clearTimeout(fileNameSearchTimer);
+      const query = currentFileNameQuery();
+      if (!query) {
+        currentPathSearchRoots.value = null;
+        currentPathSearchNextCursor = null;
+        scheduleTreeScrollbarUpdate();
+        return;
+      }
+      fileNameSearchTimer = window.setTimeout(() => {
+        fileNameSearchTimer = null;
+        void searchCurrentPathFileNames(query);
+      }, 160);
+    });
 
     // ===== 列宽缩放（localStorage 持久化） =====
     const PANEL_WIDTH_KEY = 'easy_terminal_filetree_width';
@@ -724,6 +1044,9 @@ export default defineComponent({
         const home = await invoke<string>('get_remote_home', { profile, profiles });
         const remoteStrategy = createRemoteFileStrategy(profile.id, home, profile, profiles);
         strategy.value = remoteStrategy;
+        currentRemoteProfile.value = profile;
+        // 绑定 SSH profile id，使收藏夹按远程主机隔离
+        currentSshProfileId = profile.id;
         // 通知父组件当前策略已变更为远程，使 PreviewPanel 能预览远程文件
         emit('strategy-change', remoteStrategy);
         await init();
@@ -737,21 +1060,34 @@ export default defineComponent({
     async function switchToLocal() {
       const localStrategy = createLocalFileStrategy();
       strategy.value = localStrategy;
+      currentRemoteProfile.value = null;
+      // 本地终端共享一套收藏夹（ssh_profile_id 为空）
+      currentSshProfileId = '';
       // 通知父组件策略已变更为本地
       emit('strategy-change', localStrategy);
       await init();
     }
 
+    /** Resolve `~` against the active remote account, never against this computer. */
+    async function resolveTerminalPath(cwd: string): Promise<string> {
+      if (!currentRemoteProfile.value) return expandTilde(cwd);
+      const remoteHome = await strategy.value.getHomePath();
+      const value = cwd.trim();
+      if (value === '~') return remoteHome;
+      if (value.startsWith('~/')) return joinPath(remoteHome, value.slice(2));
+      return value;
+    }
+
     // 定位到指定工作目录（用于「定位当前终端目录」按钮）
     async function locateToCwd(cwd: string) {
       if (!cwd) return;
-      const expanded = await expandTilde(cwd);
+      const expanded = await resolveTerminalPath(cwd);
       void navigateTo(expanded);
     }
 
     async function syncToTerminal(context: { cwd: string }) {
       if (!context.cwd || context.cwd === currentPath.value) return;
-      const expanded = await expandTilde(context.cwd);
+      const expanded = await resolveTerminalPath(context.cwd);
       if (expanded !== currentPath.value) {
         void navigateTo(expanded);
       }
@@ -765,9 +1101,10 @@ export default defineComponent({
       favorites, showFavorites, treeListRef,
       showCustomTreeScrollbar, treeScrollbarTop, treeScrollbarHeight,
       fileModalOpen, fileModalParent, fileModalMode,
-      renamingPath, renamingValue, contextMenu,
+      renamingPath, renamingValue, contextMenu, currentRemoteProfile,
+      externalDropActive, transferOpen, transferMode, transferRemotePath, sshProfiles,
       // 计算属性
-      filterPlaceholder, favoritesLabel, favoritesEmptyLabel, emptyLabel,
+      filterPlaceholder, filterScopeLabel, clearSearchLabel, favoritesLabel, favoritesEmptyLabel, emptyLabel,
       sortNameLabel, sortModifiedLabel, sortSizeLabel, sortOptions, sortValue,
       newFileLabel, newFolderLabel, renameLabel, deleteLabel,
       addFavoriteLabel, removeFavoriteLabel, openInTerminalLabel,
@@ -775,6 +1112,7 @@ export default defineComponent({
       visibleNodes,
       // 方法
       formatSize, isFavorite, toggleFavorite, removeFavorite, navigateTo, iconClass,
+      clearFileNameSearch,
       // 收藏夹编辑
       FAVORITE_ICONS, favEditOpen, favEditName, favEditIcon, favIconSvg, favIconColor,
       openFavEditor, saveFavEdit, favContextMenu, onFavContext, copyFavPath,
@@ -783,11 +1121,13 @@ export default defineComponent({
       updateTreeScrollbar, onTreeScrollbarTrackMouseDown, onTreeScrollbarThumbMouseDown,
       onSortKeyChange,
       toggleSortDir,
-      onNodeClick, onNodeContext, toggleNode,
+      onNodeClick, onNodeDblClick, onNodeContext, toggleNode,
+      loadMore,
       openCreateModal, onFileModalCreate,
       startRename, commitRename, cancelRename,
-      deleteNode, copyNodePath, openTerminalHere, onCdToTerminal,
-      onDragStart, onDragOver, onDrop,
+      deleteNode, copyNodePath, openTerminalHere, openInCurrentTerminal,
+      onDragStart, onDragOver, onDrop, onExternalDragOver, onExternalDragLeave, onExternalDrop,
+      openTransfer, isRemoteTree,
       refreshTree,
       // 列宽缩放
       panelWidth, resizing, onResizerMouseDown,

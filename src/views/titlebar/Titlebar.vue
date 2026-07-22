@@ -13,15 +13,15 @@
       <span class="cmdk-kbd">⌘K</span>
     </button>
     <div class="app-titlebar-actions">
-      <button class="theme-toggle" type="button" :title="themeLabel" @click="toggleTheme">
+      <button class="theme-toggle" type="button" :data-tooltip="themeLabel" @click="toggleTheme">
         <span class="theme-track" :class="{ dark: isDark }"><span class="theme-thumb"></span></span>
         <span class="theme-label">{{ themeLabel }}</span>
       </button>
     </div>
     <div class="app-window-controls">
-      <button class="app-btn-minimize" :title="minimizeLabel" @click="$emit('minimize')"></button>
-      <button class="app-btn-maximize" :title="maximizeLabel" @click="$emit('maximize')"></button>
-      <button class="app-btn-close" :title="closeLabel" @click="$emit('close')"></button>
+      <button class="app-btn-minimize" :data-tooltip="minimizeLabel" @click="$emit('minimize')"></button>
+      <button class="app-btn-maximize" :data-tooltip="maximizeLabel" @click="$emit('maximize')"></button>
+      <button class="app-btn-close" :data-tooltip="closeLabel" @click="$emit('close')"></button>
     </div>
   </div>
 </template>

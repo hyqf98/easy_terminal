@@ -5,6 +5,8 @@ import { migrateThemeId } from '../../composables/useCraftTheme';
 interface StoredSettings {
   theme: string;
   language: string;
+  uiFontSize?: number;
+  termFontSize?: number;
 }
 
 function applyThemeAttribute(theme: string) {
@@ -18,6 +20,8 @@ export async function applyStoredAppearance() {
   try {
     const settings = await invoke<StoredSettings>('get_settings');
     applyThemeAttribute(settings.theme || 'craft-light');
+    document.documentElement.style.setProperty('--font-size-md', `${settings.uiFontSize ?? 13}px`);
+    document.documentElement.style.setProperty('--term-font-size', `${settings.termFontSize ?? 13}px`);
     if (settings.language) {
       setLang(settings.language as Lang);
     }

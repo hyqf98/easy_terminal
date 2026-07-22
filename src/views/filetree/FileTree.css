@@ -18,6 +18,26 @@
   animation: filePanelSlideIn 200ms ease both;
 }
 
+/* Native desktop files dropped over a remote tree get a clear destination cue. */
+.remote-drop-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  padding: 24px;
+  text-align: center;
+  background: color-mix(in srgb, var(--accent) 14%, rgba(8, 14, 24, .78));
+  border: 1px dashed var(--accent);
+  color: var(--text);
+  pointer-events: none;
+  animation: remoteDropIn 120ms ease-out;
+}
+.remote-drop-mask strong { font-size: 13px; }
+.remote-drop-mask span { color: var(--text-sub); font-size: 11px; }
+@keyframes remoteDropIn { from { opacity: 0; } to { opacity: 1; } }
+
 @keyframes filePanelSlideIn {
   0% { transform: translateX(-12px); opacity: 0; }
   100% { transform: translateX(0); opacity: 1; }
@@ -82,6 +102,30 @@ body.files-resizing * {
 .tree-search svg {
   width: 12px;
   height: 12px;
+}
+.tree-search:has(.tree-search-clear) input {
+  padding-right: 23px;
+}
+.tree-search-clear {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+.tree-search-clear:hover,
+.tree-search-clear:focus-visible {
+  color: var(--text);
+  background: var(--craft-surface-muted);
+  outline: 0;
 }
 /* 排序下拉：紧凑宽度，只显示字段名（方向用独立按钮） */
 .tree-sort {

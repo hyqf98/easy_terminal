@@ -153,6 +153,15 @@
           </div>
           <div class="settings-row">
             <div class="settings-row-info">
+              <div class="settings-row-label">{{ t('settings.performanceRefresh') }}</div>
+              <div class="settings-row-desc">{{ t('settings.performanceRefreshHint') }}</div>
+            </div>
+            <div class="settings-control">
+              <AppSelect :model-value="performanceRefreshSeconds" :options="performanceRefreshOptions" @update:model-value="onPerformanceRefreshChange" />
+            </div>
+          </div>
+          <div class="settings-row">
+            <div class="settings-row-info">
               <div class="settings-row-label">对齐辅助线</div>
               <div class="settings-row-desc">拖拽终端时显示吸附辅助线</div>
             </div>

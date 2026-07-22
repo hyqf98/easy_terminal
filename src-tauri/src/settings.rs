@@ -15,10 +15,16 @@ pub struct AppSettings {
     pub auto_check_update: bool,
     #[serde(default = "default_restore_session")]
     pub restore_session: bool,
+    #[serde(default = "default_font_size")]
+    pub ui_font_size: u32,
+    #[serde(default = "default_font_size")]
+    pub term_font_size: u32,
     #[serde(default)]
     pub last_update_check: String,
     #[serde(default = "default_market_repo_url")]
     pub market_repo_url: String,
+    #[serde(default = "default_performance_refresh_seconds")]
+    pub performance_refresh_seconds: u32,
 }
 
 fn default_market_repo_url() -> String {
@@ -70,6 +76,14 @@ fn default_restore_session() -> bool {
     true
 }
 
+fn default_font_size() -> u32 {
+    13
+}
+
+fn default_performance_refresh_seconds() -> u32 {
+    3
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -77,8 +91,11 @@ impl Default for AppSettings {
             language: default_language(),
             auto_check_update: default_auto_check_update(),
             restore_session: default_restore_session(),
+            ui_font_size: default_font_size(),
+            term_font_size: default_font_size(),
             last_update_check: String::new(),
             market_repo_url: default_market_repo_url(),
+            performance_refresh_seconds: default_performance_refresh_seconds(),
         }
     }
 }
@@ -353,6 +370,90 @@ fn default_ssh_port() -> u16 {
     22
 }
 
+/// VPN 隧道配置（持久化到 vpn-profiles.json）
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnProfile {
+    /// 配置唯一标识（UUID）
+    pub id: String,
+    /// 配置名称（用户可读）
+    #[serde(default)]
+    pub name: String,
+    /// 分组名称
+    #[serde(default)]
+    pub group: String,
+    /// .ovpn 配置文件路径或内联内容
+    #[serde(default)]
+    pub ovpn_config: String,
+    /// 认证模式：cert | password | static-key
+    #[serde(default = "default_vpn_auth_mode")]
+    pub auth_mode: String,
+    /// 用户名（password 模式）
+    #[serde(default)]
+    pub username: String,
+    /// 密码（password 模式）
+    #[serde(default)]
+    pub password: String,
+    /// 是否自动连接
+    #[serde(default)]
+    pub auto_connect: bool,
+    /// 服务器地址（用于 UI 展示）
+    #[serde(default)]
+    pub server_host: String,
+    /// 服务器端口
+    #[serde(default = "default_vpn_port")]
+    pub server_port: u16,
+}
+
+/// VPN 缺省认证模式：密码认证
+fn default_vpn_auth_mode() -> String {
+    "password".to_string()
+}
+
+/// VPN 缺省端口：OpenVPN 默认 1194
+fn default_vpn_port() -> u16 {
+    1194
+}
+
+/// VPN 隧道运行时状态
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnTunnelStatus {
+    /// 关联的 VPN 配置 ID
+    pub profile_id: String,
+    /// 隧道状态：disconnected | connecting | connected | error | reconnecting
+    #[serde(default)]
+    pub state: String,
+    /// 分配的虚拟 IP 地址
+    #[serde(default)]
+    pub ip: String,
+    /// 接收字节数
+    #[serde(default)]
+    pub bytes_in: u64,
+    /// 发送字节数
+    #[serde(default)]
+    pub bytes_out: u64,
+    /// 连接建立时间（ISO 8601 字符串）
+    #[serde(default)]
+    pub connected_at: String,
+    /// 错误信息（state=error 时有值）
+    #[serde(default)]
+    pub error_message: String,
+}
+
+/// VPN 连接测试结果
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct VpnTestResult {
+    /// 测试是否通过
+    pub success: bool,
+    /// 结果说明信息
+    pub message: String,
+    /// 延迟（毫秒），失败时为 None
+    #[serde(default)]
+    pub latency_ms: Option<u64>,
+}
+
 fn history_path() -> Result<PathBuf, String> {
     Ok(app_state_dir()?.join("command-history.json"))
 }
@@ -363,6 +464,10 @@ fn mappings_path() -> Result<PathBuf, String> {
 
 fn ssh_profiles_path() -> Result<PathBuf, String> {
     Ok(app_state_dir()?.join("ssh-profiles.json"))
+}
+
+fn vpn_profiles_path() -> Result<PathBuf, String> {
+    Ok(app_state_dir()?.join("vpn-profiles.json"))
 }
 
 fn shortcuts_path() -> Result<PathBuf, String> {
@@ -530,6 +635,25 @@ pub fn save_ssh_profiles(entries: Vec<SSHProfile>) -> Result<(), String> {
     fs::write(&path, data).map_err(|e| e.to_string())
 }
 
+/// 从 vpn-profiles.json 加载 VPN 配置列表。
+///
+/// 文件不存在时返回空列表（首次启动或尚未创建配置的合法场景）。
+pub fn load_vpn_profiles() -> Result<Vec<VpnProfile>, String> {
+    let path = vpn_profiles_path()?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let data = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    serde_json::from_str(&data).map_err(|e| e.to_string())
+}
+
+/// 将 VPN 配置列表持久化到 vpn-profiles.json。
+pub fn save_vpn_profiles(entries: Vec<VpnProfile>) -> Result<(), String> {
+    let path = vpn_profiles_path()?;
+    let data = serde_json::to_string_pretty(&entries).map_err(|e| e.to_string())?;
+    fs::write(&path, data).map_err(|e| e.to_string())
+}
+
 pub fn load_shortcuts() -> Result<Vec<ShortcutBinding>, String> {
     let path = shortcuts_path()?;
     if !path.exists() {
@@ -544,13 +668,31 @@ pub fn load_shortcuts() -> Result<Vec<ShortcutBinding>, String> {
         .map(|binding| (binding.id.clone(), binding))
         .collect();
 
-    for binding in stored {
+    for mut binding in stored {
+        migrate_legacy_terminal_shortcuts(&mut binding);
         merged.insert(binding.id.clone(), binding);
     }
 
     let mut values: Vec<ShortcutBinding> = merged.into_values().collect();
     values.sort_by(|left, right| left.label.cmp(&right.label));
     Ok(values)
+}
+
+fn migrate_legacy_terminal_shortcuts(binding: &mut ShortcutBinding) {
+    let replacements = match binding.id.as_str() {
+        "terminal.duplicate" => Some(("Ctrl+D", "Ctrl+Shift+D")),
+        "terminal.paste" => Some(("Ctrl+Shift+D", "Ctrl+Alt+Shift+D")),
+        "terminal.selectLine" => Some(("Ctrl+A", "Ctrl+Shift+A")),
+        _ => None,
+    };
+    if let Some((old_default, new_default)) = replacements {
+        if binding.windows == old_default {
+            binding.windows = new_default.to_string();
+        }
+        if binding.linux == old_default {
+            binding.linux = new_default.to_string();
+        }
+    }
 }
 
 pub fn save_shortcuts(entries: Vec<ShortcutBinding>) -> Result<(), String> {
@@ -798,9 +940,9 @@ fn default_shortcuts() -> Vec<ShortcutBinding> {
             category: "terminal".to_string(),
             editable: true,
             deletable: false,
-            windows: "Ctrl+D".to_string(),
+            windows: "Ctrl+Shift+D".to_string(),
             darwin: "Cmd+D".to_string(),
-            linux: "Ctrl+D".to_string(),
+            linux: "Ctrl+Shift+D".to_string(),
         },
         ShortcutBinding {
             id: "terminal.paste".to_string(),
@@ -809,9 +951,9 @@ fn default_shortcuts() -> Vec<ShortcutBinding> {
             category: "terminal".to_string(),
             editable: true,
             deletable: false,
-            windows: "Ctrl+Shift+D".to_string(),
+            windows: "Ctrl+Alt+Shift+D".to_string(),
             darwin: "Cmd+Shift+D".to_string(),
-            linux: "Ctrl+Shift+D".to_string(),
+            linux: "Ctrl+Alt+Shift+D".to_string(),
         },
         ShortcutBinding {
             id: "terminal.copyText".to_string(),
@@ -842,9 +984,9 @@ fn default_shortcuts() -> Vec<ShortcutBinding> {
             category: "terminal".to_string(),
             editable: true,
             deletable: false,
-            windows: "Ctrl+A".to_string(),
+            windows: "Ctrl+Shift+A".to_string(),
             darwin: "Cmd+A".to_string(),
-            linux: "Ctrl+A".to_string(),
+            linux: "Ctrl+Shift+A".to_string(),
         },
         ShortcutBinding {
             id: "sidebar.files".to_string(),

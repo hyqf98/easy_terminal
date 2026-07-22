@@ -122,7 +122,9 @@ function global:prompt {
                                     if valid_up_to > 0 {
                                         // Emit the valid portion
                                         let valid_str = unsafe {
-                                            std::str::from_utf8_unchecked(&pending[start..start + valid_up_to])
+                                            std::str::from_utf8_unchecked(
+                                                &pending[start..start + valid_up_to],
+                                            )
                                         };
                                         let _ = app_handle.emit(
                                             "pty-output",
@@ -300,12 +302,14 @@ fn ensure_easy_terminal_zdotdir() -> Result<PathBuf, String> {
     ));
 
     // OSC 0 标题序列：设置终端标题为当前目录
-    content.push_str(r#"autoload -Uz add-zsh-hook >/dev/null 2>&1 || true
+    content.push_str(
+        r#"autoload -Uz add-zsh-hook >/dev/null 2>&1 || true
 if typeset -f add-zsh-hook >/dev/null 2>&1; then
   _easy_terminal_precmd() { print -Pn "\e]0;%~\a" }
   add-zsh-hook precmd _easy_terminal_precmd
 fi
-"#);
+"#,
+    );
 
     fs::write(zshrc, content).map_err(|e| e.to_string())?;
     Ok(dir)

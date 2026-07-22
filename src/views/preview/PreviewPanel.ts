@@ -1,11 +1,12 @@
-import { defineComponent, ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
+import { defineComponent, ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue';
 import type { PropType } from 'vue';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { Icon } from '@vicons/utils';
-import { X, Edit, DeviceFloppy } from '@vicons/tabler';
+import { X, Edit, DeviceFloppy, Search, ChevronUp, ChevronDown } from '@vicons/tabler';
 import videojs from 'video.js';
 import 'video.js/dist/video-js.css';
 import { marked } from 'marked';
+import Mark from 'mark.js';
 import { t } from '../../i18n';
 import { showMessage } from '../../composables/useAppMessage';
 import { EditorState } from '@codemirror/state';
@@ -13,7 +14,7 @@ import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } f
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, foldKeymap, indentOnInput } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap, autocompletion, completionKeymap } from '@codemirror/autocomplete';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { SearchQuery, findNext, findPrevious, search, searchKeymap, setSearchQuery, highlightSelectionMatches } from '@codemirror/search';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { css } from '@codemirror/lang-css';
@@ -29,19 +30,11 @@ import { php } from '@codemirror/lang-php';
 import { oneDark } from '@codemirror/theme-one-dark';
 import type { Extension } from '@codemirror/state';
 import type { IFileOperationStrategy } from '../filetree/strategies/FileOperationStrategy';
+import type { FilePreviewData, PrefetchedFilePreview } from '../../types';
 
 // 可识别的文件类型分类
 type PreviewKind = 'markdown' | 'image' | 'video' | 'code' | 'binary';
 type PanelStyle = Record<string, string>;
-
-// 预览数据（来自后端 read_file_preview）
-interface FilePreviewData {
-  path: string;
-  language: string;
-  content: string;
-  truncated: boolean;
-  size: number;
-}
 
 // 大纲条目：从 Markdown 原文中提取的标题
 interface MarkdownHeading {
@@ -86,13 +79,14 @@ function detectVideoMime(path: string): string {
 
 export default defineComponent({
   name: 'PreviewPanel',
-  components: { Icon, X, Edit, DeviceFloppy },
+  components: { Icon, X, Edit, DeviceFloppy, Search, ChevronUp, ChevronDown },
   props: {
     filePath: { type: String, default: '' },
     // 文件操作策略：非空时走远程（SSH）策略读取/写入，跳过本地 invoke 与 convertFileSrc
     strategy: { type: Object as PropType<IFileOperationStrategy | null>, default: null },
+    prefetched: { type: Object as PropType<PrefetchedFilePreview | null>, default: null },
   },
-  emits: ['close'],
+  emits: ['close', 'width-change'],
   setup(props, { emit }) {
     const kind = ref<PreviewKind>('code');
     const rawContent = ref('');
@@ -110,6 +104,9 @@ export default defineComponent({
     })());
     const panelStyle = computed<PanelStyle>(() => ({ width: `${panelWidth.value}px` }));
 
+    // 宽度变化时通知父组件，让 #stage 的 CSS 变量 --preview-w 同步更新
+    watch(panelWidth, (w) => emit('width-change', w), { immediate: true });
+
     // Markdown 预览/源码切换
     const mdMode = ref<'preview' | 'source'>('preview');
     // 图片点击放大
@@ -118,7 +115,160 @@ export default defineComponent({
     const editMode = ref(false);
     const editorHostRef = ref<HTMLDivElement | null>(null);
     let editorView: EditorView | null = null;
+    // 只读代码预览编辑器（预览模式下的语法高亮 + 折叠）
+    let readOnlyEditorView: EditorView | null = null;
+    const readOnlyEditorHostRef = ref<HTMLDivElement | null>(null);
     const saving = ref(false);
+
+    // 统一内容搜索：CodeMirror 负责源码/代码，Mark.js 负责 Markdown 渲染内容。
+    const searchOpen = ref(false);
+    const searchQuery = ref('');
+    const searchCurrent = ref(0);
+    const searchTotal = ref(0);
+    const searchInputRef = ref<HTMLInputElement | null>(null);
+    const markdownPreviewRef = ref<HTMLElement | null>(null);
+    const markdownSourceRef = ref<HTMLElement | null>(null);
+    let domSearchMatches: HTMLElement[] = [];
+    let editorSearchMatches: Array<{ from: number; to: number }> = [];
+    let searchRunId = 0;
+
+    const canSearch = computed(() => kind.value === 'code' || kind.value === 'markdown');
+    const searchPlaceholder = computed(() => t('file.searchPlaceholder'));
+    const searchResultLabel = computed(() => searchQuery.value ? `${searchCurrent.value} / ${searchTotal.value}` : '');
+
+    function activeSearchEditor(): EditorView | null {
+      if (editMode.value) return editorView;
+      if (kind.value === 'code') return readOnlyEditorView;
+      return null;
+    }
+
+    function activeDomSearchRoot(): HTMLElement | null {
+      if (kind.value !== 'markdown' || editMode.value) return null;
+      return mdMode.value === 'preview' ? markdownPreviewRef.value : markdownSourceRef.value;
+    }
+
+    function setActiveDomMatch(index: number) {
+      domSearchMatches.forEach((element) => element.classList.remove('current'));
+      if (!domSearchMatches.length) {
+        searchCurrent.value = 0;
+        return;
+      }
+      const normalized = (index + domSearchMatches.length) % domSearchMatches.length;
+      const current = domSearchMatches[normalized];
+      current.classList.add('current');
+      current.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      searchCurrent.value = normalized + 1;
+    }
+
+    function clearDomSearch(root: HTMLElement | null): Promise<void> {
+      domSearchMatches = [];
+      if (!root) return Promise.resolve();
+      return new Promise((resolve) => new Mark(root).unmark({ done: () => resolve() }));
+    }
+
+    function clearEditorSearch(view: EditorView | null) {
+      if (!view) return;
+      view.dispatch({ effects: setSearchQuery.of(new SearchQuery({ search: '' })) });
+    }
+
+    async function refreshSearch() {
+      const runId = ++searchRunId;
+      await nextTick();
+      const query = searchQuery.value.trim();
+      const editor = activeSearchEditor();
+      const domRoot = activeDomSearchRoot();
+
+      if (editorView !== editor) clearEditorSearch(editorView);
+      if (readOnlyEditorView !== editor) clearEditorSearch(readOnlyEditorView);
+      await clearDomSearch(markdownPreviewRef.value);
+      await clearDomSearch(markdownSourceRef.value);
+      if (runId !== searchRunId) return;
+
+      searchCurrent.value = 0;
+      searchTotal.value = 0;
+      editorSearchMatches = [];
+      if (!query || !searchOpen.value) {
+        clearEditorSearch(editor);
+        return;
+      }
+
+      if (editor) {
+        const cmQuery = new SearchQuery({ search: query, caseSensitive: false, literal: true });
+        editor.dispatch({
+          effects: setSearchQuery.of(cmQuery),
+          selection: { anchor: 0 },
+        });
+        const cursor = cmQuery.getCursor(editor.state);
+        for (let result = cursor.next(); !result.done; result = cursor.next()) {
+          editorSearchMatches.push(result.value);
+        }
+        searchTotal.value = editorSearchMatches.length;
+        if (editorSearchMatches.length) {
+          findNext(editor);
+          searchCurrent.value = 1;
+        }
+        return;
+      }
+
+      if (domRoot) {
+        await new Promise<void>((resolve) => {
+          new Mark(domRoot).mark(query, {
+            className: 'preview-search-mark',
+            separateWordSearch: false,
+            caseSensitive: false,
+            acrossElements: true,
+            each: (element) => domSearchMatches.push(element as HTMLElement),
+            done: () => resolve(),
+          });
+        });
+        if (runId !== searchRunId) return;
+        searchTotal.value = domSearchMatches.length;
+        if (domSearchMatches.length) setActiveDomMatch(0);
+      }
+    }
+
+    function syncEditorSearchCurrent(view: EditorView) {
+      const selection = view.state.selection.main;
+      const index = editorSearchMatches.findIndex((match) => match.from === selection.from && match.to === selection.to);
+      if (index >= 0) searchCurrent.value = index + 1;
+    }
+
+    function goToSearchMatch(direction: 1 | -1) {
+      if (!searchQuery.value.trim()) return;
+      const editor = activeSearchEditor();
+      if (editor) {
+        (direction === 1 ? findNext : findPrevious)(editor);
+        syncEditorSearchCurrent(editor);
+        return;
+      }
+      if (domSearchMatches.length) setActiveDomMatch(searchCurrent.value - 1 + direction);
+    }
+
+    function openSearch() {
+      if (!canSearch.value) return;
+      searchOpen.value = true;
+      void nextTick(() => searchInputRef.value?.focus());
+    }
+
+    function closeSearch() {
+      searchOpen.value = false;
+      searchQuery.value = '';
+      searchCurrent.value = 0;
+      searchTotal.value = 0;
+      searchRunId += 1;
+      clearEditorSearch(editorView);
+      clearEditorSearch(readOnlyEditorView);
+      void clearDomSearch(markdownPreviewRef.value);
+      void clearDomSearch(markdownSourceRef.value);
+    }
+
+    function onGlobalSearchKeydown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f' && canSearch.value) {
+        event.preventDefault();
+        event.stopPropagation();
+        openSearch();
+      }
+    }
 
     /** 根据语言名获取 CodeMirror 语法扩展 */
     function getLangExtensions(lang: string): Extension[] {
@@ -159,6 +309,7 @@ export default defineComponent({
         indentOnInput(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         highlightSelectionMatches(),
+        search({ top: true }),
         ...getLangExtensions(language.value),
         keymap.of([
           ...defaultKeymap,
@@ -181,6 +332,40 @@ export default defineComponent({
         state: EditorState.create({ doc: rawContent.value, extensions }),
         parent: editorHostRef.value,
       });
+      if (searchOpen.value && searchQuery.value) void refreshSearch();
+    }
+
+    /** 初始化只读 CodeMirror（代码预览，支持语法高亮 + 折叠） */
+    function initReadOnlyEditor() {
+      if (readOnlyEditorView) {
+        readOnlyEditorView.destroy();
+        readOnlyEditorView = null;
+      }
+      if (!readOnlyEditorHostRef.value || kind.value !== 'code') return;
+
+      const isDark = !document.documentElement.getAttribute('data-theme')?.includes('light');
+      const fontSize = parseInt(localStorage.getItem('terminal-font-size') || '14', 10);
+      const extensions: Extension[] = [
+        ...getLangExtensions(language.value),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        bracketMatching(),
+        foldGutter(),
+        indentOnInput(),
+        EditorView.lineWrapping,
+        EditorState.readOnly.of(true),
+        search({ top: true }),
+        keymap.of([...foldKeymap]),
+        EditorView.theme({
+          '&': { fontSize: fontSize + 'px', height: '100%' },
+          '.cm-scroller': { fontFamily: 'var(--font-mono)' },
+        }, { dark: isDark }),
+      ];
+      if (isDark) extensions.push(oneDark);
+      readOnlyEditorView = new EditorView({
+        state: EditorState.create({ doc: rawContent.value, extensions }),
+        parent: readOnlyEditorHostRef.value,
+      });
+      if (searchOpen.value && searchQuery.value) void refreshSearch();
     }
 
     /** 保存编辑内容 */
@@ -244,11 +429,17 @@ export default defineComponent({
       }
     });
 
-    // 渲染后的 Markdown HTML
+    // 渲染后的 Markdown HTML（给 H1-H3 添加 data-heading-idx，与大纲 headings 数组一一对应）
     const renderedMarkdown = computed(() => {
       if (kind.value !== 'markdown') return '';
       try {
-        return marked.parse(rawContent.value) as string;
+        let html = marked.parse(rawContent.value, { async: false }) as string;
+        // 给 H1-H3 添加递增索引，与 headings computed 的顺序一致
+        let idx = 0;
+        html = html.replace(/<(h[1-3])\b/gi, (_match, tag) => {
+          return `<${tag} data-heading-idx="${idx++}"`;
+        });
+        return html;
       } catch {
         return '';
       }
@@ -266,6 +457,18 @@ export default defineComponent({
       return result;
     });
 
+    /** 点击大纲条目，平滑滚动到对应标题并临时高亮 */
+    function scrollToHeading(idx: number) {
+      const body = document.querySelector('.preview-md');
+      if (!body) return;
+      const target = body.querySelector(`[data-heading-idx="${idx}"]`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        (target as HTMLElement).style.background = 'var(--accent-soft)';
+        setTimeout(() => { (target as HTMLElement).style.background = ''; }, 1200);
+      }
+    }
+
     // 加载文件预览内容（文本类），并按类型初始化媒体 URL
     async function loadFile() {
       if (!props.filePath) return;
@@ -281,7 +484,14 @@ export default defineComponent({
 
       // Markdown / 代码 / 文本：远程走策略读取，本地走后端 invoke
       try {
-        if (props.strategy) {
+        const prefetched = props.prefetched?.path === props.filePath ? props.prefetched.data : null;
+        if (prefetched) {
+          rawContent.value = prefetched.content;
+          language.value = prefetched.language;
+          truncated.value = prefetched.truncated;
+          fileSize.value = prefetched.size;
+          mdMode.value = 'preview';
+        } else if (props.strategy) {
           // 远程文件：直接使用策略返回的预览数据
           const data = await props.strategy.readFilePreview(props.filePath);
           rawContent.value = data.content;
@@ -303,6 +513,11 @@ export default defineComponent({
         showMessage(String(err), 'error');
       } finally {
         loading.value = false;
+      }
+      // 代码/文本：初始化只读 CodeMirror（等 DOM 更新后挂载）
+      if (kind.value === 'code') {
+        await nextTick();
+        initReadOnlyEditor();
       }
     }
 
@@ -358,11 +573,17 @@ export default defineComponent({
 
     // 文件路径变化时重新加载
     watch(
-      () => props.filePath,
+      [() => props.filePath, () => props.strategy, () => props.prefetched],
       () => {
+        closeSearch();
         if (player) {
           player.dispose();
           player = null;
+        }
+        // 销毁旧的只读代码编辑器
+        if (readOnlyEditorView) {
+          readOnlyEditorView.destroy();
+          readOnlyEditorView = null;
         }
         mediaUrl.value = '';
         rawContent.value = '';
@@ -383,7 +604,17 @@ export default defineComponent({
       }
     );
 
+    watch(
+      [searchQuery, mdMode, editMode, rawContent],
+      () => { if (searchOpen.value) void refreshSearch(); },
+      { flush: 'post' }
+    );
+
+    onMounted(() => document.addEventListener('keydown', onGlobalSearchKeydown, true));
+
     onBeforeUnmount(() => {
+      document.removeEventListener('keydown', onGlobalSearchKeydown, true);
+      closeSearch();
       // 释放 video.js 播放器资源
       if (player) {
         player.dispose();
@@ -394,6 +625,11 @@ export default defineComponent({
         editorView.destroy();
         editorView = null;
       }
+      // 释放只读代码预览编辑器
+      if (readOnlyEditorView) {
+        readOnlyEditorView.destroy();
+        readOnlyEditorView = null;
+      }
     });
 
     return {
@@ -403,6 +639,7 @@ export default defineComponent({
       truncated,
       fileSize,
       loading,
+      panelWidth,
       panelStyle,
       mdMode,
       imgZoomed,
@@ -416,6 +653,7 @@ export default defineComponent({
       kindLabel,
       renderedMarkdown,
       headings,
+      scrollToHeading,
       toggleZoom,
       startResize,
       close,
@@ -424,9 +662,25 @@ export default defineComponent({
       editMode,
       editorHostRef,
       saving,
+      // 只读代码预览编辑器
+      readOnlyEditorHostRef,
       canEdit,
       saveEdit,
       toggleEdit,
+      // 内容搜索
+      canSearch,
+      searchOpen,
+      searchQuery,
+      searchCurrent,
+      searchTotal,
+      searchInputRef,
+      searchPlaceholder,
+      searchResultLabel,
+      markdownPreviewRef,
+      markdownSourceRef,
+      openSearch,
+      closeSearch,
+      goToSearchMatch,
     };
   },
 });

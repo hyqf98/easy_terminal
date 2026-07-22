@@ -1,5 +1,6 @@
 import { defineComponent, ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { LogicalSize } from '@tauri-apps/api/dpi';
 import { invoke } from '@tauri-apps/api/core';
 import { t, onLangChange } from '../../i18n';
 import { useCraftTheme, migrateThemeId } from '../../composables/useCraftTheme';
@@ -14,19 +15,25 @@ import CommandConfigPanel from '../command/CommandConfigPanel.vue';
 import CommandMarketPanel from '../command/CommandMarketPanel.vue';
 import HistoryPanel from '../history/HistoryPanel.vue';
 import SshPanel from '../ssh/SshPanel.vue';
+import VpnPanel from '../vpn/VpnPanel.vue';
 import ShortcutPanel from '../shortcut/ShortcutPanel.vue';
 import SettingsPanel from '../settings/SettingsPanel.vue';
 import TerminalWindow from '../terminal/TerminalWindow.vue';
 import TerminalFilePanel from '../terminal/TerminalFilePanel.vue';
+import PerformancePanel from '../performance/PerformancePanel.vue';
 import FileManager from '../filemanager/FileManager.vue';
 import { Canvas } from '../canvas/canvas';
 import { ShortcutManager } from '../shortcut/shortcutManager';
 import { setupDesktopDrawShortcut } from '../shortcut/globalShortcut';
-import type { SSHProfile, TerminalLaunchOptions, WorkspaceState, SnapTarget, Rect, SnapOptions } from '../../types';
+import { RemoteFileStrategy } from '../filetree/strategies/RemoteFileStrategy';
+import type {
+  SSHProfile, TerminalLaunchOptions, WorkspaceState, SnapTarget, Rect, SnapOptions,
+  FilePreviewData, PrefetchedFilePreview, RuntimePlatform, TerminalFilePreviewRequest,
+} from '../../types';
 import type { IFileOperationStrategy } from '../filetree/strategies/FileOperationStrategy';
 import { Perf } from '../../utils/perf';
 
-type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'ssh' | 'shortcuts' | 'settings';
+type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'ssh' | 'vpn' | 'shortcuts' | 'settings';
 
 interface TerminalEntry {
   id: string;
@@ -46,6 +53,7 @@ const SHORTCUT_VIEW_MAP: Record<string, ViewId> = {
   'sidebar.commands': 'commands',
   'sidebar.history': 'history',
   'sidebar.ssh': 'ssh',
+  'sidebar.vpn': 'vpn',
   'sidebar.shortcuts': 'shortcuts',
   'sidebar.settings': 'settings',
 };
@@ -57,7 +65,7 @@ export default defineComponent({
   components: {
     Titlebar, Dock, CanvasMinimap, TerminalModal,
     PreviewPanel, CommandConfigPanel, CommandMarketPanel,
-    HistoryPanel, SshPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel,
+    HistoryPanel, SshPanel, VpnPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel, PerformancePanel,
     FileManager,
   },
   setup() {
@@ -72,8 +80,96 @@ export default defineComponent({
     const canvasRef = ref<HTMLDivElement | null>(null);
 
     const activeView = ref<ViewId>('canvas');
-    // 当前预览文件路径：非空则弹出右侧 PreviewPanel
+    const UNIFIED_TITLEBAR_H = 28;
+    // 当前预览文件路径及其来源视图；预览仅在对应视图的右侧停靠区渲染。
     const previewPath = ref('');
+    const previewOwner = ref<'canvas' | 'files' | ''>('');
+    const previewTerminalId = ref('');
+    const prefetchedPreview = ref<PrefetchedFilePreview | null>(null);
+    const isCanvasPreviewOpen = computed(() => previewOwner.value === 'canvas' && Boolean(previewPath.value));
+    const isFileManagerPreviewOpen = computed(() => previewOwner.value === 'files' && Boolean(previewPath.value));
+    const isPreviewOpen = computed(() => Boolean(previewOwner.value && previewPath.value));
+    // 预览打开前的主窗口逻辑宽度。首次挂载时扩宽，之后拖动仅在固定总宽内重新分配空间。
+    let previewBaseWindowWidth: number | null = null;
+    let previewInitialExpansionApplied = false;
+    let previewOpening = false;
+    let pendingPreviewRequest: {
+      owner: 'canvas' | 'files';
+      path: string;
+      strategy: IFileOperationStrategy | null;
+      terminalId: string;
+      prefetched?: PrefetchedFilePreview | null;
+    } | null = null;
+    let desiredWindowWidth: number | null = null;
+    let windowResizeQueue = Promise.resolve();
+
+    function resizeMainWindowTo(width: number): Promise<void> {
+      desiredWindowWidth = width;
+      windowResizeQueue = windowResizeQueue
+        .then(async () => {
+          const targetWidth = desiredWindowWidth;
+          desiredWindowWidth = null;
+          if (targetWidth === null) return;
+          const scaleFactor = await appWin.scaleFactor();
+          const currentSize = (await appWin.innerSize()).toLogical(scaleFactor);
+          await appWin.setSize(new LogicalSize(Math.round(targetWidth), currentSize.height));
+        })
+        .catch((error) => {
+          console.error('[AppLayout] Failed to resize window for file preview:', error);
+        });
+      return windowResizeQueue;
+    }
+
+    // PreviewPanel 自行持久化宽度；仅首次挂载时把该宽度追加到主窗口。
+    function onPreviewWidthChange(width: number) {
+      if (!isPreviewOpen.value || previewBaseWindowWidth === null || previewInitialExpansionApplied) return;
+      previewInitialExpansionApplied = true;
+      void resizeMainWindowTo(previewBaseWindowWidth + width);
+    }
+
+    function closePreview() {
+      const restoreWindowWidth = isPreviewOpen.value ? previewBaseWindowWidth : null;
+      previewPath.value = '';
+      previewOwner.value = '';
+      previewTerminalId.value = '';
+      currentFileStrategy.value = null;
+      prefetchedPreview.value = null;
+      previewBaseWindowWidth = null;
+      previewInitialExpansionApplied = false;
+      if (restoreWindowWidth !== null) void resizeMainWindowTo(restoreWindowWidth);
+    }
+
+    function applyPreviewRequest(request: NonNullable<typeof pendingPreviewRequest>) {
+      currentFileStrategy.value = request.strategy;
+      prefetchedPreview.value = request.prefetched || null;
+      previewPath.value = request.path;
+      previewOwner.value = request.owner;
+      previewTerminalId.value = request.terminalId;
+    }
+
+    function openDockedPreview(request: NonNullable<typeof pendingPreviewRequest>) {
+      pendingPreviewRequest = request;
+      if (isPreviewOpen.value) {
+        applyPreviewRequest(request);
+        return;
+      }
+      if (previewOpening) return;
+
+      previewOpening = true;
+      void (async () => {
+        await windowResizeQueue;
+        const scaleFactor = await appWin.scaleFactor();
+        const currentSize = (await appWin.innerSize()).toLogical(scaleFactor);
+        previewBaseWindowWidth = currentSize.width;
+        previewInitialExpansionApplied = false;
+        if (pendingPreviewRequest) applyPreviewRequest(pendingPreviewRequest);
+      })().catch((error) => {
+        previewBaseWindowWidth = null;
+        console.error('[AppLayout] Failed to open file preview:', error);
+      }).finally(() => {
+        previewOpening = false;
+      });
+    }
     const showHint = ref(true);
     const terminalModalOpen = ref(false);
     const hintLabel = computed(() => t('hint.canvas'));
@@ -93,6 +189,15 @@ export default defineComponent({
     const terminalCwds = ref<Record<string, string>>({});
     // 展开的文件面板所属终端 ID（同时只展开一个）
     const filePanelTerminalId = ref('');
+    // 性能面板由各终端独立拥有，可同时打开多个。
+    const performancePanelTerminalIds = ref<Set<string>>(new Set());
+    const PERFORMANCE_PANEL_WIDTH_KEY = 'easy_terminal_performance_panel_width';
+    const performancePanelWidth = ref<number>((() => {
+      const raw = localStorage.getItem(PERFORMANCE_PANEL_WIDTH_KEY);
+      const value = raw ? Number.parseInt(raw, 10) : NaN;
+      return Number.isFinite(value) && value >= 200 && value <= 480 ? value : 320;
+    })());
+    const performanceRefreshSeconds = ref(3);
     // 各终端实例引用（非响应式 Map，仅用于命令式访问）
     const terminalInstanceMap = new Map<string, any>();
     /** v-for 函数 ref 回调：存储/清理终端实例引用 */
@@ -118,6 +223,8 @@ export default defineComponent({
     let canvas: Canvas | null = null;
     const canvasZoom = ref(1);
     let shortcutManager: ShortcutManager | null = null;
+    const currentPlatform = ref<RuntimePlatform>('windows');
+    let copiedTerminal: Omit<TerminalEntry, 'id' | 'zIndex'> | null = null;
 
     const appWin = getCurrentWindow();
 
@@ -224,8 +331,13 @@ export default defineComponent({
 
     function onTerminalClose(id: string) {
       terminals.value = terminals.value.filter((term) => term.id !== id);
+      if (performancePanelTerminalIds.value.delete(id)) performancePanelTerminalIds.value = new Set(performancePanelTerminalIds.value);
       if (activeTerminalId.value === id) {
         activeTerminalId.value = terminals.value[terminals.value.length - 1]?.id || '';
+      }
+      // 仅关闭由该终端文件面板发起的画布预览。
+      if (previewOwner.value === 'canvas' && previewTerminalId.value === id) {
+        closePreview();
       }
       showHint.value = terminals.value.length === 0;
       void persistWorkspace();
@@ -261,10 +373,65 @@ export default defineComponent({
       createTerminal(50, 50, 700, 450, { cwd: dirPath });
     }
 
-    /** 终端文件面板触发的预览：携带面板当前策略（本地/远程）以正确预览 */
+    /** Change the paired terminal's directory without creating another terminal. */
+    function onOpenCurrentTerminalAt(dirPath: string) {
+      const targetId = filePanelTerminalId.value || activeTerminalId.value;
+      const terminal = terminals.value.find((item) => item.id === targetId);
+      const instance = targetId ? terminalInstanceMap.get(targetId) : null;
+      if (!terminal || !instance?.writeToTerminal || !dirPath) return;
+      const isPosix = terminal.launchOptions.mode === 'ssh' || currentPlatform.value !== 'windows';
+      const command = isPosix
+        ? `cd -- '${dirPath.replace(/'/g, "'\\\"'\\\"'")}'\r`
+        : `cd /d "${dirPath.replace(/"/g, '""')}"\r`;
+      instance.writeToTerminal(command);
+      onTerminalActivate(targetId);
+    }
+
+    /** 终端文件面板触发的预览：保留本地/远程策略，并停靠到画布视图右侧。 */
     function onTerminalPanelPreview(payload: { path: string; strategy: IFileOperationStrategy | null }) {
-      currentFileStrategy.value = payload.strategy;
-      previewPath.value = payload.path;
+      openDockedPreview({
+        owner: 'canvas',
+        path: payload.path,
+        strategy: payload.strategy,
+        terminalId: filePanelTerminalId.value,
+      });
+    }
+
+    async function onTerminalFilePreview(request: TerminalFilePreviewRequest): Promise<boolean> {
+      if (request.signal?.aborted) return false;
+      let strategy: IFileOperationStrategy | null = null;
+      let readPromise: Promise<FilePreviewData>;
+      if (request.mode === 'ssh') {
+        const profile = sshProfiles.value.find((item) => item.id === request.profileId);
+        if (!profile) return false;
+        strategy = new RemoteFileStrategy(profile.id, '', profile, sshProfiles.value);
+        readPromise = strategy.readFilePreview(request.path);
+      } else {
+        readPromise = invoke<FilePreviewData>('read_file_preview', { path: request.path });
+      }
+
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      try {
+        const data = await Promise.race([
+          readPromise,
+          new Promise<never>((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('preview timeout')), 5000);
+          }),
+        ]);
+        if (request.signal?.aborted) return false;
+        openDockedPreview({
+          owner: 'canvas',
+          path: request.path,
+          strategy,
+          terminalId: request.terminalId,
+          prefetched: { path: request.path, data },
+        });
+        return true;
+      } catch {
+        return false;
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
     }
 
     /** 终端位置/尺寸变化（拖拽/缩放中实时同步），更新 terminals 数组以驱动文件面板跟随 */
@@ -284,6 +451,48 @@ export default defineComponent({
       filePanelTerminalId.value = filePanelTerminalId.value === terminalId ? '' : terminalId;
     }
 
+    function onTogglePerformancePanel(terminalId: string) {
+      const next = new Set(performancePanelTerminalIds.value);
+      if (next.has(terminalId)) next.delete(terminalId); else next.add(terminalId);
+      performancePanelTerminalIds.value = next;
+    }
+
+    function isPerformancePanelOpen(terminalId: string): boolean {
+      return performancePanelTerminalIds.value.has(terminalId);
+    }
+
+    /** 文件面板仍保持全局单开；性能面板则按终端独立展开。 */
+    function isFilePanelOpen(terminalId: string): boolean {
+      return filePanelTerminalId.value === terminalId;
+    }
+
+    /** 任一侧栏展开后，终端与侧栏组成同一个画布窗口组。 */
+    function hasAttachedPanel(term: TerminalEntry): boolean {
+      return isFilePanelOpen(term.id) || isPerformancePanelOpen(term.id);
+    }
+
+    function getLeftInset(term: TerminalEntry): number {
+      return isFilePanelOpen(term.id) ? filePanelWidth.value : 0;
+    }
+
+    function getRightInset(term: TerminalEntry): number {
+      return isPerformancePanelOpen(term.id) ? performancePanelWidth.value : 0;
+    }
+
+    function getPerformancePanelStyle(term: TerminalEntry): Record<string, string> {
+      const titleOffset = hasAttachedPanel(term) ? UNIFIED_TITLEBAR_H : 0;
+      return {
+        left: `${term.x + term.w}px`, top: `${term.y + titleOffset}px`,
+        width: `${performancePanelWidth.value}px`, height: `${Math.max(100, term.h - titleOffset)}px`, zIndex: String(term.zIndex),
+      };
+    }
+
+    function onPerformancePanelResizeStart(terminalId: string, event: MouseEvent) {
+      const instance = terminalInstanceMap.get(terminalId);
+      const startResize = (instance as any)?.startResize;
+      if (typeof startResize === 'function') startResize.call(instance, 'se', event);
+    }
+
     /** 当前展开的文件面板对应的终端条目 */
     const filePanelTerminal = computed(() => {
       if (!filePanelTerminalId.value) return null;
@@ -294,7 +503,6 @@ export default defineComponent({
     const FILEPANEL_WIDTH_KEY = 'easy_terminal_filepanel_width';
     const FILEPANEL_MIN = 200;
     const FILEPANEL_MAX = 480;
-    const UNIFIED_TITLEBAR_H = 28;
     const filePanelWidth = ref<number>((() => {
       const raw = localStorage.getItem(FILEPANEL_WIDTH_KEY);
       const n = raw ? parseInt(raw, 10) : NaN;
@@ -302,13 +510,12 @@ export default defineComponent({
     })());
 
     function getUnifiedRect(term: TerminalEntry): Rect {
-      if (filePanelTerminalId.value !== term.id) {
-        return { x: term.x, y: term.y, w: term.w, h: term.h };
-      }
+      const leftInset = getLeftInset(term);
+      const rightInset = getRightInset(term);
       return {
-        x: term.x - filePanelWidth.value,
+        x: term.x - leftInset,
         y: term.y,
-        w: term.w + filePanelWidth.value,
+        w: term.w + leftInset + rightInset,
         h: term.h,
       };
     }
@@ -382,6 +589,12 @@ export default defineComponent({
       terminalInstanceMap.get(terminalId)?.startDrag?.(event);
     }
 
+    /** 统一外框的八向手柄：实际缩放绑定终端，同时按左右 inset 换算完整窗口组。 */
+    function onUnifiedResizeStart(terminalId: string, direction: string, event: MouseEvent) {
+      onTerminalActivate(terminalId);
+      terminalInstanceMap.get(terminalId)?.startResize?.(direction, event);
+    }
+
     function onUnifiedClose(terminalId: string) {
       terminalInstanceMap.get(terminalId)?.requestClose?.();
     }
@@ -430,12 +643,6 @@ export default defineComponent({
       } as Record<string, string>;
     });
 
-    /** 文件面板「在终端打开（cd）」：写入面板所绑定终端的 PTY */
-    function onPanelCdTo(payload: { path: string; terminalId: string }) {
-      const term = terminalInstanceMap.get(payload.terminalId);
-      term?.writeToTerminal?.(`cd "${payload.path}"\n`);
-    }
-
     /** 终端 cwd 变化：记录到 terminalCwds 并同步 activeTerminalCwd */
     function onTerminalCwdChange(terminalId: string, cwd: string) {
       terminalCwds.value[terminalId] = cwd;
@@ -460,6 +667,9 @@ export default defineComponent({
       // 保存原位置/层级，重建后还原
       const { x, y, w, h, zIndex } = entry;
       // 关闭旧终端（触发 PTY 清理）
+      if (previewOwner.value === 'canvas' && previewTerminalId.value === terminalId) {
+        closePreview();
+      }
       terminals.value = terminals.value.filter((term) => term.id !== terminalId);
       if (profileId) {
         const profile = sshProfiles.value.find((p) => p.id === profileId);
@@ -517,9 +727,6 @@ export default defineComponent({
     async function restoreWorkspace() {
       try {
         const saved = await invoke<WorkspaceState>('load_workspace_state');
-        if (canvas) {
-          canvas.setState(saved.canvas);
-        }
         const valid = saved.terminals
           .filter((session) => !session.minimized && (session.w > 200 || session.h > 100 || session.launchOptions?.mode === 'ssh'))
           .map((session) => ({
@@ -529,6 +736,10 @@ export default defineComponent({
             w: Math.max(200, Math.min(2000, session.w)),
             h: Math.max(100, Math.min(1200, session.h)),
           }));
+        if (canvas) {
+          if (valid.length > 0) canvas.setState(saved.canvas);
+          else canvas.resetView();
+        }
         for (const session of valid) {
           createTerminal(session.x, session.y, session.w, session.h, session.launchOptions || { mode: 'local' }, undefined, false);
         }
@@ -644,19 +855,68 @@ export default defineComponent({
         if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA') && !activeEl.classList.contains('xterm-helper-textarea')) return;
         if (!shortcutManager) return;
 
+        const activeTerminal = terminalInstanceMap.get(activeTerminalId.value);
+
+        if (shortcutManager.matches('terminal.copyText', event)) {
+          if (!activeTerminal) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void activeTerminal.copyText?.().catch(() => undefined);
+          return;
+        }
+
+        if (shortcutManager.matches('terminal.pasteText', event)) {
+          if (!activeTerminal) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void activeTerminal.pasteText?.().catch(() => undefined);
+          return;
+        }
+
+        if (shortcutManager.matches('terminal.selectLine', event)) {
+          if (!activeTerminal) return;
+          if (activeTerminal.selectInputLine?.()) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
+        }
+
         if (shortcutManager.matches('terminal.duplicate', event)) {
           if (!activeTerminalId.value) return;
           const entry = terminals.value.find((term) => term.id === activeTerminalId.value);
           if (!entry) return;
           event.preventDefault();
           event.stopPropagation();
-          createTerminal(entry.x + 30, entry.y + 30, entry.w, entry.h, { ...entry.launchOptions });
+          copiedTerminal = {
+            x: entry.x,
+            y: entry.y,
+            w: entry.w,
+            h: entry.h,
+            launchOptions: { ...entry.launchOptions },
+          };
           showMessage(t('terminal.copied'), 'success');
           return;
         }
 
+        if (shortcutManager.matches('terminal.paste', event)) {
+          if (!copiedTerminal) return;
+          event.preventDefault();
+          event.stopPropagation();
+          createTerminal(
+            copiedTerminal.x + 30,
+            copiedTerminal.y + 30,
+            copiedTerminal.w,
+            copiedTerminal.h,
+            { ...copiedTerminal.launchOptions },
+          );
+          copiedTerminal = { ...copiedTerminal, x: copiedTerminal.x + 30, y: copiedTerminal.y + 30 };
+          return;
+        }
+
         // Delete 键：关闭当前激活的终端
-        if (event.key === 'Delete' && activeTerminalId.value) {
+        if (event.key === 'Delete' && activeTerminalId.value
+            && !activeEl?.classList.contains('xterm-helper-textarea')) {
           event.preventDefault();
           event.stopPropagation();
           onTerminalClose(activeTerminalId.value);
@@ -674,6 +934,23 @@ export default defineComponent({
     }
 
     let unsubLang: (() => void) | null = null;
+    const onShortcutBindingsChange = ((event: Event) => {
+      const bindings = (event as CustomEvent<import('../../types').ShortcutBinding[]>).detail;
+      if (bindings) shortcutManager?.replaceBindings(bindings);
+    }) as EventListener;
+    const onFileManagerPreview = ((event: Event) => {
+      const path = (event as CustomEvent<string>).detail;
+      openDockedPreview({
+        owner: 'files',
+        path,
+        strategy: null,
+        terminalId: '',
+      });
+    }) as EventListener;
+    const onPerformanceRefreshChange = ((event: Event) => {
+      const seconds = Number((event as CustomEvent<number>).detail);
+      if ([1, 3, 5, 10, 30].includes(seconds)) performanceRefreshSeconds.value = seconds;
+    }) as EventListener;
 
     onMounted(async () => {
       Perf.mark('app.startup');
@@ -682,12 +959,14 @@ export default defineComponent({
       setupCloseHandler();
 
       try {
-        const settings = await invoke<{ theme: string; language: string; restoreSession: boolean }>('get_settings');
+        const settings = await invoke<{ theme: string; language: string; restoreSession: boolean; performanceRefreshSeconds?: number }>('get_settings');
         setCraftTheme(migrateThemeId(settings.theme));
+        performanceRefreshSeconds.value = settings.performanceRefreshSeconds || 3;
       } catch { /* ignore */ }
 
       shortcutManager = new ShortcutManager();
       await shortcutManager.init();
+      currentPlatform.value = shortcutManager.getPlatform();
       setupDesktopDrawShortcut(shortcutManager);
       setupKeyboardShortcuts();
 
@@ -698,18 +977,19 @@ export default defineComponent({
       unsubLang = onLangChange(() => { /* computed auto-update via langTick in Dock */ });
       Perf.end('app.startup');
 
-      // FileManager 预览请求：复用 PreviewPanel
-      window.addEventListener('fm-open-preview', ((e: CustomEvent) => {
-        currentFileStrategy.value = null; // FileManager 仅处理本地文件
-        previewPath.value = e.detail as string;
-      }) as EventListener);
+      // FileManager 预览请求：复用 PreviewPanel，停靠到文件视图右侧。
+      window.addEventListener('fm-open-preview', onFileManagerPreview);
+      window.addEventListener('shortcut-bindings-change', onShortcutBindingsChange);
+      window.addEventListener('performance-refresh-seconds-change', onPerformanceRefreshChange);
     });
 
     onUnmounted(() => {
       canvas?.destroy();
       canvas = null;
       unsubLang?.();
-      window.removeEventListener('fm-open-preview', (() => {}) as EventListener);
+      window.removeEventListener('fm-open-preview', onFileManagerPreview);
+      window.removeEventListener('shortcut-bindings-change', onShortcutBindingsChange);
+      window.removeEventListener('performance-refresh-seconds-change', onPerformanceRefreshChange);
     });
 
     // 把画布吸附能力注入到每个终端窗口，拖拽/缩放时触发对齐辅助线
@@ -746,6 +1026,7 @@ export default defineComponent({
         { id: 'market', label: '命令市场', icon: '<path d="M3 9l1.5-5h15L21 9"/><path d="M3 9v11h18V9"/>' },
         { id: 'history', label: '历史命令', icon: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>' },
         { id: 'ssh', label: 'SSH 连接', icon: '<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>' },
+        { id: 'vpn', label: 'VPN 隧道', icon: '<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10 11v-1a2 2 0 0 1 4 0v1"/>' },
         { id: 'shortcuts', label: '快捷键', icon: '<rect x="3" y="6" width="18" height="12" rx="2"/>' },
         { id: 'settings', label: '设置', icon: '<circle cx="12" cy="12" r="3"/>' },
       ];
@@ -784,25 +1065,25 @@ export default defineComponent({
     return {
       settingsRef, sshPanelRef, marketRef,
       viewportRef, canvasRef,
-      activeView, previewPath, showHint, hintLabel, canvasHintLabel, newTerminalLabel, filesPlaceholderLabel,
+      activeView, previewPath, previewOwner, prefetchedPreview, isCanvasPreviewOpen, isFileManagerPreviewOpen, closePreview, onPreviewWidthChange, showHint, hintLabel, canvasHintLabel, newTerminalLabel, filesPlaceholderLabel,
       terminals, activeTerminalId, activeTerminalCwd, setTerminalRef,
       onMinimize, onMaximize, onClose, onViewChange,
       onToolbarNewTerminal, onToolbarResetView, openTerminalModal,
       terminalModalOpen,
       onTerminalActivate, onTerminalClose,
       onTerminalInteractionStart, onTerminalInteractionEnd,
-      onCommandExecuted, onOpenTerminalAt, onTerminalPanelPreview, onSshConnect,
+      onCommandExecuted, onOpenTerminalAt, onOpenCurrentTerminalAt, onTerminalPanelPreview, onSshConnect,
       onSshProfilesChange, onSshSelectionChange, onThemeChange,
       onCommandsChanged, onSendCommand, onSwitchSsh,
-      onToggleFilePanel, onPanelCdTo, onTerminalRectChange, onTerminalCwdChange, terminalCwds,
+      onToggleFilePanel, onTogglePerformancePanel, isPerformancePanelOpen, isFilePanelOpen, hasAttachedPanel, getPerformancePanelStyle, onPerformancePanelResizeStart, performancePanelWidth, performanceRefreshSeconds, onTerminalRectChange, onTerminalCwdChange, terminalCwds,
       filePanelTerminalId, filePanelTerminal, filePanelStyle, filePanelWidth, onPanelResizeStart,
       unifiedSshMenuTerminalId,
       getUnifiedWindowStyle, getUnifiedTitlebarStyle, getUnifiedWindowClasses,
-      onUnifiedPointerEnter, onUnifiedPointerLeave,
+      onUnifiedPointerEnter, onUnifiedPointerLeave, onUnifiedResizeStart,
       getUnifiedTitle, getUnifiedCwd, isUnifiedSsh, getUnifiedStatusPulse, getUnifiedStatusText,
       onUnifiedTitleDrag, onUnifiedClose, onUnifiedMinimize, onUnifiedMaximize,
       toggleUnifiedSshMenu, onUnifiedSwitchSsh,
-      snapRectFn, clearGuidesFn, canvasZoom, sshProfiles, currentFileStrategy,
+      snapRectFn, clearGuidesFn, canvasZoom, sshProfiles, currentFileStrategy, currentPlatform, onTerminalFilePreview,
       // ⌘K 命令面板
       cmdkOpen, cmdkQuery, cmdkIndex, cmdkInputRef, cmdkPlaceholder, cmdkResults, onCmdk, onCmdkEnter,
     };

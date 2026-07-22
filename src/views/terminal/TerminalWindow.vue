@@ -9,15 +9,15 @@
   >
     <div class="title-bar" @mousedown.prevent="startDrag">
       <div class="terminal-dots">
-        <button class="terminal-dot dot-close" title="关闭" @click.stop="requestClose"></button>
-        <button class="terminal-dot dot-minimize" title="最小化" @click.stop="minimize"></button>
-        <button class="terminal-dot dot-maximize" title="最大化" @click.stop="toggleMaximize"></button>
+        <button class="terminal-dot dot-close" data-tooltip="关闭" @click.stop="requestClose"></button>
+        <button class="terminal-dot dot-minimize" data-tooltip="最小化" @click.stop="minimize"></button>
+        <button class="terminal-dot dot-maximize" data-tooltip="最大化" @click.stop="toggleMaximize"></button>
       </div>
       <div class="terminal-title">
         <svg v-if="isSsh" class="terminal-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
         <svg v-else class="terminal-title-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
         <span class="terminal-title-name" @dblclick="startRename">{{ terminalName }}</span>
-        <span v-if="currentCwd" class="terminal-title-cwd" :title="currentCwd">{{ currentCwd }}</span>
+        <span v-if="currentCwd" class="terminal-title-cwd" :data-tooltip="currentCwd">{{ currentCwd }}</span>
       </div>
       <div class="terminal-status">
         <!-- SSH 切换按钮：在本地/SSH 终端间快速切换 -->
@@ -25,7 +25,7 @@
           <button
             class="ssh-switch-btn"
             :class="{ active: isSsh }"
-            :title="isSsh ? '切换 SSH / 本地' : '连接 SSH 服务器'"
+            :data-tooltip="isSsh ? '切换 SSH / 本地' : '连接 SSH 服务器'"
             @click.stop="sshMenuOpen = !sshMenuOpen"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
@@ -45,12 +45,15 @@
         <span>{{ statusText }}</span>
       </div>
     </div>
-    <div class="terminal-body" ref="bodyRef"></div>
+    <div class="terminal-body" ref="bodyRef">
+      <!-- xterm 仅以这个无 padding 的承载层为尺寸基准，避免 FitAddon 把外层留白算进可用行数。 -->
+      <div class="terminal-xterm-host" ref="xtermHostRef"></div>
+    </div>
     <!-- 箭头把手：absolute 定位在终端左边缘垂直居中，点击切换独立文件面板 -->
     <button
       class="terminal-file-tab"
       :class="{ expanded: filePanelExpanded }"
-      :title="filePanelExpanded ? '收起文件列表' : '展开文件列表'"
+      :data-tooltip="filePanelExpanded ? '收起文件列表' : '展开文件列表'"
       @click.stop="toggleFilePanel"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -58,17 +61,21 @@
         <polyline v-else points="15 6 9 12 15 18" />
       </svg>
     </button>
+    <button
+      class="terminal-performance-tab"
+      :class="{ expanded: performancePanelOpen }"
+      :data-tooltip="performancePanelOpen ? '收起性能监控' : '展开性能监控'"
+      @click.stop="togglePerformancePanel"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 18V9"/><path d="M10 18V5"/><path d="M16 18v-7"/><path d="M22 18V3"/></svg>
+    </button>
     <!-- 补全弹窗 Teleport 到 body 并使用 position:fixed，避免被 .terminal-window 的 overflow:hidden 裁剪 -->
     <Teleport to="body">
       <div ref="completionPopupRef" class="completion-popup" v-if="suggestVisible && suggestItems.length > 0"
         :class="`selection-mode-${suggestSelectionMode}`"
         :data-placement="suggestPlacement"
         :style="suggestStyle">
-        <div class="completion-header">
-          <span>{{ suggestHeaderText }}</span>
-          <span class="completion-count">{{ suggestItems.length }} 条匹配</span>
-        </div>
-        <div class="completion-list">
+        <div ref="completionListRef" class="completion-list" @scroll.passive="updateCompletionScrollbar">
           <div
             v-for="(item, idx) in suggestItems"
             :key="item.id"
@@ -84,14 +91,21 @@
             <span class="completion-kbd">{{ suggestKbdHint(idx, item) }}</span>
           </div>
         </div>
-        <div class="completion-footer">
-          <span>↑↓ / Tab 选择 · Enter 接受 · Esc 关闭</span>
-          <span class="completion-source">{{ activeSuggestion ? activeSuggestion.sourceLabel : '' }}</span>
+        <div
+          v-if="showCompletionScrollbar"
+          class="completion-scrollbar-track"
+          @mousedown.stop.prevent="onCompletionScrollbarTrackMouseDown"
+        >
+          <div
+            class="completion-scrollbar-thumb"
+            :style="{ height: completionScrollbarHeight + 'px', transform: 'translateY(' + completionScrollbarTop + 'px)' }"
+            @mousedown.stop.prevent="onCompletionScrollbarThumbMouseDown"
+          ></div>
         </div>
       </div>
     </Teleport>
     <Teleport to="body">
-      <span v-if="ghostText" class="terminal-ghost-text" :style="ghostStyle" aria-hidden="true">{{ ghostText }}</span>
+      <span v-if="ghostText" class="terminal-ghost-text" :class="{ replacement: ghostPreviewMode === 'replacement' }" :style="ghostStyle" aria-hidden="true">{{ ghostText }}</span>
     </Teleport>
     <div class="resize-handle resize-n" @mousedown.prevent.stop="startResize('n', $event)"></div>
     <div class="resize-handle resize-s" @mousedown.prevent.stop="startResize('s', $event)"></div>

@@ -1,7 +1,8 @@
 <template>
   <!-- 宽度通过 CSS 变量 --filetree-width 驱动，默认 280px；
        被 TerminalFilePanel 嵌入时 :deep 覆盖为 100%（内联 style 仅设变量，不直接设 width） -->
-  <div class="files-layout" :style="{ '--filetree-width': panelWidth + 'px' }">
+  <div class="files-layout" :class="{ 'remote-drop-active': externalDropActive }" :style="{ '--filetree-width': panelWidth + 'px' }"
+    @dragover="onExternalDragOver" @dragleave="onExternalDragLeave" @drop="onExternalDrop">
     <!-- 右侧拖拽缩放手柄：调整文件列宽度 -->
     <div
       class="files-resizer"
@@ -20,12 +21,12 @@
             v-for="fav in visibleFavorites"
             :key="fav.path"
             class="fav-card"
-            :title="fav.path"
+            :data-tooltip="fav.path"
             @click="navigateTo(fav.path)"
             @contextmenu="onFavContext($event, fav)"
           >
             <span class="fav-card-icon" :style="{ color: fav.color || favIconColor(fav.icon) }" v-html="'<svg viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.6\' stroke-linecap=\'round\' stroke-linejoin=\'round\'>' + favIconSvg(fav.icon) + '</svg>'"></span>
-            <span class="fav-card-name" :title="fav.name">{{ fav.name }}</span>
+            <span class="fav-card-name" :data-tooltip="fav.name">{{ fav.name }}</span>
           </div>
         </div>
         <!-- 更多/收起按钮：收藏数超过当前显示行数时出现 -->
@@ -49,9 +50,21 @@
 
       <!-- 筛选 / 排序行：紧凑单行，方向切换按钮紧跟排序框 -->
       <div class="tree-search-row">
-        <div class="search-input tree-search">
+        <div class="search-input tree-search" :data-tooltip="filterScopeLabel">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input v-model="filterText" :placeholder="filterPlaceholder" />
+          <input
+            v-model="filterText"
+            :aria-label="filterPlaceholder"
+            :placeholder="filterPlaceholder"
+            @keydown.esc.prevent="clearFileNameSearch"
+          />
+          <button
+            v-if="filterText"
+            class="tree-search-clear"
+            :aria-label="clearSearchLabel"
+            :data-tooltip="clearSearchLabel"
+            @click="clearFileNameSearch"
+          >×</button>
         </div>
         <AppSelect
           class="tree-sort"
@@ -62,7 +75,7 @@
         <!-- 升降序切换按钮：点击翻转方向 -->
         <button
           class="btn btn-ghost tree-sort-dir-btn"
-          :title="sortDir === 'asc' ? '升序（点击切降序）' : '降序（点击切升序）'"
+          :data-tooltip="sortDir === 'asc' ? '升序（点击切降序）' : '降序（点击切升序）'"
           @click="toggleSortDir"
         >
           <svg v-if="sortDir === 'asc'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
@@ -70,7 +83,7 @@
         </button>
         <button
           class="btn btn-ghost tree-refresh-btn"
-          :title="refreshLabel"
+          :data-tooltip="refreshLabel"
           @click="refreshTree"
         >
           <Icon :size="13"><Refresh /></Icon>
@@ -78,7 +91,7 @@
         <!-- 定位当前终端工作目录：跳转到对应目录节点 -->
         <button
           class="btn btn-ghost tree-locate-btn"
-          title="定位到当前终端目录"
+          data-tooltip="定位到当前终端目录"
           @click="$emit('locate-cwd')"
         >
           <Icon :size="13"><Target /></Icon>
@@ -87,8 +100,15 @@
 
       <div class="tree-list-shell">
         <div ref="treeListRef" class="tree-list" @scroll.passive="updateTreeScrollbar">
+          <template v-for="item in visibleNodes" :key="item.node.entry.path">
+          <button
+            v-if="item.loadMore"
+            class="tree-node tree-load-more"
+            :style="{ paddingLeft: 8 + item.depth * 14 + 'px' }"
+            @click.stop="loadMore(item.node)"
+          >加载更多</button>
           <div
-            v-for="item in visibleNodes"
+            v-else
             :key="item.node.entry.path"
             class="tree-node"
             :class="{
@@ -101,6 +121,7 @@
             :style="{ paddingLeft: 8 + item.depth * 14 + 'px' }"
             draggable="true"
             @click="onNodeClick(item.node)"
+            @dblclick.stop="onNodeDblClick(item.node)"
             @contextmenu="onNodeContext($event, item.node)"
             @dragstart="onDragStart($event, item.node)"
             @dragover="onDragOver($event, item.node)"
@@ -135,6 +156,7 @@
               <span v-else-if="!item.node.entry.is_dir" class="tree-meta">{{ formatSize(item.node.entry.size) }}</span>
             </template>
           </div>
+          </template>
 
           <div v-if="visibleNodes.length === 0" class="tree-empty">{{ emptyLabel }}</div>
         </div>
@@ -151,6 +173,11 @@
         </div>
       </div>
     </aside>
+
+    <div v-if="externalDropActive" class="remote-drop-mask" aria-hidden="true">
+      <strong>上传到 SSH：{{ currentRemoteProfile?.name || currentRemoteProfile?.host }}</strong>
+      <span>释放以将文件或文件夹上传到当前远程目录</span>
+    </div>
 
     <!-- 右键菜单 -->
     <Teleport to="body">
@@ -181,6 +208,13 @@
           <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
           {{ copyPathLabel }}
         </button>
+        <template v-if="isRemoteTree()">
+          <div class="tree-context-divider"></div>
+          <button class="tree-context-item" @click="openTransfer('upload', contextMenu.node)">
+            <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1" /><path d="M7 9h10M7 13h7" /></svg>
+            文件管理
+          </button>
+        </template>
         <div class="tree-context-divider"></div>
         <button
           v-if="contextMenu.node.entry.is_dir"
@@ -193,21 +227,31 @@
         <button
           v-if="contextMenu.node.entry.is_dir"
           class="tree-context-item"
-          @click="openTerminalHere(contextMenu.node)"
+          @click="openInCurrentTerminal(contextMenu.node)"
         >
           <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
-          {{ openInTerminalLabel }}
+          在当前终端打开
         </button>
         <button
           v-if="contextMenu.node.entry.is_dir"
           class="tree-context-item"
-          @click="onCdToTerminal(contextMenu.node)"
+          @click="openTerminalHere(contextMenu.node)"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M7 9l3 3-3 3" /><line x1="13" y1="15" x2="17" y2="15" /></svg>
-          在终端打开（cd）
+          <svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5" /><line x1="12" y1="19" x2="20" y2="19" /></svg>
+          新开终端
         </button>
       </div>
     </Teleport>
+
+    <FileTransferModal
+      v-if="transferOpen && currentRemoteProfile"
+      :profile="currentRemoteProfile"
+      :profiles="sshProfiles"
+      :remote-path="transferRemotePath"
+      :initial-mode="transferMode"
+      @close="transferOpen = false"
+      @complete="refreshTree"
+    />
 
     <!-- 收藏夹右键菜单 -->
     <Teleport to="body">
@@ -259,7 +303,7 @@
                   v-for="ic in FAVORITE_ICONS"
                   :key="ic.key"
                   :class="['fav-icon-pick', { active: favEditIcon === ic.key }]"
-                  :title="ic.label"
+                  :data-tooltip="ic.label"
                   :style="{ color: favEditIcon === ic.key ? ic.color : ic.color }"
                   @click="favEditIcon = ic.key"
                 >

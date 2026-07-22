@@ -34,6 +34,11 @@ export class ShortcutManager {
     this.emit();
   }
 
+  replaceBindings(bindings: ShortcutBinding[]) {
+    this.bindings = bindings.map((binding) => ({ ...binding }));
+    this.emit();
+  }
+
   async loadDefaultBindings(): Promise<ShortcutBinding[]> {
     return invoke<ShortcutBinding[]>('load_default_shortcuts');
   }

@@ -55,7 +55,13 @@ fn ensure_plugin(repo_url: &str, dir_name: &str, entry: &str) -> Result<PathBuf,
 
     // 浅克隆（--depth=1），快速且节省空间
     let output = Command::new("git")
-        .args(["clone", "--depth", "1", repo_url, plugin_dir.to_str().unwrap_or("")])
+        .args([
+            "clone",
+            "--depth",
+            "1",
+            repo_url,
+            plugin_dir.to_str().unwrap_or(""),
+        ])
         .output()
         .map_err(|e| format!("git clone failed: {}", e))?;
 
@@ -142,7 +148,12 @@ pub fn ensure_starship() -> Result<PathBuf, String> {
 
     // 解压到 shell 目录
     let extract_status = Command::new("tar")
-        .args(["xzf", tmp_tar.to_str().unwrap_or(""), "-C", shell_dir.to_str().unwrap_or("")])
+        .args([
+            "xzf",
+            tmp_tar.to_str().unwrap_or(""),
+            "-C",
+            shell_dir.to_str().unwrap_or(""),
+        ])
         .status()
         .map_err(|e| format!("tar failed: {}", e))?;
 
@@ -178,12 +189,18 @@ pub fn check_setup_status() -> ShellSetupStatus {
 
     let syntax_ok = base
         .as_ref()
-        .map(|b| b.join("zsh-syntax-highlighting/zsh-syntax-highlighting.zsh").exists())
+        .map(|b| {
+            b.join("zsh-syntax-highlighting/zsh-syntax-highlighting.zsh")
+                .exists()
+        })
         .unwrap_or(false);
 
     let auto_ok = base
         .as_ref()
-        .map(|b| b.join("zsh-autosuggestions/zsh-autosuggestions.zsh").exists())
+        .map(|b| {
+            b.join("zsh-autosuggestions/zsh-autosuggestions.zsh")
+                .exists()
+        })
         .unwrap_or(false);
 
     let (star_ok, star_path) = match starship_path() {

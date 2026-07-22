@@ -7,7 +7,7 @@
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="1.5" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
             SSH 连接
             <span class="tag tag-accent ssh-count-tag">{{ profiles.length }}</span>
-            <button class="ssh-add-btn" type="button" :title="addLabel" :aria-label="addLabel" @click="openAdd">
+            <button class="ssh-add-btn" type="button" :data-tooltip="addLabel" :aria-label="addLabel" @click="openAdd">
               <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
             </button>
           </h3>
@@ -48,7 +48,7 @@
                   <div class="ssh-host-name">{{ profile.name || profile.host }}</div>
                   <div class="ssh-host-addr">{{ profile.user }}@{{ profile.host }}:{{ profile.port }}</div>
                 </div>
-                <span class="ssh-host-state offline" :title="stateLabel"></span>
+                <span class="ssh-host-state offline" :data-tooltip="stateLabel"></span>
               </div>
             </div>
           </div>

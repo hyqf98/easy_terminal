@@ -235,17 +235,16 @@ export class Canvas implements CanvasController {
     if (!target) return;
     // 浮动面板（文件树、预览面板、弹框等）内部的滚动不触发画布平移/缩放
     if (target.closest('.files-layout, .preview-panel, .modal-overlay, .tree-context-menu, .n-select-menu')) return;
-
-    const isOverTerminal = this.isTerminalInteractionTarget(target);
-
-    if (e.ctrlKey) {
-      e.preventDefault();
-      this.handleZoomAtMouse(e);
+    // 终端及其一体化文件面板完全拥有滚轮事件。无论终端是否聚焦，也无论是否按下
+    // Shift/Ctrl，都不能把滚轮继续分发给全局画布。
+    if (this.isTerminalInteractionTarget(target)) {
       Perf.end('canvas.onWheel');
       return;
     }
 
-    if (isOverTerminal && document.querySelector('.terminal-window.focused')) {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      this.handleZoomAtMouse(e);
       Perf.end('canvas.onWheel');
       return;
     }
@@ -506,6 +505,8 @@ export class Canvas implements CanvasController {
   }
 
   private canvasMenu: HTMLDivElement | null = null;
+  private canvasMenuCleanup: (() => void) | null = null;
+  private canvasMenuListenerTimer: ReturnType<typeof setTimeout> | null = null;
 
   private onContextMenu(e: MouseEvent) {
     if (this.isTerminalInteractionTarget(e.target as HTMLElement)) return;
@@ -517,6 +518,8 @@ export class Canvas implements CanvasController {
   }
 
   closeCanvasMenu() {
+    this.canvasMenuCleanup?.();
+    this.canvasMenuCleanup = null;
     if (this.canvasMenu) {
       this.canvasMenu.remove();
       this.canvasMenu = null;
@@ -550,14 +553,20 @@ export class Canvas implements CanvasController {
       }
     };
     const cleanup = () => {
+      if (this.canvasMenuListenerTimer !== null) {
+        clearTimeout(this.canvasMenuListenerTimer);
+        this.canvasMenuListenerTimer = null;
+      }
       document.removeEventListener('click', close);
       document.removeEventListener('contextmenu', close as EventListener);
     };
-    setTimeout(() => {
+    this.canvasMenuCleanup = cleanup;
+    this.canvasMenuListenerTimer = setTimeout(() => {
+      this.canvasMenuListenerTimer = null;
+      if (this.canvasMenu !== menu) return;
       document.addEventListener('click', close);
       document.addEventListener('contextmenu', close as EventListener);
     }, 0);
-    menu.addEventListener('remove', cleanup);
   }
 
   private isTerminalInteractionTarget(target: HTMLElement | null): boolean {
