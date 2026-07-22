@@ -284,7 +284,7 @@ export default defineComponent({
     function getBaseTerminalFontSize(): number {
       const raw = getComputedStyle(document.documentElement).getPropertyValue('--term-font-size');
       const parsed = Number.parseFloat(raw);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : 13;
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 15;
     }
 
     function resolveFontSize(): number {

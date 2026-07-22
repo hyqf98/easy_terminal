@@ -15,7 +15,6 @@ import CommandConfigPanel from '../command/CommandConfigPanel.vue';
 import CommandMarketPanel from '../command/CommandMarketPanel.vue';
 import HistoryPanel from '../history/HistoryPanel.vue';
 import SshPanel from '../ssh/SshPanel.vue';
-import VpnPanel from '../vpn/VpnPanel.vue';
 import ShortcutPanel from '../shortcut/ShortcutPanel.vue';
 import SettingsPanel from '../settings/SettingsPanel.vue';
 import TerminalWindow from '../terminal/TerminalWindow.vue';
@@ -33,7 +32,7 @@ import type {
 import type { IFileOperationStrategy } from '../filetree/strategies/FileOperationStrategy';
 import { Perf } from '../../utils/perf';
 
-type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'ssh' | 'vpn' | 'shortcuts' | 'settings';
+type ViewId = 'canvas' | 'files' | 'commands' | 'market' | 'history' | 'ssh' | 'shortcuts' | 'settings';
 
 interface TerminalEntry {
   id: string;
@@ -53,7 +52,6 @@ const SHORTCUT_VIEW_MAP: Record<string, ViewId> = {
   'sidebar.commands': 'commands',
   'sidebar.history': 'history',
   'sidebar.ssh': 'ssh',
-  'sidebar.vpn': 'vpn',
   'sidebar.shortcuts': 'shortcuts',
   'sidebar.settings': 'settings',
 };
@@ -65,7 +63,7 @@ export default defineComponent({
   components: {
     Titlebar, Dock, CanvasMinimap, TerminalModal,
     PreviewPanel, CommandConfigPanel, CommandMarketPanel,
-    HistoryPanel, SshPanel, VpnPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel, PerformancePanel,
+    HistoryPanel, SshPanel, ShortcutPanel, SettingsPanel, TerminalWindow, TerminalFilePanel, PerformancePanel,
     FileManager,
   },
   setup() {
@@ -253,7 +251,7 @@ export default defineComponent({
     }
 
     function onToolbarNewTerminal(options?: TerminalLaunchOptions) {
-      createTerminal(80, 80, 700, 450, options || {});
+      createTerminal(80, 80, 820, 520, options || {});
     }
 
     function onToolbarResetView() {
@@ -267,11 +265,10 @@ export default defineComponent({
     function createTerminal(
       x = 80,
       y = 80,
-      w = 700,
-      h = 450,
+      w = 820,
+      h = 520,
       options: TerminalLaunchOptions = {},
       zIndexOverride?: number,
-      autoFitViewport = true,
     ) {
       const id = `term-${nextTerminalId++}`;
       const entry: TerminalEntry = {
@@ -282,24 +279,7 @@ export default defineComponent({
       terminals.value.push(entry);
       activeTerminalId.value = id;
       showHint.value = false;
-      // 首个终端创建后：智能调整视口缩放让终端以合理大小居中显示
-      // 避免在极小 zoom 下终端内容看不清（非框选入口：Dock新建、SSH连接等）
-      if (autoFitViewport && terminals.value.length === 1) {
-        void nextTick(() => fitTerminalToViewport(x, y, w, h));
-      }
       return id;
-    }
-
-    /** 调整画布视口让指定终端以约 70% 占比居中显示 */
-    function fitTerminalToViewport(x: number, y: number, w: number, h: number) {
-      const vp = viewportRef.value;
-      if (!vp || !canvas) return;
-      const targetZoomW = (vp.clientWidth * 0.7) / w;
-      const targetZoomH = (vp.clientHeight * 0.7) / h;
-      const targetZoom = Math.min(targetZoomW, targetZoomH, 1.5);
-      const panX = vp.clientWidth / 2 - (x + w / 2) * targetZoom;
-      const panY = vp.clientHeight / 2 - (y + h / 2) * targetZoom;
-      canvas.setState({ panX, panY, zoom: targetZoom });
     }
 
     // 在指定位置创建 SSH 终端（复用 SSH 启动命令与密码序列逻辑）
@@ -370,7 +350,7 @@ export default defineComponent({
 
     function onOpenTerminalAt(dirPath: string) {
       activeView.value = 'canvas';
-      createTerminal(50, 50, 700, 450, { cwd: dirPath });
+      createTerminal(50, 50, 820, 520, { cwd: dirPath });
     }
 
     /** Change the paired terminal's directory without creating another terminal. */
@@ -651,7 +631,7 @@ export default defineComponent({
 
     async function onSshConnect(profile: SSHProfile, _profiles: SSHProfile[]) {
       activeView.value = 'canvas';
-      createSshTerminal(profile, { x: 80, y: 80, w: 700, h: 450 });
+      createSshTerminal(profile, { x: 80, y: 80, w: 820, h: 520 });
     }
 
     function onSshProfilesChange(profiles: SSHProfile[]) {
@@ -741,7 +721,7 @@ export default defineComponent({
           else canvas.resetView();
         }
         for (const session of valid) {
-          createTerminal(session.x, session.y, session.w, session.h, session.launchOptions || { mode: 'local' }, undefined, false);
+          createTerminal(session.x, session.y, session.w, session.h, session.launchOptions || { mode: 'local' });
         }
         if (valid.length > 0) showHint.value = false;
 
@@ -824,7 +804,7 @@ export default defineComponent({
       canvas.onTerminalCreate = (x, y, w, h) => {
         // 框选坐标已经按当前 pan/zoom 反算为画布坐标，创建后不能再次改变视口，
         // 否则终端的屏幕尺寸和落点会偏离用户刚刚画出的矩形。
-        createTerminal(x, y, w, h, { mode: 'local' }, undefined, false);
+        createTerminal(x, y, w, h, { mode: 'local' });
       };
       canvas.onCanvasContextMenu = (cvs, clientX, clientY) => {
         const items: Array<{ label: string; action: () => void }> = [];
@@ -836,7 +816,7 @@ export default defineComponent({
         }
         items.push({
           label: t('canvas.newTerminal'),
-          action: () => { createTerminal(80, 80, 700, 450); },
+          action: () => { createTerminal(80, 80, 820, 520); },
         });
         cvs.showCanvasMenu(clientX, clientY, items);
       };
@@ -1026,7 +1006,6 @@ export default defineComponent({
         { id: 'market', label: '命令市场', icon: '<path d="M3 9l1.5-5h15L21 9"/><path d="M3 9v11h18V9"/>' },
         { id: 'history', label: '历史命令', icon: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>' },
         { id: 'ssh', label: 'SSH 连接', icon: '<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>' },
-        { id: 'vpn', label: 'VPN 隧道', icon: '<path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><rect x="9" y="11" width="6" height="5" rx="1"/><path d="M10 11v-1a2 2 0 0 1 4 0v1"/>' },
         { id: 'shortcuts', label: '快捷键', icon: '<rect x="3" y="6" width="18" height="12" rx="2"/>' },
         { id: 'settings', label: '设置', icon: '<circle cx="12" cy="12" r="3"/>' },
       ];

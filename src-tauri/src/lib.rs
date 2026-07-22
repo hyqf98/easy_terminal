@@ -10,7 +10,6 @@ mod pty;
 mod settings;
 mod shell_setup;
 mod ssh;
-mod vpn;
 
 use pty::PtyManager;
 use serde::Deserialize;
@@ -871,18 +870,6 @@ fn save_ssh_profiles(entries: Vec<settings::SSHProfile>) -> Result<(), String> {
     settings::save_ssh_profiles(entries)
 }
 
-/// 加载持久化的 VPN 配置列表。
-#[tauri::command]
-fn load_vpn_profiles() -> Result<Vec<settings::VpnProfile>, String> {
-    settings::load_vpn_profiles()
-}
-
-/// 持久化 VPN 配置列表到本地存储。
-#[tauri::command]
-fn save_vpn_profiles(entries: Vec<settings::VpnProfile>) -> Result<(), String> {
-    settings::save_vpn_profiles(entries)
-}
-
 #[tauri::command]
 async fn test_ssh_connection(
     host: String,
@@ -1382,12 +1369,6 @@ pub fn run() {
             save_command_mappings,
             load_ssh_profiles,
             save_ssh_profiles,
-            load_vpn_profiles,
-            save_vpn_profiles,
-            vpn::vpn_connect,
-            vpn::vpn_disconnect,
-            vpn::vpn_get_status,
-            vpn::vpn_test_connection,
             test_ssh_connection,
             get_local_performance_snapshot,
             stop_local_port_process,
@@ -1438,9 +1419,5 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {
-            // 应用退出时：杀掉所有 openvpn 子进程，清理路由表，不留残余
-            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
-                vpn::shutdown_all_vpn();
-            }
         });
 }

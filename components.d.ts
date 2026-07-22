@@ -19,6 +19,7 @@ declare module 'vue' {
     FileModal: typeof import('./src/components/modals/FileModal.vue')['default']
     InstallPreviewModal: typeof import('./src/components/modals/InstallPreviewModal.vue')['default']
     MappingModal: typeof import('./src/components/modals/MappingModal.vue')['default']
+    NButton: typeof import('naive-ui')['NButton']
     NConfigProvider: typeof import('naive-ui')['NConfigProvider']
     NDialogProvider: typeof import('naive-ui')['NDialogProvider']
     NEmpty: typeof import('naive-ui')['NEmpty']

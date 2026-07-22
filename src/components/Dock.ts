@@ -7,7 +7,6 @@ import {
   BuildingStore,
   History,
   Lock,
-  ShieldLock,
   Keyboard,
   Settings,
   ChevronUp,
@@ -28,7 +27,6 @@ const DOCK_ICONS: Record<string, Component> = markRaw({
   market: BuildingStore,
   history: History,
   ssh: Lock,
-  vpn: ShieldLock,
   shortcuts: Keyboard,
   settings: Settings,
 });
@@ -36,7 +34,7 @@ const DOCK_ICONS: Record<string, Component> = markRaw({
 // files 保留在 Dock：但点击后切换到独立的空视图，不再复用画布左侧的 FileTree 浮层
 // mappings 已合并到命令管理面板的子标签中，不再作为独立 Dock 项
 const MAIN_IDS = ['canvas', 'files', 'commands', 'market', 'history'] as const;
-const TAIL_IDS = ['ssh', 'vpn', 'shortcuts', 'settings'] as const;
+const TAIL_IDS = ['ssh', 'shortcuts', 'settings'] as const;
 
 const LABEL_KEYS: Record<string, string> = {
   canvas: 'sidebar.canvas',
@@ -45,7 +43,6 @@ const LABEL_KEYS: Record<string, string> = {
   market: 'sidebar.market',
   history: 'sidebar.history',
   ssh: 'sidebar.ssh',
-  vpn: 'sidebar.vpn',
   shortcuts: 'sidebar.shortcuts',
   settings: 'sidebar.settings',
 };

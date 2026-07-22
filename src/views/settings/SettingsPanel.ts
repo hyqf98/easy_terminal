@@ -78,7 +78,7 @@ export default defineComponent({
     const autoCheckUpdate = ref(true);
     const restoreSession = ref(true);
     const uiFontSize = ref(13);
-    const termFontSize = ref(13);
+    const termFontSize = ref(15);
     const performanceRefreshSeconds = ref(3);
     // Shell 美化组件安装状态
     const shellStatus = ref<ShellSetupStatus | null>(null);
@@ -179,9 +179,9 @@ export default defineComponent({
     ];
     const termFontSizeOptions: SelectOption[] = [
       { value: 12, label: '12px' },
-      { value: 13, label: '13px（默认）' },
+      { value: 13, label: '13px' },
       { value: 14, label: '14px' },
-      { value: 15, label: '15px' },
+      { value: 15, label: '15px（默认）' },
       { value: 16, label: '16px' },
     ];
     const performanceRefreshOptions: SelectOption[] = [
@@ -389,7 +389,7 @@ export default defineComponent({
         autoCheckUpdate.value = settings.autoCheckUpdate ?? true;
         restoreSession.value = settings.restoreSession ?? true;
         uiFontSize.value = settings.uiFontSize ?? 13;
-        termFontSize.value = settings.termFontSize ?? 13;
+        termFontSize.value = settings.termFontSize ?? 15;
         performanceRefreshSeconds.value = settings.performanceRefreshSeconds ?? 3;
         setLang(currentLang.value);
         applyCraftTheme(currentTheme.value);

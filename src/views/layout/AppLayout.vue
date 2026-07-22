@@ -225,11 +225,6 @@
       />
     </section>
 
-    <!-- VPN 视图 -->
-    <section class="view" v-show="activeView === 'vpn'">
-      <VpnPanel />
-    </section>
-
     <!-- 快捷键视图 -->
     <section class="view" v-show="activeView === 'shortcuts'">
       <ShortcutPanel />

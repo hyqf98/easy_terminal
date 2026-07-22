@@ -267,7 +267,7 @@ export async function initDetachedTerminalMode() {
   const term = new Terminal({
     theme,
     fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", Consolas, monospace',
-    fontSize: Number.isFinite(storedFontSize) && storedFontSize > 0 ? Math.ceil(storedFontSize) : 13,
+    fontSize: Number.isFinite(storedFontSize) && storedFontSize > 0 ? Math.ceil(storedFontSize) : 15,
     fontWeight: '400',
     fontWeightBold: '600',
     lineHeight: 1.2,
