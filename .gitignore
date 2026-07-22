@@ -27,6 +27,4 @@ dist-ssr
 *.sln
 *.sw?
 
-# VPN: 构建时自动下载的 openvpn 二进制（不入版本库）
-src-tauri/binaries/
-src-tauri/resources/wintun.dll
+# VPN binaries: openvpn 各平台二进制和 wintun.dll 已内嵌提交，不忽略
